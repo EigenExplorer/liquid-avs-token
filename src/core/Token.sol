@@ -1,30 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/ERC20Upgradeable.sol";
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
 
-contract LiquidAvsToken is ERC20, Ownable {
+import "./TokenStorage.sol";
+
+contract Token is
+    Initializable,
+    OwnableUpgradeable,
+    TokenStorage,
+    ERC20Upgradeable,
+    ReentrancyGuardUpgradeable
+{
     using SafeERC20 for IERC20;
 
-    IERC20 public avsToken;
-    address public strategyManager;
-
-    event Deposit(address indexed user, uint256 amount, uint256 shares);
-    event Withdraw(address indexed user, uint256 amount, uint256 shares);
-
     constructor(
-        string memory _name,
-        string memory _symbol,
-        IERC20 _avsToken
-    ) ERC20(_name, _symbol) Ownable(msg.sender) {
-        avsToken = _avsToken;
+        IERC20 _avsToken,
+        address _strategyManager
+    ) TokenStorage(_avsToken, _strategyManager) {
+        _disableInitializers();
     }
 
-    function setStrategyManager(address _strategyManager) external onlyOwner {
-        strategyManager = _strategyManager;
+    function initialize(Init calldata init) external initializer {
+        __ERC20_init(init.name, init.symbol);
+        __ReentrancyGuard_init();
+        _transferOwnership(init.initialOwner);
     }
+
 
     function deposit(uint256 amount) external returns (uint256) {
         require(amount > 0, "Deposit amount must be greater than 0");
@@ -61,7 +66,7 @@ contract LiquidAvsToken is ERC20, Ownable {
 
         avsToken.safeTransfer(node, amount);
     }
-    
+
     function calculateShares(uint256 amount) public view returns (uint256) {
         if (totalSupply() == 0) {
             return amount;
