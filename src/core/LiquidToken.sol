@@ -71,15 +71,15 @@ contract LiquidToken is
     }
 
     function requestWithdrawal(
-        IERC20[] memory assets,
+        IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
     ) external whenNotPaused {
-        if (assets.length != shareAmounts.length) revert ArrayLengthMismatch();
+        if (withdrawAssets.length != shareAmounts.length) revert ArrayLengthMismatch();
 
         uint256 totalShares = 0;
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (!tokenRegistry.tokenIsSupported(assets[i]))
-                revert UnsupportedAsset(assets[i]);
+        for (uint256 i = 0; i < withdrawAssets.length; i++) {
+            if (!tokenRegistry.tokenIsSupported(withdrawAssets[i]))
+                revert UnsupportedAsset(withdrawAssets[i]);
             if (shareAmounts[i] == 0)
                 revert("Share amount must be greater than 0");
             totalShares += shareAmounts[i];
@@ -93,11 +93,11 @@ contract LiquidToken is
             );
 
         bytes32 requestId = keccak256(
-            abi.encodePacked(msg.sender, assets, shareAmounts, block.timestamp)
+            abi.encodePacked(msg.sender, withdrawAssets, shareAmounts, block.timestamp)
         );
         WithdrawalRequest memory request = WithdrawalRequest({
             user: msg.sender,
-            assets: assets,
+            assets: withdrawAssets,
             shareAmounts: shareAmounts,
             requestTime: block.timestamp,
             fulfilled: false
@@ -108,7 +108,7 @@ contract LiquidToken is
 
         transferFrom(msg.sender, address(this), totalShares);
 
-        emit WithdrawalRequested(requestId, msg.sender, assets, shareAmounts);
+        emit WithdrawalRequested(requestId, msg.sender, withdrawAssets, shareAmounts);
     }
 
     function fulfillWithdrawal(bytes32 requestId) external whenNotPaused {
