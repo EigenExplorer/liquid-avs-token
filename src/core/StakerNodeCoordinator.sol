@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import "./Token.sol";
-import "./StakerNode.sol";
-import "../interfaces/IStakerNodeCoordinator.sol";
+import {LiquidToken} from "./LiquidToken.sol";
+import {StakerNode} from "./StakerNode.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 contract StakerNodeCoordinator is IStakerNodeCoordinator, Ownable {
-    Token public lAvsToken;
+    LiquidToken public lToken;
     address[] public stakerNodes;
 
-    constructor(address _lAvsToken) Ownable(msg.sender) {
-        lAvsToken = Token(_lAvsToken);
+    constructor(address _lToken) Ownable(msg.sender) {
+        lToken = LiquidToken(_lToken);
     }
 
     function addStakerNode(address _nodeAddress) external onlyOwner {
@@ -21,16 +21,16 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, Ownable {
         emit StakerNodeAdded(_nodeAddress);
     }
 
-    function withdrawToNode(
-        address _nodeAddress,
-        uint256 _amount
-    ) external onlyOwner {
-        require(_nodeAddress != address(0), "Invalid node address");
-        require(isStakerNode(_nodeAddress), "Not a registered staker node");
+    // function withdrawToNode(
+    //     address _nodeAddress,
+    //     uint256 _amount
+    // ) external onlyOwner {
+    //     require(_nodeAddress != address(0), "Invalid node address");
+    //     require(isStakerNode(_nodeAddress), "Not a registered staker node");
 
-        lAvsToken.withdrawToNode(_nodeAddress, _amount);
-        emit TokensWithdrawnToNode(_nodeAddress, _amount);
-    }
+    //     lToken.withdrawToNode(_nodeAddress, _amount);
+    //     emit TokensWithdrawnToNode(_nodeAddress, _amount);
+    // }
 
     function isStakerNode(address _nodeAddress) public view returns (bool) {
         for (uint i = 0; i < stakerNodes.length; i++) {
