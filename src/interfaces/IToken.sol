@@ -1,13 +1,41 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface IToken {
-    event Deposit(address indexed user, uint256 amount, uint256 shares);
-    event Withdraw(address indexed user, uint256 amount, uint256 shares);
+import "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-    function deposit(uint256 amount) external returns (uint256);
-    function withdraw(uint256 shares) external returns (uint256);
-    function withdrawToNode(address node, uint256 amount) external;
-    function calculateShares(uint256 amount) external view returns (uint256);
-    function calculateAmount(uint256 shares) external view returns (uint256);
+interface IToken {
+    struct Init {
+        string name;
+        string symbol;
+        address initialOwner;
+        address pauser;
+        address unpauser;
+    }
+
+    event Deposit(
+        address indexed sender,
+        address indexed receiver,
+        IERC20 indexed asset,
+        uint256 amount,
+        uint256 shares
+    );
+    event Withdraw(
+        address indexed sender,
+        IERC20 indexed asset,
+        uint256 amount,
+        uint256 shares
+    );
+    event AssetRetrieved(
+        IERC20 indexed asset,
+        uint256 amount,
+        address destination
+    );
+    event DepositsPausedUpdated(bool paused);
+
+    error UnsupportedAsset(IERC20 asset);
+    error Paused();
+    error ZeroAmount();
+    error ZeroShares();
+    error InsufficientBalance(uint256 available, uint256 required);
+    error NotStrategyManager(address sender);
 }
