@@ -10,7 +10,10 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+
 contract Orchestrator is
+    IOrchestrator,
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable
