@@ -25,4 +25,7 @@ interface IStakerNodeCoordinator {
     error MaxNodesReached(uint256 maxNodes);
     error NodeAlreadyRegistered(address nodeAddress);
     error NotOwner();
+
+    function delegationManager() external view returns (IDelegationManager);
+    function strategyManager() external view returns (IStrategyManager);
 }

@@ -3,65 +3,77 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
-interface IEigenlayerStrategy {
-    function deposit(uint256 amount) external;
-}
-
-interface IEigenlayerOperator {
-    function delegate(address operator) external;
-}
-
-contract StakerNode is IStakerNode, Ownable {
+contract StakerNode is IStakerNode, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
-    IERC20 public avsToken;
-    IEigenlayerStrategy public strategy;
-    IEigenlayerOperator public eigenlayerOperator;
+    uint256 public id;
+    IStakerNodeCoordinator public coordinator;
 
-    event Delegated(address indexed operator);
-    event DepositedToStrategy(uint256 amount);
-
-    constructor(
-        address _avsToken,
-        address _strategy,
-        address _eigenlayerOperator
-    ) Ownable(msg.sender) {
-        avsToken = IERC20(_avsToken);
-        strategy = IEigenlayerStrategy(_strategy);
-        eigenlayerOperator = IEigenlayerOperator(_eigenlayerOperator);
+    constructor() {
+        _disableInitializers();
     }
 
-    function delegateToOperator(address operator) external onlyOwner {
-        eigenlayerOperator.delegate(operator);
+    function initialize(Init calldata init) external initializer {
+        __ReentrancyGuard_init();
+
+        id = init.id;
+        coordinator = IStakerNodeCoordinator(init.coordinator);
+    }
+
+    function delegateToOperator(
+        address operator,
+        ISignatureUtils.SignatureWithExpiry memory signature,
+        bytes32 approverSalt
+    ) external {
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        delegationManager.delegateTo(operator, signature, approverSalt);
+
         emit Delegated(operator);
     }
 
-    function depositToStrategy(uint256 amount) external onlyOwner {
-        require(
-            avsToken.balanceOf(address(this)) >= amount,
-            "Insufficient balance"
-        );
+    function depositToStrategy(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
+        IStrategy[] calldata strategies
+    ) external {
+        IStrategyManager strategyManager = coordinator.strategyManager();
 
-        avsToken.approve(address(strategy), amount);
-        strategy.deposit(amount);
+        uint256 assetsLength = assets.length;
+        for (uint256 i = 0; i < assetsLength; i++) {
+            IERC20 asset = assets[i];
+            uint256 amount = amounts[i];
+            IStrategy strategy = strategies[i];
 
-        emit DepositedToStrategy(amount);
+            asset.forceApprove(address(strategyManager), amount);
+
+            uint256 shares = strategyManager.depositIntoStrategy(
+                IStrategy(strategy),
+                asset,
+                amount
+            );
+            emit DepositedToStrategy(asset, strategy, amount, shares);
+        }
     }
 
-    function withdrawTokens(
-        address recipient,
-        uint256 amount
-    ) external onlyOwner {
-        require(recipient != address(0), "Invalid recipient");
-        require(
-            avsToken.balanceOf(address(this)) >= amount,
-            "Insufficient balance"
-        );
+    // function withdrawTokens(
+    //     address recipient,
+    //     uint256 amount
+    // ) external {
+    //     require(recipient != address(0), "Invalid recipient");
+    //     require(
+    //         avsToken.balanceOf(address(this)) >= amount,
+    //         "Insufficient balance"
+    //     );
 
-        avsToken.safeTransfer(recipient, amount);
-    }
+    //     avsToken.safeTransfer(recipient, amount);
+    // }
 }
