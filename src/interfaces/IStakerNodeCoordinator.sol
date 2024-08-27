@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IStakerNode} from "./IStakerNode.sol";
 
 /// @title IStakerNodeCoordinator
 /// @notice Interface for the StakerNodeCoordinator contract
@@ -25,12 +26,12 @@ interface IStakerNodeCoordinator {
 
     /// @notice Emitted when a new staker node is created
     /// @param nodeId The ID of the newly created node
-    /// @param nodeAddress The address of the newly created node
-    event StakerNodeCreated(uint256 nodeId, address nodeAddress);
+    /// @param node The IStakerNode interface of the newly created node
+    event StakerNodeCreated(uint256 nodeId, IStakerNode node);
 
     /// @notice Emitted when a staker node is removed
-    /// @param nodeAddress The address of the removed node
-    event StakerNodeRemoved(address nodeAddress);
+    /// @param node The IStakerNode interface of the removed node
+    event StakerNodeRemoved(IStakerNode node);
 
     /// @notice Emitted when the maximum number of nodes is updated
     /// @param maxNodes The new maximum number of nodes
@@ -69,8 +70,8 @@ interface IStakerNodeCoordinator {
     function initialize(Init calldata init) external;
 
     /// @notice Creates a new staker node
-    /// @return The address of the newly created staker node
-    function createStakerNode() external returns (address);
+    /// @return The IStakerNode interface of the newly created staker node
+    function createStakerNode() external returns (IStakerNode);
 
     /// @notice Registers the initial staker node implementation
     /// @param _implementationContract Address of the implementation contract
@@ -99,18 +100,18 @@ interface IStakerNodeCoordinator {
     /// @return True if the caller is the liquid token manager, false otherwise
     function hasLiquidTokenManagerRole(address caller) external view returns (bool);
 
-    /// @notice Retrieves all staker node addresses
-    /// @return An array of all staker node addresses
-    function getAllNodes() external view returns (address[] memory);
+    /// @notice Retrieves all staker nodes
+    /// @return An array of all IStakerNode interfaces
+    function getAllNodes() external view returns (IStakerNode[] memory);
 
     /// @notice Gets the total number of staker nodes
     /// @return The number of staker nodes
     function getStakerNodesCount() external view returns (uint256);
 
-    /// @notice Retrieves a staker node address by its ID
+    /// @notice Retrieves a staker node by its ID
     /// @param nodeId The ID of the staker node
-    /// @return The address of the staker node
-    function getNodeById(uint256 nodeId) external view returns (address);
+    /// @return The IStakerNode interface of the staker node
+    function getNodeById(uint256 nodeId) external view returns (IStakerNode);
 
     /// @notice Gets the delegation manager contract
     /// @return The IDelegationManager interface

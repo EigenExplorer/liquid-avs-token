@@ -70,9 +70,10 @@ contract LiquidTokenManager is
             revert LengthMismatch(init.assets.length, init.strategies.length);
         }
 
+        liquidToken = init.liquidToken;
+        stakerNodeCoordinator = init.stakerNodeCoordinator;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
-        liquidToken = init.liquidToken;
 
         // Initialize strategies for each asset
         for (uint256 i = 0; i < init.assets.length; i++) {
@@ -138,9 +139,7 @@ contract LiquidTokenManager is
             revert LengthMismatch(assetsLength, amountsLength);
         }
 
-        IStakerNode node = IStakerNode(
-            stakerNodeCoordinator.getNodeById(nodeId)
-        );
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         if (address(node) == address(0)) {
             revert InvalidNodeId(nodeId);
         }

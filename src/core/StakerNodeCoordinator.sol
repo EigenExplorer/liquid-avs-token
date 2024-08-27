@@ -20,7 +20,7 @@ contract StakerNodeCoordinator is
     uint256 public override maxNodes;
 
     UpgradeableBeacon public upgradeableBeacon;
-    address[] private stakerNodes;
+    IStakerNode[] private stakerNodes;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant STAKER_NODE_OPERATOR_ROLE =
@@ -53,13 +53,13 @@ contract StakerNodeCoordinator is
 
     /// @notice Creates a new staker node
     /// @dev Only callable by accounts with STAKER_NODE_CREATOR_ROLE
-    /// @return Address of the newly created staker node
+    /// @return The IStakerNode interface of the newly created staker node
     function createStakerNode()
         public
         override
         notZeroAddress(address(upgradeableBeacon))
         onlyRole(STAKER_NODE_CREATOR_ROLE)
-        returns (address)
+        returns (IStakerNode)
     {
         uint256 nodeId = stakerNodes.length;
 
@@ -68,9 +68,9 @@ contract StakerNodeCoordinator is
         }
 
         BeaconProxy proxy = new BeaconProxy(address(upgradeableBeacon), "");
-        address node = address(proxy);
+        IStakerNode node = IStakerNode(payable(proxy));
 
-        initializeStakerNode(IStakerNode(node), nodeId);
+        initializeStakerNode(node, nodeId);
 
         stakerNodes.push(node);
 
@@ -187,9 +187,9 @@ contract StakerNodeCoordinator is
         return caller == address(liquidTokenManager);
     }
 
-    /// @notice Retrieves all staker node addresses
-    /// @return address[] Array of all staker node addresses
-    function getAllNodes() public view override returns (address[] memory) {
+    /// @notice Retrieves all staker nodes
+    /// @return An array of all IStakerNode interfaces
+    function getAllNodes() public view override returns (IStakerNode[] memory) {
         return stakerNodes;
     }
 
@@ -199,12 +199,12 @@ contract StakerNodeCoordinator is
         return stakerNodes.length;
     }
 
-    /// @notice Retrieves a staker node address by its ID
+    /// @notice Retrieves a staker node by its ID
     /// @param nodeId The ID of the staker node
-    /// @return address The address of the staker node
+    /// @return The IStakerNode interface of the staker node
     function getNodeById(
         uint256 nodeId
-    ) public view override returns (address) {
+    ) public view override returns (IStakerNode) {
         if (nodeId >= stakerNodes.length) {
             revert NodeIdOutOfRange(nodeId);
         }

@@ -15,6 +15,7 @@ interface ILiquidTokenManager {
         ILiquidToken liquidToken;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
+        IStakerNodeCoordinator stakerNodeCoordinator;
         address admin;
         address strategyController;
     }
@@ -70,7 +71,10 @@ interface ILiquidTokenManager {
     // State Variables
     function strategyManager() external view returns (IStrategyManager);
     function delegationManager() external view returns (IDelegationManager);
-    function stakerNodeCoordinator() external view returns (IStakerNodeCoordinator);
+    function stakerNodeCoordinator()
+        external
+        view
+        returns (IStakerNodeCoordinator);
     function liquidToken() external view returns (ILiquidToken);
     function strategies(IERC20 asset) external view returns (IStrategy);
 }

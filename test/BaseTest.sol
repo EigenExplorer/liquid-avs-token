@@ -11,6 +11,7 @@ import {LiquidToken} from "../src/core/LiquidToken.sol";
 import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {StakerNode} from "../src/core/StakerNode.sol";
+import {StakerNodeCoordinator} from "../src/core/StakerNodeCoordinator.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
@@ -21,18 +22,20 @@ import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract BaseTest is Test {
+    // EigenLayer Contracts
+    IStrategyManager public strategyManager;
+    IDelegationManager public delegationManager;
+
     // Contracts
     LiquidToken public liquidToken;
     TokenRegistry public tokenRegistry;
     LiquidTokenManager public liquidTokenManager;
-    StakerNode public stakerNode;
+    StakerNodeCoordinator public stakerNodeCoordinator;
 
     // Mock contracts
     MockERC20 public testToken;
     MockERC20 public testToken2;
     MockStrategy public mockStrategy;
-    IStrategyManager public strategyManager;
-    IDelegationManager public delegationManager;
 
     // Addresses
     address public admin = address(this);
@@ -44,6 +47,7 @@ contract BaseTest is Test {
     LiquidToken private _liquidTokenImplementation;
     TokenRegistry private _tokenRegistryImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
+    StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
     StakerNode private _stakerNodeImplementation;
 
     function setUp() public virtual {
@@ -72,9 +76,10 @@ contract BaseTest is Test {
 
     function _deployMainContracts() private {
         _tokenRegistryImplementation = new TokenRegistry();
-        _liquidTokenManagerImplementation = new LiquidTokenManager();
-        _stakerNodeImplementation = new StakerNode();
         _liquidTokenImplementation = new LiquidToken();
+        _liquidTokenManagerImplementation = new LiquidTokenManager();
+        _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
+        _stakerNodeImplementation = new StakerNode();
     }
 
     function _deployProxies() private {
@@ -105,10 +110,10 @@ contract BaseTest is Test {
                 )
             )
         );
-        stakerNode = StakerNode(
+        stakerNodeCoordinator = StakerNodeCoordinator(
             address(
                 new TransparentUpgradeableProxy(
-                    address(_stakerNodeImplementation),
+                    address(_stakerNodeCoordinatorImplementation),
                     address(admin),
                     ""
                 )
@@ -118,9 +123,9 @@ contract BaseTest is Test {
 
     function _initializeProxies() private {
         _initializeTokenRegistry();
-        _initializeLiquidTokenManager();
+        _initializeStakerNodeCoordinator();
         _initializeLiquidToken();
-        _initializeStakerNode();
+        _initializeLiquidTokenManager();
     }
 
     function _initializeTokenRegistry() private {
@@ -131,9 +136,10 @@ contract BaseTest is Test {
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
             assets: new IERC20[](2),
             strategies: new IStrategy[](2),
-            liquidToken: ILiquidToken(address(liquidToken)),
+            liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
+            stakerNodeCoordinator: stakerNodeCoordinator,
             admin: admin,
             strategyController: admin
         });
@@ -157,12 +163,23 @@ contract BaseTest is Test {
         liquidToken.initialize(init);
     }
 
-    function _initializeStakerNode() private {
-        IStakerNode.Init memory init = IStakerNode.Init({
-            coordinator: IStakerNodeCoordinator(address(liquidTokenManager)),
-            id: 1
+    function _initializeStakerNodeCoordinator() private {
+        IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
+            liquidTokenManager: liquidTokenManager,
+            strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            maxNodes: 10,
+            initialOwner: admin,
+            pauser: pauser,
+            unpauser: pauser,
+            stakerNodeOperator: admin,
+            stakerNodeCreator: admin,
+            stakerNodesDelegator: admin
         });
-        stakerNode.initialize(init);
+        stakerNodeCoordinator.initialize(init);
+        stakerNodeCoordinator.registerStakerNodeImplementation(
+            address(_stakerNodeImplementation)
+        );
     }
 
     function _setupTestTokens() private {
