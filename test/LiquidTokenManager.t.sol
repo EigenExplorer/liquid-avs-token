@@ -9,16 +9,57 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
 
     function setUp() public override {
         super.setUp();
+
         // Create a staker node for testing
         vm.prank(admin);
         stakerNodeCoordinator.createStakerNode();
         stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+
+        // Register a mock operator to EL
+        address operatorAddress = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(block.timestamp, block.prevrandao)
+                    )
+                )
+            )
+        );
+
+        vm.prank(operatorAddress);
+        delegationManager.registerAsOperator(
+            IDelegationManager.OperatorDetails({
+                __deprecated_earningsReceiver: operatorAddress,
+                delegationApprover: address(0),
+                stakerOptOutWindowBlocks: 1
+            }),
+            "ipfs://"
+        );
+
+        // Strategy whitelist
+        ISignatureUtils.SignatureWithExpiry memory signature;
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
+
+        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        thirdPartyTransfersForbiddenValues[0] = false;
+
+        vm.prank(strategyManager.strategyWhitelister());
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbiddenValues
+        );
+
+        // Delegate the staker node to EL
+        stakerNode.delegate(operatorAddress, signature, bytes32(0));
     }
 
     function testInitialize() public {
@@ -49,7 +90,10 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testSetStrategy() public {
-        MockStrategy newStrategy = new MockStrategy(strategyManager);
+        MockStrategy newStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken))
+        );
         vm.prank(admin);
         liquidTokenManager.setStrategy(
             IERC20(address(testToken)),
@@ -62,7 +106,10 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testSetStrategyUnauthorized() public {
-        MockStrategy newStrategy = new MockStrategy(strategyManager);
+        MockStrategy newStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken))
+        );
         vm.prank(user1);
         vm.expectRevert(); // TODO: Check if this is the correct revert message
         liquidTokenManager.setStrategy(
@@ -72,19 +119,27 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testStakeAssetsToNode() public {
+        vm.prank(user1);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
         uint256 nodeId = 0;
 
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1 ether;
-
-        testToken.mint(address(liquidToken), 1 ether);
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
 
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
-        assertEq(testToken.balanceOf(address(stakerNode)), 1 ether);
+        (
+            IStrategy[] memory depositStrategies,
+            uint256[] memory depositAmounts
+        ) = strategyManager.getDeposits(address(stakerNode));
+        assertEq(address(depositStrategies[0]), address(mockStrategy));
+        assertEq(depositAmounts[0], 1 ether);
     }
 
     function testStakeAssetsToNodeUnauthorized() public {

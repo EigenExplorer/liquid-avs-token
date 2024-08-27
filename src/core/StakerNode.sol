@@ -24,7 +24,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     IStakerNodeCoordinator public coordinator;
     uint256 public id;
 
-    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE = keccak256("LIQUID_TOKEN_MANAGER_ROLE");
+    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
+        keccak256("LIQUID_TOKEN_MANAGER_ROLE");
     bytes32 public constant DELEGATOR_ROLE = keccak256("DELEGATOR_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 

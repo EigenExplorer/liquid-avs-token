@@ -20,6 +20,8 @@ import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {IPauserRegistry} from "@eigenlayer/contracts/permissions/PauserRegistry.sol";
+import {NetworkAddresses} from "./utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
     // EigenLayer Contracts
@@ -60,18 +62,21 @@ contract BaseTest is Test {
     }
 
     function _setupELContracts() private {
-        strategyManager = IStrategyManager(
-            0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
-        );
-        delegationManager = IDelegationManager(
-            0xA44151489861Fe9e3055d95adC98FbD462B948e7
-        );
+        uint256 chainId = block.chainid;
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses
+            .getAddresses(chainId);
+
+        strategyManager = IStrategyManager(addresses.strategyManager);
+        delegationManager = IDelegationManager(addresses.delegationManager);
     }
 
     function _deployMockContracts() private {
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
-        mockStrategy = new MockStrategy(strategyManager);
+        mockStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken))
+        );
     }
 
     function _deployMainContracts() private {

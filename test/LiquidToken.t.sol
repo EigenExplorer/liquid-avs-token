@@ -298,7 +298,10 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(
-            abi.encodeWithSelector(ILiquidToken.NotLiquidTokenManager.selector, user1)
+            abi.encodeWithSelector(
+                ILiquidToken.NotLiquidTokenManager.selector,
+                user1
+            )
         );
         liquidToken.transferAssets(assets, amounts);
     }
