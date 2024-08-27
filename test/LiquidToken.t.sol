@@ -10,6 +10,7 @@ import "../src/interfaces/ILiquidToken.sol";
 import "../src/utils/TokenRegistry.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
@@ -77,7 +78,11 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
 
-        assertEq(testToken.balanceOf(user1), 95 ether, "Incorrect token balance after withdrawal");
+        assertEq(
+            testToken.balanceOf(user1),
+            95 ether,
+            "Incorrect token balance after withdrawal"
+        );
     }
 
     function testTransferAssetsToOrchestrator() public {
@@ -97,6 +102,206 @@ contract LiquidTokenTest is BaseTest {
             5 ether,
             "Incorrect token balance in orchestrator"
         );
+    }
+
+    function testDepositMultipleAssets() public {
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), 10 ether);
+        testToken2.approve(address(liquidToken), 5 ether);
+
+        uint256 shares1 = liquidToken.deposit(
+            IERC20(address(testToken)),
+            10 ether,
+            user1
+        );
+        uint256 shares2 = liquidToken.deposit(
+            IERC20(address(testToken2)),
+            5 ether,
+            user1
+        );
+
+        assertEq(
+            shares1,
+            10 ether,
+            "Incorrect number of shares minted for token1"
+        );
+        assertEq(
+            shares2,
+            5 ether,
+            "Incorrect number of shares minted for token2"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1),
+            15 ether,
+            "Incorrect total balance after deposits"
+        );
+        vm.stopPrank();
+    }
+
+    function testRequestWithdrawalMultipleAssets() public {
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), 10 ether);
+        testToken2.approve(address(liquidToken), 5 ether);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        liquidToken.deposit(IERC20(address(testToken2)), 5 ether, user1);
+
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5 ether;
+        amounts[1] = 2 ether;
+
+        liquidToken.approve(user1, 7 ether);
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        assertEq(
+            liquidToken.balanceOf(user1),
+            8 ether,
+            "Incorrect balance after withdrawal request"
+        );
+    }
+
+    function testFulfillWithdrawalMultipleAssets() public {
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), 10 ether);
+        testToken2.approve(address(liquidToken), 5 ether);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        liquidToken.deposit(IERC20(address(testToken2)), 5 ether, user1);
+
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5 ether;
+        amounts[1] = 2 ether;
+
+        liquidToken.approve(user1, 7 ether);
+        liquidToken.requestWithdrawal(assets, amounts);
+
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+
+        // Fast forward time
+        vm.warp(block.timestamp + 15 days);
+
+        liquidToken.fulfillWithdrawal(requestId);
+        vm.stopPrank();
+
+        assertEq(
+            testToken.balanceOf(user1),
+            95 ether,
+            "Incorrect token1 balance after withdrawal"
+        );
+        assertEq(
+            testToken2.balanceOf(user1),
+            97 ether,
+            "Incorrect token2 balance after withdrawal"
+        );
+    }
+
+    function testTransferAssetsToOrchestratorMultipleAssets() public {
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), 10 ether);
+        testToken2.approve(address(liquidToken), 5 ether);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        liquidToken.deposit(IERC20(address(testToken2)), 5 ether, user1);
+        vm.stopPrank();
+
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5 ether;
+        amounts[1] = 2 ether;
+
+        vm.prank(address(orchestrator));
+        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+
+        assertEq(
+            testToken.balanceOf(address(orchestrator)),
+            5 ether,
+            "Incorrect token1 balance in orchestrator"
+        );
+        assertEq(
+            testToken2.balanceOf(address(orchestrator)),
+            2 ether,
+            "Incorrect token2 balance in orchestrator"
+        );
+    }
+
+    function testDepositZeroAmount() public {
+        vm.prank(user1);
+        vm.expectRevert(ILiquidToken.ZeroAmount.selector);
+        liquidToken.deposit(IERC20(address(testToken)), 0, user1);
+    }
+
+    function testDepositUnsupportedAsset() public {
+        ERC20 unsupportedToken = new MockERC20("Unsupported Token", "UT");
+        vm.prank(user1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.UnsupportedAsset.selector,
+                address(unsupportedToken)
+            )
+        );
+        liquidToken.deposit(IERC20(address(unsupportedToken)), 10 ether, user1);
+    }
+
+    function testRequestWithdrawalInsufficientBalance() public {
+        vm.startPrank(user1);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 11 ether;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.InsufficientBalance.selector,
+                address(liquidToken),
+                11 ether,
+                10 ether
+            )
+        );
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+    }
+
+    function testFulfillWithdrawalBeforeDelay() public {
+        vm.startPrank(user1);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5 ether;
+
+        liquidToken.approve(user1, amounts[0]);
+        liquidToken.requestWithdrawal(assets, amounts);
+
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+
+        // Fast forward time, but not enough
+        vm.warp(block.timestamp + 13 days);
+
+        vm.expectRevert(ILiquidToken.WithdrawalDelayNotMet.selector);
+        liquidToken.fulfillWithdrawal(requestId);
+        vm.stopPrank();
+    }
+
+    function testTransferAssetsToOrchestratorNotOrchestrator() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5 ether;
+
+        vm.prank(user1);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILiquidToken.NotOrchestrator.selector, user1)
+        );
+        liquidToken.transferAssetsToOrchestrator(assets, amounts);
     }
 
     function testPause() public {

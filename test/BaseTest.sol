@@ -33,6 +33,7 @@ contract BaseTest is Test {
 
     // Mock contracts
     MockERC20 public testToken;
+    MockERC20 public testToken2;
     MockStrategy public mockStrategy;
     IStrategyManager public strategyManager;
     IDelegationManager public delegationManager;
@@ -54,6 +55,7 @@ contract BaseTest is Test {
 
         // Deploy mock contracts
         testToken = new MockERC20("Test Token", "TEST");
+        testToken2 = new MockERC20("Test Token 2", "TEST2");
         mockStrategy = new MockStrategy(strategyManager);
 
         // Deploy main contracts
@@ -141,12 +143,19 @@ contract BaseTest is Test {
 
         // Setup test token
         tokenRegistry.addToken(IERC20(address(testToken)), 18, 1e18);
+        tokenRegistry.addToken(IERC20(address(testToken2)), 18, 1e18);
         testToken.mint(user1, 100 ether);
         testToken.mint(user2, 100 ether);
+        testToken2.mint(user1, 100 ether);
+        testToken2.mint(user2, 100 ether);
 
         vm.prank(user1);
         testToken.approve(address(liquidToken), type(uint256).max);
+        vm.prank(user1);
+        testToken2.approve(address(liquidToken), type(uint256).max);
         vm.prank(user2);
         testToken.approve(address(liquidToken), type(uint256).max);
+        vm.prank(user2);
+        testToken2.approve(address(liquidToken), type(uint256).max);
     }
 }
