@@ -3,33 +3,92 @@ pragma solidity ^0.8.20;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
+/// @title ITokenRegistry Interface
+/// @notice Interface for the TokenRegistry contract
+/// @dev This interface defines the functions and events for managing token information and prices
 interface ITokenRegistry {
+    /// @notice Struct to hold token information
+    /// @param isSupported Whether the token is supported
+    /// @param decimals The number of decimals for the token
+    /// @param pricePerUnit The price per unit of the token
     struct TokenInfo {
         bool isSupported;
         uint256 decimals;
         uint256 pricePerUnit;
     }
 
+    /// @notice Emitted when a new token is added to the registry
+    /// @param token The address of the added token
+    /// @param decimals The number of decimals for the token
+    /// @param initialPrice The initial price set for the token
     event TokenAdded(
         IERC20 indexed token,
         uint256 decimals,
         uint256 initialPrice
     );
+
+    /// @notice Emitted when a token is removed from the registry
+    /// @param token The address of the removed token
     event TokenRemoved(IERC20 indexed token);
+
+    /// @notice Emitted when a token's price is updated
+    /// @param token The address of the token whose price was updated
+    /// @param newPrice The new price for the token
     event PriceUpdated(IERC20 indexed token, uint256 newPrice);
 
+    /// @notice Error thrown when an operation is attempted on an unsupported token
+    /// @param token The address of the unsupported token
     error TokenNotSupported(IERC20 token);
+
+    /// @notice Error thrown when attempting to add a token that is already supported
+    /// @param token The address of the token that is already supported
     error TokenAlreadySupported(IERC20 token);
+
+    /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
 
+    /// @notice Adds a new token to the registry
+    /// @param token The address of the token to add
+    /// @param decimals The number of decimals for the token
+    /// @param initialPrice The initial price for the token
+    function addToken(IERC20 token, uint256 decimals, uint256 initialPrice) external;
+
+    /// @notice Removes a token from the registry
+    /// @param token The address of the token to remove
+    function removeToken(IERC20 token) external;
+
+    /// @notice Updates the price of a token
+    /// @param token The address of the token to update
+    /// @param newPrice The new price for the token
+    function updatePrice(IERC20 token, uint256 newPrice) external;
+
+    /// @notice Checks if a token is supported
+    /// @param token The address of the token to check
+    /// @return bool indicating whether the token is supported
     function tokenIsSupported(IERC20 token) external view returns (bool);
-    function convertToUnitOfAccount(
-        IERC20 token,
-        uint256 amount
-    ) external view returns (uint256);
-    function convertFromUnitOfAccount(
-        IERC20 token,
-        uint256 amount
-    ) external view returns (uint256);
+
+    /// @notice Converts a token amount to the unit of account
+    /// @param token The address of the token to convert
+    /// @param amount The amount of tokens to convert
+    /// @return The converted amount in the unit of account
+    function convertToUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
+
+    /// @notice Converts an amount in the unit of account to a token amount
+    /// @param token The address of the token to convert to
+    /// @param amount The amount in the unit of account to convert
+    /// @return The converted amount in the specified token
+    function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
+
+    /// @notice Calculates the total assets in the unit of account
+    /// @return The total assets value in the unit of account
     function totalAssets() external view returns (uint256);
+
+    /// @notice Retrieves the list of supported tokens
+    /// @return An array of addresses of supported tokens
+    function getSupportedTokens() external view returns (address[] memory);
+
+    /// @notice Retrieves the information for a specific token
+    /// @param token The address of the token to get information for
+    /// @return TokenInfo struct containing the token's information
+    function getTokenInfo(IERC20 token) external view returns (TokenInfo memory);
 }

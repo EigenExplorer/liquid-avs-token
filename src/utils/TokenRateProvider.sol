@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import "../../lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../interfaces/ITokenRegistry.sol";
+import "../interfaces/ITokenRateProvider.sol";
+
+/// @title TokenRateProvider
+/// @notice A contract to provide and update rates for given tokens
+/// @dev This contract interacts with a TokenRegistry to manage token rates
+contract TokenRateProvider is ITokenRateProvider, Initializable, AccessControlUpgradeable {
+    ITokenRegistry public tokenRegistry;
+
+    bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
+
+    /// @notice Initializes the contract
+    /// @param admin The address to be granted admin rights
+    /// @param _tokenRegistry The address of the TokenRegistry contract
+    function initialize(address admin, ITokenRegistry _tokenRegistry) public initializer {
+        __AccessControl_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(RATE_UPDATER_ROLE, admin);
+
+        tokenRegistry = _tokenRegistry;
+    }
+
+    /// @notice Updates the rate for a single token
+    /// @param token The token address
+    /// @param newRate The new rate for the token
+    function updateRate(IERC20 token, uint256 newRate) external onlyRole(RATE_UPDATER_ROLE) {
+        tokenRegistry.updatePrice(token, newRate);
+        emit RateUpdated(token, newRate);
+    }
+
+    /// @notice Updates rates for multiple tokens in a single transaction
+    /// @param tokens An array of token addresses
+    /// @param newRates An array of new rates corresponding to the tokens
+    function batchUpdateRates(IERC20[] calldata tokens, uint256[] calldata newRates) external onlyRole(RATE_UPDATER_ROLE) {
+        require(tokens.length == newRates.length, "Mismatched array lengths");
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            tokenRegistry.updatePrice(tokens[i], newRates[i]);
+            emit RateUpdated(tokens[i], newRates[i]);
+        }
+    }
+
+    /// @notice Retrieves the current rate for a given token
+    /// @param token The token address
+    /// @return The current rate of the token
+    function getRate(IERC20 token) external view returns (uint256) {
+        ITokenRegistry.TokenInfo memory tokenInfo = tokenRegistry.getTokenInfo(token);
+        return tokenInfo.pricePerUnit;
+    }
+}
