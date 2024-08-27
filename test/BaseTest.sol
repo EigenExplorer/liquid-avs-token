@@ -22,13 +22,9 @@ import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transpa
 
 contract BaseTest is Test {
     // Contracts
-    LiquidToken public liquidTokenImplementation;
     LiquidToken public liquidToken;
-    TokenRegistry public tokenRegistryImplementation;
     TokenRegistry public tokenRegistry;
-    LiquidTokenManager public liquidTokenManagerImplementation;
     LiquidTokenManager public liquidTokenManager;
-    StakerNode public stakerNodeImplementation;
     StakerNode public stakerNode;
 
     // Mock contracts
@@ -44,73 +40,111 @@ contract BaseTest is Test {
     address public user1 = address(3);
     address public user2 = address(4);
 
+    // Private variables (with leading underscore)
+    LiquidToken private _liquidTokenImplementation;
+    TokenRegistry private _tokenRegistryImplementation;
+    LiquidTokenManager private _liquidTokenManagerImplementation;
+    StakerNode private _stakerNodeImplementation;
+
     function setUp() public virtual {
-        // Setup EL contracts
+        _setupELContracts();
+        _deployMockContracts();
+        _deployMainContracts();
+        _deployProxies();
+        _initializeProxies();
+        _setupTestTokens();
+    }
+
+    function _setupELContracts() private {
         strategyManager = IStrategyManager(
             0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
         );
         delegationManager = IDelegationManager(
             0xA44151489861Fe9e3055d95adC98FbD462B948e7
         );
+    }
 
-        // Deploy mock contracts
+    function _deployMockContracts() private {
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
         mockStrategy = new MockStrategy(strategyManager);
+    }
 
-        // Deploy main contracts
-        tokenRegistryImplementation = new TokenRegistry();
-        liquidTokenManagerImplementation = new LiquidTokenManager();
-        stakerNodeImplementation = new StakerNode();
-        liquidTokenImplementation = new LiquidToken();
+    function _deployMainContracts() private {
+        _tokenRegistryImplementation = new TokenRegistry();
+        _liquidTokenManagerImplementation = new LiquidTokenManager();
+        _stakerNodeImplementation = new StakerNode();
+        _liquidTokenImplementation = new LiquidToken();
+    }
 
-        // Deploy and initialize TokenRegistry proxy
-        bytes memory tokenRegistryData = abi.encodeWithSelector(
-            TokenRegistry.initialize.selector,
-            admin,
-            admin
-        );
+    function _deployProxies() private {
         tokenRegistry = TokenRegistry(
             address(
                 new TransparentUpgradeableProxy(
-                    address(tokenRegistryImplementation),
+                    address(_tokenRegistryImplementation),
                     address(admin),
-                    tokenRegistryData
+                    ""
                 )
             )
-        );
-
-        // Deploy and initialize LiquidTokenManager proxy
-        ILiquidTokenManager.Init
-            memory liquidTokenManagerInit = ILiquidTokenManager.Init({
-                assets: new IERC20[](2),
-                strategies: new IStrategy[](2),
-                liquidToken: ILiquidToken(address(liquidToken)),
-                strategyManager: strategyManager,
-                delegationManager: delegationManager,
-                admin: admin,
-                strategyController: admin
-            });
-        liquidTokenManagerInit.assets[0] = IERC20(address(testToken));
-        liquidTokenManagerInit.assets[1] = IERC20(address(testToken2));
-        liquidTokenManagerInit.strategies[0] = IStrategy(address(mockStrategy));
-        liquidTokenManagerInit.strategies[1] = IStrategy(address(mockStrategy));
-
-        bytes memory liquidTokenManagerData = abi.encodeWithSelector(
-            LiquidTokenManager.initialize.selector,
-            liquidTokenManagerInit
         );
         liquidTokenManager = LiquidTokenManager(
             address(
                 new TransparentUpgradeableProxy(
-                    address(liquidTokenManagerImplementation),
+                    address(_liquidTokenManagerImplementation),
                     address(admin),
-                    liquidTokenManagerData
+                    ""
                 )
             )
         );
+        liquidToken = LiquidToken(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(_liquidTokenImplementation),
+                    address(admin),
+                    ""
+                )
+            )
+        );
+        stakerNode = StakerNode(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(_stakerNodeImplementation),
+                    address(admin),
+                    ""
+                )
+            )
+        );
+    }
 
-        // Deploy and initialize LiquidToken proxy
+    function _initializeProxies() private {
+        _initializeTokenRegistry();
+        _initializeLiquidTokenManager();
+        _initializeLiquidToken();
+        _initializeStakerNode();
+    }
+
+    function _initializeTokenRegistry() private {
+        tokenRegistry.initialize(admin, admin);
+    }
+
+    function _initializeLiquidTokenManager() private {
+        ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
+            assets: new IERC20[](2),
+            strategies: new IStrategy[](2),
+            liquidToken: ILiquidToken(address(liquidToken)),
+            strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            admin: admin,
+            strategyController: admin
+        });
+        init.assets[0] = IERC20(address(testToken));
+        init.assets[1] = IERC20(address(testToken2));
+        init.strategies[0] = IStrategy(address(mockStrategy));
+        init.strategies[1] = IStrategy(address(mockStrategy));
+        liquidTokenManager.initialize(init);
+    }
+
+    function _initializeLiquidToken() private {
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
@@ -120,42 +154,21 @@ contract BaseTest is Test {
             tokenRegistry: ITokenRegistry(address(tokenRegistry)),
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
-        bytes memory liquidTokenData = abi.encodeWithSelector(
-            LiquidToken.initialize.selector,
-            init
-        );
-        liquidToken = LiquidToken(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(liquidTokenImplementation),
-                    address(admin),
-                    liquidTokenData
-                )
-            )
-        );
+        liquidToken.initialize(init);
+    }
 
-        // Deploy and initialize StakerNode proxy
-        IStakerNode.Init memory nodeInit = IStakerNode.Init({
+    function _initializeStakerNode() private {
+        IStakerNode.Init memory init = IStakerNode.Init({
             coordinator: IStakerNodeCoordinator(address(liquidTokenManager)),
             id: 1
         });
-        bytes memory stakerNodeData = abi.encodeWithSelector(
-            StakerNode.initialize.selector,
-            nodeInit
-        );
-        stakerNode = StakerNode(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(stakerNodeImplementation),
-                    address(admin),
-                    stakerNodeData
-                )
-            )
-        );
+        stakerNode.initialize(init);
+    }
 
-        // Setup test token
+    function _setupTestTokens() private {
         tokenRegistry.addToken(IERC20(address(testToken)), 18, 1e18);
         tokenRegistry.addToken(IERC20(address(testToken2)), 18, 1e18);
+
         testToken.mint(user1, 100 ether);
         testToken.mint(user2, 100 ether);
         testToken2.mint(user1, 100 ether);
