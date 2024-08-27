@@ -30,6 +30,10 @@ contract Orchestrator is
 
     mapping(IERC20 => IStrategy) public strategies;
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         IStrategyManager _strategyManager,
         IDelegationManager _delegationManager,

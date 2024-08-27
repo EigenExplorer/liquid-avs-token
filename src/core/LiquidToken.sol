@@ -15,7 +15,8 @@ import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
 
 /**
  * @title LiquidToken
- * @notice
+ * @dev Implements a liquid staking token with deposit, withdrawal, and asset management functionalities.
+ * This contract interacts with a TokenRegistry and an Orchestrator to manage assets and handle user requests.
  */
 contract LiquidToken is
     ILiquidToken,
@@ -37,14 +38,13 @@ contract LiquidToken is
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
+    /// @dev Disables initializers for the implementation contract
     constructor() {
         _disableInitializers();
     }
 
-    /**
-     * @dev Initializes the LiquidToken contract with the necessary parameters.
-     * @param init The initialization parameters, including the name, symbol, token registry, and orchestrator.
-     */
+    /// @notice Initializes the LiquidToken contract with the necessary parameters
+    /// @param init The initialization parameters, including the name, symbol, token registry, and orchestrator
     function initialize(Init calldata init) external initializer {
         __ERC20_init(init.name, init.symbol);
         __ReentrancyGuard_init();
@@ -58,13 +58,11 @@ contract LiquidToken is
         orchestrator = init.orchestrator;
     }
 
-    /**
-     * @dev Allows users to deposit an asset and receive the corresponding number of shares.
-     * @param asset The ERC20 asset to be deposited.
-     * @param amount The amount of the asset to be deposited.
-     * @param receiver The address that will receive the minted shares.
-     * @return shares The number of shares minted.
-     */
+    /// @notice Allows users to deposit an asset and receive the corresponding number of shares
+    /// @param asset The ERC20 asset to be deposited
+    /// @param amount The amount of the asset to be deposited
+    /// @param receiver The address that will receive the minted shares
+    /// @return shares The number of shares minted
     function deposit(
         IERC20 asset,
         uint256 amount,
@@ -85,11 +83,9 @@ contract LiquidToken is
         return shares;
     }
 
-    /**
-     * @dev Allows users to request a withdrawal of their shares.
-     * @param withdrawAssets The ERC20 assets the user wants to withdraw.
-     * @param shareAmounts The number of shares to be withdrawn for each asset.
-     */
+    /// @notice Allows users to request a withdrawal of their shares
+    /// @param withdrawAssets The ERC20 assets the user wants to withdraw
+    /// @param shareAmounts The number of shares to be withdrawn for each asset
     function requestWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
@@ -142,10 +138,8 @@ contract LiquidToken is
         );
     }
 
-    /**
-     * @dev Allows users to fulfill a withdrawal request after the withdrawal delay has passed.
-     * @param requestId The unique identifier of the withdrawal request.
-     */
+    /// @notice Allows users to fulfill a withdrawal request after the withdrawal delay has passed
+    /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(bytes32 requestId) external whenNotPaused {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
@@ -173,11 +167,9 @@ contract LiquidToken is
         );
     }
 
-    /**
-     * @dev Allows the orchestrator to transfer assets from the LiquidToken contract to itself.
-     * @param assetsToRetrieve The ERC20 assets to be transferred.
-     * @param amounts The amounts of each asset to be transferred.
-     */
+    /// @notice Allows the orchestrator to transfer assets from the LiquidToken contract to itself
+    /// @param assetsToRetrieve The ERC20 assets to be transferred
+    /// @param amounts The amounts of each asset to be transferred
     function transferAssetsToOrchestrator(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts
@@ -206,12 +198,10 @@ contract LiquidToken is
         }
     }
 
-    /**
-     * @dev Calculates the number of shares that correspond to a given amount of an asset.
-     * @param asset The ERC20 asset.
-     * @param amount The amount of the asset.
-     * @return The number of shares.
-     */
+    /// @notice Calculates the number of shares that correspond to a given amount of an asset
+    /// @param asset The ERC20 asset
+    /// @param amount The amount of the asset
+    /// @return The number of shares
     function calculateShares(
         IERC20 asset,
         uint256 amount
@@ -221,12 +211,10 @@ contract LiquidToken is
         return _convertToShares(assetAmountInUnitOfAccount);
     }
 
-    /**
-     * @dev Calculates the amount of an asset that corresponds to a given number of shares.
-     * @param asset The ERC20 asset.
-     * @param shares The number of shares.
-     * @return The amount of the asset.
-     */
+    /// @notice Calculates the amount of an asset that corresponds to a given number of shares
+    /// @param asset The ERC20 asset
+    /// @param shares The number of shares
+    /// @return The amount of the asset
     function calculateAmount(
         IERC20 asset,
         uint256 shares
@@ -255,6 +243,8 @@ contract LiquidToken is
         return withdrawalRequests[requestId];
     }
 
+    /// @notice Returns the total value of assets managed by the contract
+    /// @return The total value of assets in the unit of account
     function totalAssets() public view returns (uint256) {
         return tokenRegistry.totalAssets();
     }
@@ -291,10 +281,12 @@ contract LiquidToken is
     // Misc
     // ------------------------------------------------------------------------------
 
+    /// @notice Pauses the contract
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
+    /// @notice Unpauses the contract
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }

@@ -33,6 +33,10 @@ contract TokenRegistry is
     /// @notice Role identifier for price update operations
     bytes32 public constant PRICE_UPDATER_ROLE = keccak256("PRICE_UPDATER_ROLE");
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Initializes the contract, setting up initial roles
     /// @param admin Address to be granted the admin role
     /// @param priceUpdater Address to be granted the price updater role

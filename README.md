@@ -8,6 +8,8 @@ Liquid AVS Tokens (LATs) are a new category of assets designed by EigenExplorer 
 
 To get a basic understading of the Liquid AVS Token, visit the [Liquid AVS Token Documentation](https://docs.eigenexplorer.com/lat/introduction#why-choose-lat).
 
+For technical details, visit the [Technical Documentation](/docs).
+
 ## Deployments
 
 No deployments yet.
