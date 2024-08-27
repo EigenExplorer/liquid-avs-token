@@ -40,29 +40,44 @@ contract Orchestrator is
     }
 
     function initialize(
-        IStrategyManager _strategyManager,
-        IDelegationManager _delegationManager,
-        address admin,
-        address strategyController
+        Init memory init
     ) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
 
+        _grantRole(DEFAULT_ADMIN_ROLE, init.admin);
+        _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
+        _grantRole(STRATEGY_ADMIN_ROLE, init.admin);
+
         if (
-            address(_strategyManager) == address(0) ||
-            address(_delegationManager) == address(0) ||
-            admin == address(0) ||
-            strategyController == address(0)
+            address(init.strategyManager) == address(0) ||
+            address(init.delegationManager) == address(0) ||
+            address(init.liquidToken) == address(0)
         ) {
             revert ZeroAddress();
         }
 
-        strategyManager = _strategyManager;
-        delegationManager = _delegationManager;
+        if (init.assets.length != init.strategies.length) {
+            revert LengthMismatch(init.assets.length, init.strategies.length);
+        }
 
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(STRATEGY_CONTROLLER_ROLE, strategyController);
-        _grantRole(STRATEGY_ADMIN_ROLE, admin);
+        strategyManager = init.strategyManager;
+        delegationManager = init.delegationManager;
+        liquidToken = init.liquidToken;
+
+        // Initialize strategies for each asset
+        for (uint256 i = 0; i < init.assets.length; i++) {
+            if (address(init.assets[i]) == address(0) || address(init.strategies[i]) == address(0)) {
+                revert ZeroAddress();
+            }
+            
+            if (address(strategies[init.assets[i]]) != address(0)) {
+                revert StrategyAssetExists(address(init.assets[i]));
+            }
+
+            strategies[init.assets[i]] = init.strategies[i];
+            emit StrategyAdded(address(init.assets[i]), address(init.strategies[i]));
+        }
     }
 
     function stakeAssetsToNode(
@@ -166,7 +181,9 @@ contract Orchestrator is
         return strategy.userUnderlyingView(address(uint160(nodeId)));
     }
 
+    // ------------------------------------------------------------------------------
     // Internal functions
+    // ------------------------------------------------------------------------------
 
     function _parseDeposits(
         IERC20 asset,

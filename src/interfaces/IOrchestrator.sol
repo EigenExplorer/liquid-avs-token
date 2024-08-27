@@ -10,6 +10,9 @@ import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
 
 interface IOrchestrator {
     struct Init {
+        IERC20[] assets;
+        IStrategy[] strategies;
+        ILiquidToken liquidToken;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
         address admin;
@@ -38,17 +41,13 @@ interface IOrchestrator {
     // Errors
     error ZeroAddress();
     error InvalidStakingAmount(uint256 amount);
+    error StrategyAssetExists(address asset);
     error StrategyNotFound(address asset);
     error LengthMismatch(uint256 length1, uint256 length2);
     error InvalidNodeId(uint256 nodeId);
 
     // Initialization
-    function initialize(
-        IStrategyManager _strategyManager,
-        IDelegationManager _delegationManager,
-        address admin,
-        address strategyController
-    ) external;
+    function initialize(Init memory init) external;
 
     // Strategy Management
     function setStrategy(IERC20 asset, IStrategy strategy) external;

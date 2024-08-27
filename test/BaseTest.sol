@@ -81,12 +81,23 @@ contract BaseTest is Test {
         );
 
         // Deploy and initialize Orchestrator proxy
+        IOrchestrator.Init memory orchestratorInit = IOrchestrator.Init({
+            assets: new IERC20[](2),
+            strategies: new IStrategy[](2),
+            liquidToken: ILiquidToken(address(liquidToken)),
+            strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            admin: admin,
+            strategyController: admin
+        });
+        orchestratorInit.assets[0] = IERC20(address(testToken));
+        orchestratorInit.assets[1] = IERC20(address(testToken2));
+        orchestratorInit.strategies[0] = IStrategy(address(mockStrategy));
+        orchestratorInit.strategies[1] = IStrategy(address(mockStrategy));
+
         bytes memory orchestratorData = abi.encodeWithSelector(
             Orchestrator.initialize.selector,
-            strategyManager,
-            delegationManager,
-            admin,
-            admin
+            orchestratorInit
         );
         orchestrator = Orchestrator(
             address(
