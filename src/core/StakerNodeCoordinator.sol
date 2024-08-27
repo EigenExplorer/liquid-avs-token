@@ -6,7 +6,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
-import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
@@ -14,7 +14,7 @@ contract StakerNodeCoordinator is
     IStakerNodeCoordinator,
     AccessControlUpgradeable
 {
-    IOrchestrator public override orchestrator;
+    ILiquidTokenManager public override liquidTokenManager;
     IStrategyManager public override strategyManager;
     IDelegationManager public override delegationManager;
     uint256 public override maxNodes;
@@ -45,7 +45,7 @@ contract StakerNodeCoordinator is
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
 
-        orchestrator = init.orchestrator;
+        liquidTokenManager = init.liquidTokenManager;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         maxNodes = init.maxNodes;
@@ -178,13 +178,13 @@ contract StakerNodeCoordinator is
         return hasRole(STAKER_NODES_DELEGATOR_ROLE, _address);
     }
 
-    /// @notice Checks if a caller is the orchestrator
+    /// @notice Checks if a caller is the liquid token manager
     /// @param caller Address to check
-    /// @return bool True if the caller is the orchestrator, false otherwise
-    function hasOrchestratorRole(
+    /// @return bool True if the caller is the liquid token manager, false otherwise
+    function hasLiquidTokenManagerRole(
         address caller
     ) public view override returns (bool) {
-        return caller == address(orchestrator);
+        return caller == address(liquidTokenManager);
     }
 
     /// @notice Retrieves all staker node addresses

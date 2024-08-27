@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
-import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title IStakerNodeCoordinator
@@ -11,7 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 interface IStakerNodeCoordinator {
     /// @notice Initialization parameters for the StakerNodeCoordinator
     struct Init {
-        IOrchestrator orchestrator;
+        ILiquidTokenManager liquidTokenManager;
         IDelegationManager delegationManager;
         IStrategyManager strategyManager;
         uint256 maxNodes;
@@ -94,10 +94,10 @@ interface IStakerNodeCoordinator {
     /// @return True if the address has the role, false otherwise
     function hasStakerNodeDelegatorRole(address _address) external view returns (bool);
 
-    /// @notice Checks if a caller is the orchestrator
+    /// @notice Checks if a caller is the liquid token manager
     /// @param caller Address to check
-    /// @return True if the caller is the orchestrator, false otherwise
-    function hasOrchestratorRole(address caller) external view returns (bool);
+    /// @return True if the caller is the liquid token manager, false otherwise
+    function hasLiquidTokenManagerRole(address caller) external view returns (bool);
 
     /// @notice Retrieves all staker node addresses
     /// @return An array of all staker node addresses
@@ -120,9 +120,9 @@ interface IStakerNodeCoordinator {
     /// @return The IStrategyManager interface
     function strategyManager() external view returns (IStrategyManager);
 
-    /// @notice Gets the orchestrator contract
-    /// @return The IOrchestrator interface
-    function orchestrator() external view returns (IOrchestrator);
+    /// @notice Gets the liquid token manager contract
+    /// @return The ILiquidTokenManager interface
+    function liquidTokenManager() external view returns (ILiquidTokenManager);
 
     /// @notice Gets the maximum number of nodes allowed
     /// @return The maximum number of nodes

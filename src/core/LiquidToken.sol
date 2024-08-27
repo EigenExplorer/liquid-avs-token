@@ -10,13 +10,13 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/ut
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
-import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
 
 /**
  * @title LiquidToken
  * @dev Implements a liquid staking token with deposit, withdrawal, and asset management functionalities.
- * This contract interacts with a TokenRegistry and an Orchestrator to manage assets and handle user requests.
+ * This contract interacts with a TokenRegistry and LiquidTokenManager to manage assets and handle user requests.
  */
 contract LiquidToken is
     ILiquidToken,
@@ -28,7 +28,7 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ITokenRegistry public tokenRegistry;
-    IOrchestrator public orchestrator;
+    ILiquidTokenManager public liquidTokenManager;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
     mapping(address => Asset) public assets;
@@ -44,7 +44,7 @@ contract LiquidToken is
     }
 
     /// @notice Initializes the LiquidToken contract with the necessary parameters
-    /// @param init The initialization parameters, including the name, symbol, token registry, and orchestrator
+    /// @param init The initialization parameters, including the name, symbol, token registry, and liquid token manager
     function initialize(Init calldata init) external initializer {
         __ERC20_init(init.name, init.symbol);
         __ReentrancyGuard_init();
@@ -55,7 +55,7 @@ contract LiquidToken is
         _grantRole(PAUSER_ROLE, init.pauser);
 
         tokenRegistry = init.tokenRegistry;
-        orchestrator = init.orchestrator;
+        liquidTokenManager = init.liquidTokenManager;
     }
 
     /// @notice Allows users to deposit an asset and receive the corresponding number of shares
@@ -167,15 +167,15 @@ contract LiquidToken is
         );
     }
 
-    /// @notice Allows the orchestrator to transfer assets from the LiquidToken contract to itself
+    /// @notice Allows the liquid token manager to transfer assets from the LiquidToken contract to itself
     /// @param assetsToRetrieve The ERC20 assets to be transferred
     /// @param amounts The amounts of each asset to be transferred
-    function transferAssetsToOrchestrator(
+    function transferAssets(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts
     ) external whenNotPaused {
-        if (msg.sender != address(orchestrator))
-            revert NotOrchestrator(msg.sender);
+        if (msg.sender != address(liquidTokenManager))
+            revert NotLiquidTokenManager(msg.sender);
 
         if (assetsToRetrieve.length != amounts.length)
             revert ArrayLengthMismatch();
@@ -192,9 +192,9 @@ contract LiquidToken is
                 );
 
             assets[address(asset)].balance -= amount;
-            asset.safeTransfer(address(orchestrator), amount);
+            asset.safeTransfer(address(liquidTokenManager), amount);
 
-            emit AssetTransferred(asset, amount, address(orchestrator));
+            emit AssetTransferred(asset, amount, address(liquidTokenManager));
         }
     }
 

@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "./BaseTest.sol";
 import "../src/core/LiquidToken.sol";
-import "../src/core/Orchestrator.sol";
+import "../src/core/LiquidTokenManager.sol";
 import "../src/interfaces/ILiquidToken.sol";
 import "../src/utils/TokenRegistry.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -85,7 +85,7 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
-    function testTransferAssetsToOrchestrator() public {
+    function testTransferAssets() public {
         vm.prank(user1);
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
 
@@ -94,13 +94,13 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
 
-        vm.prank(address(orchestrator));
-        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+        vm.prank(address(liquidTokenManager));
+        liquidToken.transferAssets(assets, amounts);
 
         assertEq(
-            testToken.balanceOf(address(orchestrator)),
+            testToken.balanceOf(address(liquidTokenManager)),
             5 ether,
-            "Incorrect token balance in orchestrator"
+            "Incorrect token balance in liquid token manager"
         );
     }
 
@@ -200,7 +200,7 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
-    function testTransferAssetsToOrchestratorMultipleAssets() public {
+    function testTransferMultipleAssets() public {
         vm.startPrank(user1);
         testToken.approve(address(liquidToken), 10 ether);
         testToken2.approve(address(liquidToken), 5 ether);
@@ -215,18 +215,18 @@ contract LiquidTokenTest is BaseTest {
         amounts[0] = 5 ether;
         amounts[1] = 2 ether;
 
-        vm.prank(address(orchestrator));
-        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+        vm.prank(address(liquidTokenManager));
+        liquidToken.transferAssets(assets, amounts);
 
         assertEq(
-            testToken.balanceOf(address(orchestrator)),
+            testToken.balanceOf(address(liquidTokenManager)),
             5 ether,
-            "Incorrect token1 balance in orchestrator"
+            "Incorrect token1 balance in liquidTokenManager"
         );
         assertEq(
-            testToken2.balanceOf(address(orchestrator)),
+            testToken2.balanceOf(address(liquidTokenManager)),
             2 ether,
-            "Incorrect token2 balance in orchestrator"
+            "Incorrect token2 balance in liquidTokenManager"
         );
     }
 
@@ -291,7 +291,7 @@ contract LiquidTokenTest is BaseTest {
         vm.stopPrank();
     }
 
-    function testTransferAssetsToOrchestratorNotOrchestrator() public {
+    function testTransferAssetsNotLiquidTokenManager() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -299,9 +299,9 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(
-            abi.encodeWithSelector(ILiquidToken.NotOrchestrator.selector, user1)
+            abi.encodeWithSelector(ILiquidToken.NotLiquidTokenManager.selector, user1)
         );
-        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+        liquidToken.transferAssets(assets, amounts);
     }
 
     function testPause() public {

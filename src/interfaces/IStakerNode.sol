@@ -24,7 +24,7 @@ interface IStakerNode {
     error ZeroAddress();
     error NotStakerNodeOperator();
     error NotStakerNodeDelegator();
-    error NotOrchestrator();
+    error NotLiquidTokenManager();
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
 
     /// @notice Initializes the StakerNode contract

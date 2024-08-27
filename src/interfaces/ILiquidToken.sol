@@ -4,14 +4,14 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
-import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
 interface ILiquidToken is IERC20 {
     struct Init {
         string name;
         string symbol;
         ITokenRegistry tokenRegistry;
-        IOrchestrator orchestrator;
+        ILiquidTokenManager liquidTokenManager;
         address initialOwner;
         address pauser;
         address unpauser;
@@ -57,7 +57,7 @@ interface ILiquidToken is IERC20 {
     error UnsupportedAsset(IERC20 asset);
     error ZeroAmount();
     error ZeroShares();
-    error NotOrchestrator(address sender);
+    error NotLiquidTokenManager(address sender);
     error InvalidWithdrawalRequest();
     error WithdrawalDelayNotMet();
     error WithdrawalAlreadyFulfilled();
@@ -75,7 +75,7 @@ interface ILiquidToken is IERC20 {
         address receiver
     ) external returns (uint256);
 
-    function transferAssetsToOrchestrator(
+    function transferAssets(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts
     ) external;

@@ -24,7 +24,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     IStakerNodeCoordinator public coordinator;
     uint256 public id;
 
-    bytes32 public constant ORCHESTRATOR_ROLE = keccak256("ORCHESTRATOR_ROLE");
+    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE = keccak256("LIQUID_TOKEN_MANAGER_ROLE");
     bytes32 public constant DELEGATOR_ROLE = keccak256("DELEGATOR_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
@@ -51,7 +51,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         IERC20[] calldata assets,
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
-    ) external override nonReentrant onlyRole(ORCHESTRATOR_ROLE) {
+    ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         IStrategyManager strategyManager = coordinator.strategyManager();
 
         uint256 assetsLength = assets.length;
@@ -118,8 +118,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @dev Reverts if the caller doesn't have the required role
     /// @param role The role to check for
     modifier onlyRole(bytes32 role) {
-        if (role == ORCHESTRATOR_ROLE) {
-            if (!coordinator.hasOrchestratorRole(msg.sender)) {
+        if (role == LIQUID_TOKEN_MANAGER_ROLE) {
+            if (!coordinator.hasLiquidTokenManagerRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else if (role == DELEGATOR_ROLE) {

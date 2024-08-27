@@ -9,7 +9,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {LiquidToken} from "../src/core/LiquidToken.sol";
 import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
-import {Orchestrator} from "../src/core/Orchestrator.sol";
+import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {StakerNode} from "../src/core/StakerNode.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
@@ -17,7 +17,7 @@ import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.s
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
-import {IOrchestrator} from "../src/interfaces/IOrchestrator.sol";
+import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract BaseTest is Test {
@@ -26,8 +26,8 @@ contract BaseTest is Test {
     LiquidToken public liquidToken;
     TokenRegistry public tokenRegistryImplementation;
     TokenRegistry public tokenRegistry;
-    Orchestrator public orchestratorImplementation;
-    Orchestrator public orchestrator;
+    LiquidTokenManager public liquidTokenManagerImplementation;
+    LiquidTokenManager public liquidTokenManager;
     StakerNode public stakerNodeImplementation;
     StakerNode public stakerNode;
 
@@ -60,7 +60,7 @@ contract BaseTest is Test {
 
         // Deploy main contracts
         tokenRegistryImplementation = new TokenRegistry();
-        orchestratorImplementation = new Orchestrator();
+        liquidTokenManagerImplementation = new LiquidTokenManager();
         stakerNodeImplementation = new StakerNode();
         liquidTokenImplementation = new LiquidToken();
 
@@ -80,31 +80,32 @@ contract BaseTest is Test {
             )
         );
 
-        // Deploy and initialize Orchestrator proxy
-        IOrchestrator.Init memory orchestratorInit = IOrchestrator.Init({
-            assets: new IERC20[](2),
-            strategies: new IStrategy[](2),
-            liquidToken: ILiquidToken(address(liquidToken)),
-            strategyManager: strategyManager,
-            delegationManager: delegationManager,
-            admin: admin,
-            strategyController: admin
-        });
-        orchestratorInit.assets[0] = IERC20(address(testToken));
-        orchestratorInit.assets[1] = IERC20(address(testToken2));
-        orchestratorInit.strategies[0] = IStrategy(address(mockStrategy));
-        orchestratorInit.strategies[1] = IStrategy(address(mockStrategy));
+        // Deploy and initialize LiquidTokenManager proxy
+        ILiquidTokenManager.Init
+            memory liquidTokenManagerInit = ILiquidTokenManager.Init({
+                assets: new IERC20[](2),
+                strategies: new IStrategy[](2),
+                liquidToken: ILiquidToken(address(liquidToken)),
+                strategyManager: strategyManager,
+                delegationManager: delegationManager,
+                admin: admin,
+                strategyController: admin
+            });
+        liquidTokenManagerInit.assets[0] = IERC20(address(testToken));
+        liquidTokenManagerInit.assets[1] = IERC20(address(testToken2));
+        liquidTokenManagerInit.strategies[0] = IStrategy(address(mockStrategy));
+        liquidTokenManagerInit.strategies[1] = IStrategy(address(mockStrategy));
 
-        bytes memory orchestratorData = abi.encodeWithSelector(
-            Orchestrator.initialize.selector,
-            orchestratorInit
+        bytes memory liquidTokenManagerData = abi.encodeWithSelector(
+            LiquidTokenManager.initialize.selector,
+            liquidTokenManagerInit
         );
-        orchestrator = Orchestrator(
+        liquidTokenManager = LiquidTokenManager(
             address(
                 new TransparentUpgradeableProxy(
-                    address(orchestratorImplementation),
+                    address(liquidTokenManagerImplementation),
                     address(admin),
-                    orchestratorData
+                    liquidTokenManagerData
                 )
             )
         );
@@ -117,7 +118,7 @@ contract BaseTest is Test {
             pauser: pauser,
             unpauser: pauser,
             tokenRegistry: ITokenRegistry(address(tokenRegistry)),
-            orchestrator: IOrchestrator(address(orchestrator))
+            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
         bytes memory liquidTokenData = abi.encodeWithSelector(
             LiquidToken.initialize.selector,
@@ -135,7 +136,7 @@ contract BaseTest is Test {
 
         // Deploy and initialize StakerNode proxy
         IStakerNode.Init memory nodeInit = IStakerNode.Init({
-            coordinator: IStakerNodeCoordinator(address(orchestrator)),
+            coordinator: IStakerNodeCoordinator(address(liquidTokenManager)),
             id: 1
         });
         bytes memory stakerNodeData = abi.encodeWithSelector(

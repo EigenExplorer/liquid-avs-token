@@ -11,12 +11,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
-import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
-contract Orchestrator is
-    IOrchestrator,
+contract LiquidTokenManager is
+    ILiquidTokenManager,
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable
@@ -133,7 +133,7 @@ contract Orchestrator is
             strategiesForNode[i] = strategy;
         }
 
-        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+        liquidToken.transferAssets(assets, amounts);
 
         IERC20[] memory depositAssets = new IERC20[](assetsLength);
         uint256[] memory depositAmounts = new uint256[](amountsLength);

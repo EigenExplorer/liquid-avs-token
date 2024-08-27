@@ -8,7 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
 
-interface IOrchestrator {
+interface ILiquidTokenManager {
     struct Init {
         IERC20[] assets;
         IStrategy[] strategies;
