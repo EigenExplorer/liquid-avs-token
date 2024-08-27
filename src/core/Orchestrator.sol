@@ -10,7 +10,10 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {IOrchestrator} from "../interfaces/IOrchestrator.sol";
+import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 contract Orchestrator is
     IOrchestrator,
@@ -27,6 +30,8 @@ contract Orchestrator is
 
     IStrategyManager public strategyManager;
     IDelegationManager public delegationManager;
+    IStakerNodeCoordinator public stakerNodeCoordinator;
+    ILiquidToken public liquidToken;
 
     mapping(IERC20 => IStrategy) public strategies;
 
@@ -60,6 +65,85 @@ contract Orchestrator is
         _grantRole(STRATEGY_ADMIN_ROLE, admin);
     }
 
+    function stakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) public onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+        _stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function stakeAssetsToNodes(
+        NodeAllocation[] calldata allocations
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+        for (uint256 i = 0; i < allocations.length; i++) {
+            NodeAllocation memory allocation = allocations[i];
+            _stakeAssetsToNode(
+                allocation.nodeId,
+                allocation.assets,
+                allocation.amounts
+            );
+        }
+    }
+
+    function _stakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) internal {
+        uint256 assetsLength = assets.length;
+        uint256 amountsLength = amounts.length;
+
+        if (assetsLength != amountsLength) {
+            revert LengthMismatch(assetsLength, amountsLength);
+        }
+
+        IStakerNode node = IStakerNode(
+            stakerNodeCoordinator.getNodeById(nodeId)
+        );
+        if (address(node) == address(0)) {
+            revert InvalidNodeId(nodeId);
+        }
+
+        IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
+        for (uint256 i = 0; i < assetsLength; i++) {
+            IERC20 asset = assets[i];
+            if (amounts[i] == 0) {
+                revert InvalidStakingAmount(amounts[i]);
+            }
+            IStrategy strategy = strategies[asset];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(asset));
+            }
+            strategiesForNode[i] = strategy;
+        }
+
+        liquidToken.transferAssetsToOrchestrator(assets, amounts);
+
+        IERC20[] memory depositAssets = new IERC20[](assetsLength);
+        uint256[] memory depositAmounts = new uint256[](amountsLength);
+
+        for (uint256 i = 0; i < assetsLength; i++) {
+            (IERC20 depositAsset, uint256 depositAmount) = _parseDeposits(
+                assets[i],
+                amounts[i]
+            );
+            depositAssets[i] = depositAsset;
+            depositAmounts[i] = depositAmount;
+            depositAsset.safeTransfer(address(node), depositAmount);
+        }
+
+        emit StakedAssetsToNode(nodeId, assets, amounts);
+
+        node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
+
+        emit DepositedToEigenlayer(
+            depositAssets,
+            depositAmounts,
+            strategiesForNode
+        );
+    }
+
     function setStrategy(
         IERC20 asset,
         IStrategy strategy
@@ -80,5 +164,15 @@ contract Orchestrator is
             revert StrategyNotFound(address(asset));
         }
         return strategy.userUnderlyingView(address(uint160(nodeId)));
+    }
+
+    // Internal functions
+
+    function _parseDeposits(
+        IERC20 asset,
+        uint256 amount
+    ) internal pure returns (IERC20 depositAsset, uint256 depositAmount) {
+        depositAsset = asset;
+        depositAmount = amount;
     }
 }
