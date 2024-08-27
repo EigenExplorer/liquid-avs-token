@@ -15,6 +15,9 @@ import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
+/// @title LiquidTokenManager
+/// @notice Manages liquid tokens and their staking to EigenLayer strategies
+/// @dev Implements ILiquidTokenManager and uses OpenZeppelin's upgradeable contracts
 contract LiquidTokenManager is
     ILiquidTokenManager,
     Initializable,
@@ -28,20 +31,26 @@ contract LiquidTokenManager is
     bytes32 public constant STRATEGY_ADMIN_ROLE =
         keccak256("STRATEGY_ADMIN_ROLE");
 
+    /// @notice The EigenLayer StrategyManager contract
     IStrategyManager public strategyManager;
+    /// @notice The EigenLayer DelegationManager contract
     IDelegationManager public delegationManager;
+    /// @notice The StakerNodeCoordinator contract
     IStakerNodeCoordinator public stakerNodeCoordinator;
+    /// @notice The LiquidToken contract
     ILiquidToken public liquidToken;
 
+    /// @notice Mapping of assets to their corresponding EigenLayer strategies
     mapping(IERC20 => IStrategy) public strategies;
 
+    /// @dev Disables initializers for the implementation contract
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(
-        Init memory init
-    ) public initializer {
+    /// @notice Initializes the contract
+    /// @param init Initialization parameters
+    function initialize(Init memory init) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
 
@@ -67,19 +76,29 @@ contract LiquidTokenManager is
 
         // Initialize strategies for each asset
         for (uint256 i = 0; i < init.assets.length; i++) {
-            if (address(init.assets[i]) == address(0) || address(init.strategies[i]) == address(0)) {
+            if (
+                address(init.assets[i]) == address(0) ||
+                address(init.strategies[i]) == address(0)
+            ) {
                 revert ZeroAddress();
             }
-            
+
             if (address(strategies[init.assets[i]]) != address(0)) {
                 revert StrategyAssetExists(address(init.assets[i]));
             }
 
             strategies[init.assets[i]] = init.strategies[i];
-            emit StrategyAdded(address(init.assets[i]), address(init.strategies[i]));
+            emit StrategyAdded(
+                address(init.assets[i]),
+                address(init.strategies[i])
+            );
         }
     }
 
+    /// @notice Stakes assets to a specific node
+    /// @param nodeId The ID of the node to stake to
+    /// @param assets Array of asset addresses to stake
+    /// @param amounts Array of amounts to stake for each asset
     function stakeAssetsToNode(
         uint256 nodeId,
         IERC20[] memory assets,
@@ -88,6 +107,8 @@ contract LiquidTokenManager is
         _stakeAssetsToNode(nodeId, assets, amounts);
     }
 
+    /// @notice Stakes assets to multiple nodes
+    /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(
         NodeAllocation[] calldata allocations
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
@@ -101,6 +122,10 @@ contract LiquidTokenManager is
         }
     }
 
+    /// @notice Internal function to stake assets to a node
+    /// @param nodeId The ID of the node to stake to
+    /// @param assets Array of asset addresses to stake
+    /// @param amounts Array of amounts to stake for each asset
     function _stakeAssetsToNode(
         uint256 nodeId,
         IERC20[] memory assets,
@@ -159,6 +184,9 @@ contract LiquidTokenManager is
         );
     }
 
+    /// @notice Sets or updates the strategy for a given asset
+    /// @param asset The asset token address
+    /// @param strategy The strategy contract address
     function setStrategy(
         IERC20 asset,
         IStrategy strategy
@@ -170,6 +198,10 @@ contract LiquidTokenManager is
         emit StrategyAdded(address(asset), address(strategy));
     }
 
+    /// @notice Gets the staked balance of an asset for a specific node
+    /// @param asset The asset token address
+    /// @param nodeId The ID of the node
+    /// @return The staked balance of the asset for the node
     function getStakedAssetBalance(
         IERC20 asset,
         uint256 nodeId
@@ -185,6 +217,11 @@ contract LiquidTokenManager is
     // Internal functions
     // ------------------------------------------------------------------------------
 
+    /// @notice Parses deposit information for an asset
+    /// @param asset The asset token address
+    /// @param amount The amount to deposit
+    /// @return depositAsset The asset to be deposited
+    /// @return depositAmount The amount to be deposited
     function _parseDeposits(
         IERC20 asset,
         uint256 amount
