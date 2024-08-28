@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {BaseTest} from "./BaseTest.sol";
+import {BaseTest} from "./common/BaseTest.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";

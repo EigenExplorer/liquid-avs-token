@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "./BaseTest.sol";
-import "../src/core/LiquidToken.sol";
-import "../src/core/LiquidTokenManager.sol";
-import "../src/interfaces/ILiquidToken.sol";
-import "../src/utils/TokenRegistry.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+
+import {BaseTest} from "./common/BaseTest.sol";
+import {LiquidToken} from "../src/core/LiquidToken.sol";
+import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
+import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
+import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract LiquidTokenTest is BaseTest {

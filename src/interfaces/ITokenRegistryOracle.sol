@@ -5,19 +5,27 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITokenRegistry} from "./ITokenRegistry.sol";
 
-/// @title ITokenRateProvider Interface
-/// @notice Interface for the TokenRateProvider contract
+/// @title ITokenRegistryOracle Interface
+/// @notice Interface for the TokenRegistryOracle contract
 /// @dev This interface defines the functions for managing token rates
-interface ITokenRateProvider {
+interface ITokenRegistryOracle {
+    /// @notice Struct to hold initialization parameters
+    /// @param initialOwner The initial owner of the contract
+    /// @param priceUpdater The address of the price updater
+    struct Init {
+        address initialOwner;
+        address priceUpdater;
+        ITokenRegistry tokenRegistry;
+    }
+
     /// @notice Emitted when a token's rate is updated
     /// @param token The address of the token whose rate was updated
     /// @param newRate The new rate for the token
     event RateUpdated(IERC20 indexed token, uint256 newRate);
 
-    /// @notice Initializes the TokenRateProvider contract
-    /// @param admin The address to be granted admin rights
-    /// @param _tokenRegistry The address of the TokenRegistry contract
-    function initialize(address admin, ITokenRegistry _tokenRegistry) external;
+    /// @notice Initializes the TokenRegistryOracle contract
+    /// @param init Struct containing initial owner and price updater addresses
+    function initialize(Init memory init) external;
 
     /// @notice Updates the rate for a single token
     /// @param token The address of the token to update

@@ -2,26 +2,29 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {IPauserRegistry} from "@eigenlayer/contracts/permissions/PauserRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
-import {LiquidToken} from "../src/core/LiquidToken.sol";
-import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
-import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
-import {StakerNode} from "../src/core/StakerNode.sol";
-import {StakerNodeCoordinator} from "../src/core/StakerNodeCoordinator.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockStrategy} from "./mocks/MockStrategy.sol";
-import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
-import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
-import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
-import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
-import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import {IPauserRegistry} from "@eigenlayer/contracts/permissions/PauserRegistry.sol";
-import {NetworkAddresses} from "./utils/NetworkAddresses.sol";
+
+import {LiquidToken} from "../../src/core/LiquidToken.sol";
+import {TokenRegistry} from "../../src/utils/TokenRegistry.sol";
+import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
+import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
+import {StakerNode} from "../../src/core/StakerNode.sol";
+import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
+import {MockERC20} from "../mocks/MockERC20.sol";
+import {MockStrategy} from "../mocks/MockStrategy.sol";
+import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
+import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
+import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
+import {ITokenRegistry} from "../../src/interfaces/ITokenRegistry.sol";
+import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
+import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
+import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
     // EigenLayer Contracts
@@ -31,6 +34,7 @@ contract BaseTest is Test {
     // Contracts
     LiquidToken public liquidToken;
     TokenRegistry public tokenRegistry;
+    TokenRegistryOracle public tokenRegistryOracle;
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
 
@@ -47,6 +51,7 @@ contract BaseTest is Test {
 
     // Private variables (with leading underscore)
     LiquidToken private _liquidTokenImplementation;
+    TokenRegistryOracle private _tokenRegistryOracleImplementation;
     TokenRegistry private _tokenRegistryImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
@@ -80,6 +85,7 @@ contract BaseTest is Test {
     }
 
     function _deployMainContracts() private {
+        _tokenRegistryOracleImplementation = new TokenRegistryOracle();
         _tokenRegistryImplementation = new TokenRegistry();
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
@@ -88,6 +94,15 @@ contract BaseTest is Test {
     }
 
     function _deployProxies() private {
+        tokenRegistryOracle = TokenRegistryOracle(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(_tokenRegistryOracleImplementation),
+                    address(admin),
+                    ""
+                )
+            )
+        );
         tokenRegistry = TokenRegistry(
             address(
                 new TransparentUpgradeableProxy(
@@ -127,14 +142,28 @@ contract BaseTest is Test {
     }
 
     function _initializeProxies() private {
+        _initializeTokenRegistryOracle();
         _initializeTokenRegistry();
         _initializeStakerNodeCoordinator();
         _initializeLiquidToken();
         _initializeLiquidTokenManager();
     }
 
+    function _initializeTokenRegistryOracle() private {
+        ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
+            initialOwner: admin,
+            priceUpdater: user2,
+            tokenRegistry: ITokenRegistry(address(tokenRegistry))
+        });
+        tokenRegistryOracle.initialize(init);
+    }
+
     function _initializeTokenRegistry() private {
-        tokenRegistry.initialize(admin, admin);
+        ITokenRegistry.Init memory init = ITokenRegistry.Init({
+            initialOwner: admin,
+            priceUpdater: address(tokenRegistryOracle)
+        });
+        tokenRegistry.initialize(init);
     }
 
     function _initializeLiquidTokenManager() private {

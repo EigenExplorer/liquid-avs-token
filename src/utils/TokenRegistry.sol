@@ -27,28 +27,21 @@ contract TokenRegistry is
     /// @notice Number of decimal places used for price representation
     uint256 public constant PRICE_DECIMALS = 18;
 
-    /// @notice Role identifier for admin operations
-    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-
     /// @notice Role identifier for price update operations
-    bytes32 public constant PRICE_UPDATER_ROLE = keccak256("PRICE_UPDATER_ROLE");
+    bytes32 public constant PRICE_UPDATER_ROLE =
+        keccak256("PRICE_UPDATER_ROLE");
 
     constructor() {
         _disableInitializers();
     }
 
     /// @notice Initializes the contract, setting up initial roles
-    /// @param admin Address to be granted the admin role
-    /// @param priceUpdater Address to be granted the price updater role
-    function initialize(
-        address admin,
-        address priceUpdater
-    ) public initializer {
+    /// @param init Struct containing initial owner and price updater addresses
+    function initialize(Init memory init) public initializer {
         __AccessControl_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(ADMIN_ROLE, admin);
-        _grantRole(PRICE_UPDATER_ROLE, priceUpdater);
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
+        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
     }
 
     /// @notice Adds a new token to the registry
@@ -59,7 +52,7 @@ contract TokenRegistry is
         IERC20 token,
         uint256 decimals,
         uint256 initialPrice
-    ) external onlyRole(ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[address(token)].isSupported)
             revert TokenAlreadySupported(token);
         if (initialPrice == 0) revert InvalidPrice();
@@ -76,7 +69,7 @@ contract TokenRegistry is
 
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
-    function removeToken(IERC20 token) external onlyRole(ADMIN_ROLE) {
+    function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (!tokens[address(token)].isSupported)
             revert TokenNotSupported(token);
 

@@ -7,6 +7,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /// @notice Interface for the TokenRegistry contract
 /// @dev This interface defines the functions and events for managing token information and prices
 interface ITokenRegistry {
+    /// @notice Struct to hold initialization parameters
+    /// @param initialOwner The initial owner of the contract
+    /// @param priceUpdater The address of the price updater
+    struct Init {
+        address initialOwner;
+        address priceUpdater;
+    }
+
     /// @notice Struct to hold token information
     /// @param isSupported Whether the token is supported
     /// @param decimals The number of decimals for the token

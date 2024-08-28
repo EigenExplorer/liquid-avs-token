@@ -6,26 +6,25 @@ import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/acce
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
-import {ITokenRateProvider} from "../interfaces/ITokenRateProvider.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
-/// @title TokenRateProvider
+/// @title TokenRegistryOracle
 /// @notice A contract to provide and update rates for given tokens
 /// @dev This contract interacts with a TokenRegistry to manage token rates
-contract TokenRateProvider is ITokenRateProvider, Initializable, AccessControlUpgradeable {
+contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessControlUpgradeable {
     ITokenRegistry public tokenRegistry;
 
     bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
 
     /// @notice Initializes the contract
-    /// @param admin The address to be granted admin rights
-    /// @param _tokenRegistry The address of the TokenRegistry contract
-    function initialize(address admin, ITokenRegistry _tokenRegistry) public initializer {
+    /// @param init Struct containing initial owner and price updater addresses
+    function initialize(Init memory init) public initializer {
         __AccessControl_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(RATE_UPDATER_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
+        _grantRole(RATE_UPDATER_ROLE, init.priceUpdater);
 
-        tokenRegistry = _tokenRegistry;
+        tokenRegistry = init.tokenRegistry;
     }
 
     /// @notice Updates the rate for a single token
