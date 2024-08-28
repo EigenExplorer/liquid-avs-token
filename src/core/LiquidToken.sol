@@ -189,6 +189,9 @@ contract LiquidToken is
             IERC20 asset = assetsToRetrieve[i];
             uint256 amount = amounts[i];
 
+            if (!tokenRegistry.tokenIsSupported(asset))
+                revert UnsupportedAsset(asset);
+
             if (amount > assets[address(asset)].balance)
                 revert InsufficientBalance(
                     IERC20(address(asset)),
