@@ -14,7 +14,6 @@ interface ILiquidToken is IERC20 {
         ILiquidTokenManager liquidTokenManager;
         address initialOwner;
         address pauser;
-        address unpauser;
     }
 
     struct Asset {

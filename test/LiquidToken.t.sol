@@ -345,7 +345,7 @@ contract LiquidTokenTest is BaseTest {
         vm.prank(pauser);
         liquidToken.pause();
 
-        vm.prank(pauser);
+        vm.prank(admin);
         liquidToken.unpause();
 
         assertFalse(liquidToken.paused(), "Contract should be unpaused");

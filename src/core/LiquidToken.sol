@@ -35,7 +35,6 @@ contract LiquidToken is
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
-    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @dev Disables initializers for the implementation contract
@@ -51,7 +50,7 @@ contract LiquidToken is
         __AccessControl_init();
         __Pausable_init();
 
-        _grantRole(ADMIN_ROLE, init.initialOwner);
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
         tokenRegistry = init.tokenRegistry;
@@ -97,8 +96,7 @@ contract LiquidToken is
         for (uint256 i = 0; i < withdrawAssets.length; i++) {
             if (!tokenRegistry.tokenIsSupported(withdrawAssets[i]))
                 revert UnsupportedAsset(withdrawAssets[i]);
-            if (shareAmounts[i] == 0)
-                revert ZeroAmount();
+            if (shareAmounts[i] == 0) revert ZeroAmount();
             totalShares += shareAmounts[i];
         }
 
@@ -140,9 +138,7 @@ contract LiquidToken is
 
     /// @notice Allows users to fulfill a withdrawal request after the withdrawal delay has passed
     /// @param requestId The unique identifier of the withdrawal request
-    function fulfillWithdrawal(
-        bytes32 requestId
-    ) external nonReentrant {
+    function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
         if (request.user != msg.sender) revert InvalidWithdrawalRequest();
@@ -297,7 +293,7 @@ contract LiquidToken is
     }
 
     /// @notice Unpauses the contract
-    function unpause() external onlyRole(PAUSER_ROLE) {
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
 }

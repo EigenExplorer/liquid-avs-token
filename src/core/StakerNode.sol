@@ -27,8 +27,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
         keccak256("LIQUID_TOKEN_MANAGER_ROLE");
-    bytes32 public constant DELEGATOR_ROLE = keccak256("DELEGATOR_ROLE");
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
+        keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -81,7 +81,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         address operator,
         ISignatureUtils.SignatureWithExpiry memory signature,
         bytes32 approverSalt
-    ) public override onlyRole(DELEGATOR_ROLE) {
+    ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
 
@@ -89,7 +89,11 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @notice Undelegates the StakerNode's assets from the current operator
-    function undelegate() public override onlyRole(DELEGATOR_ROLE) {
+    function undelegate()
+        public
+        override
+        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
+    {
         IDelegationManager delegationManager = coordinator.delegationManager();
         bytes32[] memory withdrawalRoots = delegationManager.undelegate(
             address(this)
@@ -124,12 +128,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             if (!coordinator.hasLiquidTokenManagerRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
-        } else if (role == DELEGATOR_ROLE) {
+        } else if (role == STAKER_NODES_DELEGATOR_ROLE) {
             if (!coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
-                revert UnauthorizedAccess(msg.sender, role);
-            }
-        } else if (role == OPERATOR_ROLE) {
-            if (!coordinator.hasStakerNodeOperatorRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else {

@@ -28,8 +28,6 @@ contract LiquidTokenManager is
 
     bytes32 public constant STRATEGY_CONTROLLER_ROLE =
         keccak256("STRATEGY_CONTROLLER_ROLE");
-    bytes32 public constant STRATEGY_ADMIN_ROLE =
-        keccak256("STRATEGY_ADMIN_ROLE");
 
     /// @notice The EigenLayer StrategyManager contract
     IStrategyManager public strategyManager;
@@ -54,9 +52,8 @@ contract LiquidTokenManager is
         __AccessControl_init();
         __ReentrancyGuard_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, init.admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
-        _grantRole(STRATEGY_ADMIN_ROLE, init.admin);
 
         if (
             address(init.strategyManager) == address(0) ||
@@ -185,7 +182,7 @@ contract LiquidTokenManager is
     function setStrategy(
         IERC20 asset,
         IStrategy strategy
-    ) external onlyRole(STRATEGY_ADMIN_ROLE) {
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
         if (address(asset) == address(0) || address(strategy) == address(0)) {
             revert ZeroAddress();
         }

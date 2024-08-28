@@ -23,9 +23,6 @@ contract StakerNodeCoordinator is
     UpgradeableBeacon public upgradeableBeacon;
     IStakerNode[] private stakerNodes;
 
-    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant STAKER_NODE_OPERATOR_ROLE =
-        keccak256("STAKER_NODE_OPERATOR_ROLE");
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
     bytes32 public constant STAKER_NODE_CREATOR_ROLE =
@@ -41,8 +38,7 @@ contract StakerNodeCoordinator is
     function initialize(Init calldata init) external override initializer {
         __AccessControl_init();
 
-        _grantRole(ADMIN_ROLE, init.initialOwner);
-        _grantRole(STAKER_NODE_OPERATOR_ROLE, init.stakerNodeOperator);
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
 
@@ -98,13 +94,13 @@ contract StakerNodeCoordinator is
 
     /// @notice Registers the initial staker node implementation
     /// @param _implementationContract Address of the implementation contract
-    /// @dev Can only be called once by an account with ADMIN_ROLE
+    /// @dev Can only be called once by an account with DEFAULT_ADMIN_ROLE
     function registerStakerNodeImplementation(
         address _implementationContract
     )
         public
         override
-        onlyRole(ADMIN_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
         notZeroAddress(_implementationContract)
     {
         if (address(upgradeableBeacon) != address(0)) {
@@ -124,13 +120,13 @@ contract StakerNodeCoordinator is
 
     /// @notice Upgrades the staker node implementation
     /// @param _implementationContract Address of the new implementation contract
-    /// @dev Can only be called by an account with ADMIN_ROLE
+    /// @dev Can only be called by an account with DEFAULT_ADMIN_ROLE
     function upgradeStakerNodeImplementation(
         address _implementationContract
     )
         public
         override
-        onlyRole(ADMIN_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
         notZeroAddress(_implementationContract)
     {
         if (address(upgradeableBeacon) == address(0)) {
@@ -153,21 +149,12 @@ contract StakerNodeCoordinator is
 
     /// @notice Sets the maximum number of staker nodes
     /// @param _maxNodes New maximum number of nodes
-    /// @dev Can only be called by an account with ADMIN_ROLE
+    /// @dev Can only be called by an account with DEFAULT_ADMIN_ROLE
     function setMaxNodes(
         uint256 _maxNodes
-    ) public override onlyRole(ADMIN_ROLE) {
+    ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
         maxNodes = _maxNodes;
         emit MaxNodesUpdated(_maxNodes);
-    }
-
-    /// @notice Checks if an account has the STAKER_NODE_OPERATOR_ROLE
-    /// @param account Address to check
-    /// @return bool True if the account has the role, false otherwise
-    function hasStakerNodeOperatorRole(
-        address account
-    ) external view override returns (bool) {
-        return hasRole(STAKER_NODE_OPERATOR_ROLE, account);
     }
 
     /// @notice Checks if an address has the STAKER_NODES_DELEGATOR_ROLE

@@ -145,7 +145,7 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
-            admin: admin,
+            initialOwner: admin,
             strategyController: admin
         });
         init.assets[0] = IERC20(address(testToken));
@@ -161,7 +161,6 @@ contract BaseTest is Test {
             symbol: "LST",
             initialOwner: admin,
             pauser: pauser,
-            unpauser: pauser,
             tokenRegistry: ITokenRegistry(address(tokenRegistry)),
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
@@ -176,8 +175,6 @@ contract BaseTest is Test {
             maxNodes: 10,
             initialOwner: admin,
             pauser: pauser,
-            unpauser: pauser,
-            stakerNodeOperator: admin,
             stakerNodeCreator: admin,
             stakerNodesDelegator: admin
         });

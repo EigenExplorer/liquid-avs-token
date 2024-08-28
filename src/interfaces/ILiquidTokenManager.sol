@@ -17,7 +17,7 @@ interface ILiquidTokenManager {
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
-        address admin;
+        address initialOwner;
         address strategyController;
     }
 

@@ -19,8 +19,6 @@ interface IStakerNodeCoordinator {
         uint256 maxNodes;
         address initialOwner;
         address pauser;
-        address unpauser;
-        address stakerNodeOperator;
         address stakerNodeCreator;
         address stakerNodesDelegator;
     }
@@ -85,11 +83,6 @@ interface IStakerNodeCoordinator {
     /// @notice Sets the maximum number of staker nodes
     /// @param _maxNodes New maximum number of nodes
     function setMaxNodes(uint256 _maxNodes) external;
-
-    /// @notice Checks if an account has the STAKER_NODE_OPERATOR_ROLE
-    /// @param account Address to check
-    /// @return True if the account has the role, false otherwise
-    function hasStakerNodeOperatorRole(address account) external view returns (bool);
 
     /// @notice Checks if an address has the STAKER_NODES_DELEGATOR_ROLE
     /// @param _address Address to check
