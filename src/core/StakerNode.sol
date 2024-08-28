@@ -16,8 +16,8 @@ import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 /**
  * @title StakerNode
- * @dev Implements staking node functionality for tokens, enabling token staking, delegation, and rewards management.
- * This contract interacts with the Eigenlayer protocol to deposit assets, delegate staking operations, and manage staking rewards.
+ * @notice Implements staking node functionality for tokens, enabling token staking, delegation, and rewards management
+ * @dev Interacts with the Eigenlayer protocol to deposit assets, delegate staking operations, and manage staking rewards
  */
 contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;

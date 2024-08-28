@@ -11,6 +11,11 @@ import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
+/**
+ * @title StakerNodeCoordinator
+ * @notice Coordinates the creation and management of staker nodes
+ * @dev Manages the upgradeability and initialization of staker nodes
+ */
 contract StakerNodeCoordinator is
     IStakerNodeCoordinator,
     AccessControlUpgradeable

@@ -15,8 +15,8 @@ import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
 
 /**
  * @title LiquidToken
- * @dev Implements a liquid staking token with deposit, withdrawal, and asset management functionalities.
- * This contract interacts with a TokenRegistry and LiquidTokenManager to manage assets and handle user requests.
+ * @notice Implements a liquid staking token with deposit, withdrawal, and asset management functionalities
+ * @dev Interacts with TokenRegistry and LiquidTokenManager to manage assets and handle user requests
  */
 contract LiquidToken is
     ILiquidToken,
@@ -42,8 +42,8 @@ contract LiquidToken is
         _disableInitializers();
     }
 
-    /// @notice Initializes the LiquidToken contract with the necessary parameters
-    /// @param init The initialization parameters, including the name, symbol, token registry, and liquid token manager
+    /// @notice Initializes the LiquidToken contract
+    /// @param init The initialization parameters
     function initialize(Init calldata init) external initializer {
         __ERC20_init(init.name, init.symbol);
         __ReentrancyGuard_init();
@@ -57,10 +57,10 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
     }
 
-    /// @notice Allows users to deposit an asset and receive the corresponding number of shares
-    /// @param asset The ERC20 asset to be deposited
-    /// @param amount The amount of the asset to be deposited
-    /// @param receiver The address that will receive the minted shares
+    /// @notice Allows users to deposit an asset and receive shares
+    /// @param asset The ERC20 asset to deposit
+    /// @param amount The amount of the asset to deposit
+    /// @param receiver The address to receive the minted shares
     /// @return shares The number of shares minted
     function deposit(
         IERC20 asset,
@@ -83,8 +83,8 @@ contract LiquidToken is
     }
 
     /// @notice Allows users to request a withdrawal of their shares
-    /// @param withdrawAssets The ERC20 assets the user wants to withdraw
-    /// @param shareAmounts The number of shares to be withdrawn for each asset
+    /// @param withdrawAssets The ERC20 assets to withdraw
+    /// @param shareAmounts The number of shares to withdraw for each asset
     function requestWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
@@ -136,7 +136,7 @@ contract LiquidToken is
         );
     }
 
-    /// @notice Allows users to fulfill a withdrawal request after the withdrawal delay has passed
+    /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
@@ -170,9 +170,9 @@ contract LiquidToken is
         );
     }
 
-    /// @notice Allows the liquid token manager to transfer assets from the LiquidToken contract to itself
-    /// @param assetsToRetrieve The ERC20 assets to be transferred
-    /// @param amounts The amounts of each asset to be transferred
+    /// @notice Allows the LiquidTokenManager to transfer assets from this contract
+    /// @param assetsToRetrieve The ERC20 assets to transfer
+    /// @param amounts The amounts of each asset to transfer
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts

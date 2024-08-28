@@ -8,10 +8,10 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
-/// @title IStakerNodeCoordinator
+/// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract
 interface IStakerNodeCoordinator {
-    /// @notice Initialization parameters for the StakerNodeCoordinator
+    /// @notice Initialization parameters for StakerNodeCoordinator
     struct Init {
         ILiquidTokenManager liquidTokenManager;
         IDelegationManager delegationManager;
@@ -24,48 +24,61 @@ interface IStakerNodeCoordinator {
     }
 
     /// @notice Emitted when a new staker node is created
-    /// @param nodeId The ID of the newly created node
-    /// @param node The IStakerNode interface of the newly created node
     event StakerNodeCreated(uint256 nodeId, IStakerNode node);
 
     /// @notice Emitted when a staker node is removed
-    /// @param node The IStakerNode interface of the removed node
     event StakerNodeRemoved(IStakerNode node);
 
     /// @notice Emitted when the maximum number of nodes is updated
-    /// @param maxNodes The new maximum number of nodes
     event MaxNodesUpdated(uint256 maxNodes);
 
     /// @notice Emitted when a new staker node implementation is registered
-    /// @param upgradeableBeaconAddress The address of the upgradeable beacon
-    /// @param implementationContract The address of the new implementation contract
     event RegisteredStakerNodeImplementation(address upgradeableBeaconAddress, address implementationContract);
 
     /// @notice Emitted when the staker node implementation is upgraded
-    /// @param implementationContract The address of the new implementation contract
-    /// @param nodesCount The number of nodes upgraded
     event UpgradedStakerNodeImplementation(address implementationContract, uint256 nodesCount);
 
     /// @notice Emitted when a node is initialized
-    /// @param nodeAddress The address of the initialized node
-    /// @param initializedVersion The version of the initialization
     event NodeInitialized(address nodeAddress, uint64 initializedVersion);
 
+    /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
+
+    /// @notice Error for unauthorized access
     error Unauthorized();
+
+    /// @notice Error for insufficient funds
     error InsufficientFunds();
+
+    /// @notice Error when contract is paused
     error Paused();
+
+    /// @notice Error for zero amount
     error ZeroAmount();
+
+    /// @notice Error for zero address
     error ZeroAddress();
+
+    /// @notice Error when beacon implementation already exists
     error BeaconImplementationAlreadyExists();
+
+    /// @notice Error when no beacon implementation exists
     error NoBeaconImplementationExists();
+
+    /// @notice Error when maximum number of staker nodes is reached
     error TooManyStakerNodes(uint256 maxNodes);
+
+    /// @notice Error when node ID is out of range
     error NodeIdOutOfRange(uint256 nodeId);
+
+    /// @notice Error when node is already registered
     error NodeAlreadyRegistered(address nodeAddress);
+
+    /// @notice Error when caller is not the owner
     error NotOwner();
 
     /// @notice Initializes the StakerNodeCoordinator contract
-    /// @param init Struct containing initialization parameters
+    /// @param init Initialization parameters
     function initialize(Init calldata init) external;
 
     /// @notice Creates a new staker node

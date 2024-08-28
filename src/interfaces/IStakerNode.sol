@@ -7,14 +7,22 @@ import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
+/// @title IStakerNode Interface
+/// @notice Interface for the StakerNode contract
 interface IStakerNode {
+    /// @notice Initialization parameters for StakerNode
     struct Init {
         IStakerNodeCoordinator coordinator;
         uint256 id;
     }
 
+    /// @notice Emitted when the StakerNode is delegated to an operator
     event Delegated(address indexed operator);
+
+    /// @notice Emitted when the StakerNode is undelegated from the current operator
     event Undelegated(bytes32[] withdrawalRoots);
+
+    /// @notice Emitted when assets are deposited into an Eigenlayer strategy
     event DepositedToStrategy(
         IERC20 indexed asset,
         IStrategy indexed strategy,
@@ -22,10 +30,19 @@ interface IStakerNode {
         uint256 shares
     );
 
+    /// @notice Error for zero address
     error ZeroAddress();
+
+    /// @notice Error for unauthorized access by non-StakerNode operator
     error NotStakerNodeOperator();
+
+    /// @notice Error for unauthorized access by non-StakerNode delegator
     error NotStakerNodeDelegator();
+
+    /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager();
+
+    /// @notice Error for unauthorized access
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
 
     /// @notice Initializes the StakerNode contract
