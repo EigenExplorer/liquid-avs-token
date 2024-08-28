@@ -355,7 +355,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
     }
 
-    function testConsecutiveWithdrawalRequestsWithDelayedFulfillment() public {
+    function testConsecutiveWithdrawalRequestsWithFulfillments() public {
         vm.startPrank(user1);
 
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
