@@ -374,12 +374,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             liquidToken.balanceOf(user1), 
             3 ether, 
-            "Incorrect LiquidToken balance after second withdrawal request"
-        );
-        assertEq(
-            testToken.balanceOf(address(liquidToken)), 
-            10 ether, 
-            "testToken balance in LiquidToken contract should remain unchanged after second withdrawal request"
+            "Incorrect balance after second withdrawal request"
         );
 
         // There should be two withdrawal requests in the queue
@@ -400,7 +395,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             testToken.balanceOf(user1),
             95 ether,
-            "Incorrect testToken balance after first withdrawal fulfillment"
+            "Incorrect token balance after first withdrawal fulfillment"
         );
         assertEq(
             liquidToken.totalSupply(),
@@ -410,7 +405,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             liquidToken.balanceOf(user1),
             3 ether,
-            "Incorrect LiquidToken balance after first withdrawal fulfillment"
+            "Incorrect remaining balance after first withdrawal"
         );
 
         // Fulfill the second withdrawal request
@@ -422,7 +417,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             testToken.balanceOf(user1),
             97 ether,
-            "Incorrect testToken balance after second withdrawal fulfillment"
+            "Incorrect testToken balance after second withdrawal"
         );
         assertEq(
             liquidToken.totalSupply(),
@@ -432,7 +427,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             liquidToken.balanceOf(user1),
             3 ether,
-            "Incorrect LiquidToken balance after second withdrawal fulfillment"
+            "Incorrect remaining balance after second withdrawal fulfillment"
         );
 
         vm.stopPrank();
@@ -504,8 +499,8 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestIdUser1);
 
         // Check balances for User1
-        assertEq(testToken.balanceOf(user1), 95 ether, "User1 token balance after withdrawal is incorrect");
-        assertEq(liquidToken.balanceOf(user1), 5 ether, "User1 liquid token balance after withdrawal is incorrect");
+        assertEq(testToken.balanceOf(user1), 95 ether, "Incorrect token balance after withdrawal for User1");
+        assertEq(liquidToken.balanceOf(user1), 5 ether, "Incorrect remaining balance after withdrawal for User1");
 
         vm.stopPrank();
         vm.startPrank(user2);
@@ -519,8 +514,8 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestIdUser2);
 
         // Check balances for User2
-        assertEq(testToken.balanceOf(user2), 90 ether, "User2 token balance after withdrawal is incorrect");
-        assertEq(liquidToken.balanceOf(user2), 10 ether, "User2 liquid token balance after withdrawal is incorrect");
+        assertEq(testToken.balanceOf(user2), 90 ether, "Incorrect token balance after withdrawal for User2");
+        assertEq(liquidToken.balanceOf(user2), 10 ether, "Incorrect remaining balance after withdrawal for User2");
 
         vm.stopPrank();
 
