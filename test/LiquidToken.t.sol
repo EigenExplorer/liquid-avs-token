@@ -354,4 +354,88 @@ contract LiquidTokenTest is BaseTest {
         vm.prank(user1);
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
     }
+
+    function testConsecutiveWithdrawalRequestsWithDelayedFulfillment() public {
+    vm.startPrank(user1);
+
+    liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+    IERC20[] memory assets = new IERC20[](1);
+    assets[0] = IERC20(address(testToken));
+    uint256[] memory user1Amount = new uint256[](1);
+    user1Amount[0] = 5 ether;
+    liquidToken.requestWithdrawal(assets, user1Amount);
+
+    // Second withdrawal request before fulfilling the first
+    uint256[] memory user2Amount = new uint256[](1);
+    user2Amount[0] = 2 ether;
+    liquidToken.requestWithdrawal(assets, user2Amount);
+
+    assertEq(
+        liquidToken.balanceOf(user1), 
+        3 ether, 
+        "Incorrect LiquidToken balance after second withdrawal request"
+    );
+    assertEq(
+        testToken.balanceOf(address(liquidToken)), 
+        10 ether, 
+        "testToken balance in LiquidToken contract should remain unchanged after second withdrawal request"
+    );
+
+    // There should be two withdrawal requests in the queue
+    assertEq(
+        liquidToken.getUserWithdrawalRequests(user1).length, 
+        2, 
+        "Incorrect number of withdrawal requests"
+    );
+
+    vm.warp(block.timestamp + 15 days);
+
+    // Fulfill the first withdrawal request
+    bytes32 firstRequestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+    uint256 totalSupplyBeforeFirstFulfillment = liquidToken.totalSupply();
+    liquidToken.fulfillWithdrawal(firstRequestId);
+
+    // Check balances after the first fulfillment
+    assertEq(
+        testToken.balanceOf(user1),
+        95 ether,
+        "Incorrect testToken balance after first withdrawal fulfillment"
+    );
+    assertEq(
+        liquidToken.totalSupply(),
+        totalSupplyBeforeFirstFulfillment - 5 ether,
+        "Incorrect total supply after first withdrawal (tokens not burned)"
+    );
+    assertEq(
+        liquidToken.balanceOf(user1),
+        3 ether,
+        "Incorrect LiquidToken balance after first withdrawal fulfillment"
+    );
+
+    // Fulfill the second withdrawal request
+    bytes32 secondRequestId = liquidToken.getUserWithdrawalRequests(user1)[1];
+    uint256 totalSupplyBeforeSecondFulfillment = liquidToken.totalSupply();
+    liquidToken.fulfillWithdrawal(secondRequestId);
+
+    // Check balances after the second fulfillment
+    assertEq(
+        testToken.balanceOf(user1),
+        97 ether,
+        "Incorrect testToken balance after second withdrawal fulfillment"
+    );
+    assertEq(
+        liquidToken.totalSupply(),
+        totalSupplyBeforeSecondFulfillment - 2 ether,
+        "Incorrect total supply after second withdrawal (tokens not burned)"
+    );
+    assertEq(
+        liquidToken.balanceOf(user1),
+        3 ether,
+        "Incorrect LiquidToken balance after second withdrawal fulfillment"
+    );
+
+    vm.stopPrank();
+}
+
 }
