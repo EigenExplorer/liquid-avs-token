@@ -438,4 +438,51 @@ contract LiquidTokenTest is BaseTest {
     vm.stopPrank();
 }
 
+function testZeroAddressInput() public {
+    // Attempt to deposit with an incorrect address (address(0))
+    vm.prank(user1);
+    vm.expectRevert(
+        abi.encodeWithSelector(
+            ILiquidToken.UnsupportedAsset.selector,
+            IERC20(address(0))
+        )
+    );
+    liquidToken.deposit(IERC20(address(0)), 10 ether, user1);
+
+    // Valid deposit
+    vm.prank(user1);
+    liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+    // Attempt to withdraw with a zero address
+    vm.startPrank(user1);
+    IERC20[] memory assets = new IERC20[](1);
+    assets[0] = IERC20(address(0));  // Incorrect asset address
+    uint256[] memory amounts = new uint256[](1);
+    amounts[0] = 5 ether;
+
+    vm.expectRevert(
+        abi.encodeWithSelector(
+            ILiquidToken.UnsupportedAsset.selector,
+            address(assets[0])
+        )
+    );
+    liquidToken.requestWithdrawal(assets, amounts);
+    vm.stopPrank();
+
+    // Attempt to transfer assets with a zero address
+    IERC20[] memory assetsToRetrieve = new IERC20[](1);
+    assetsToRetrieve[0] = IERC20(address(0));  // Incorrect asset address
+    uint256[] memory amountsToRetrieve = new uint256[](1);
+    amountsToRetrieve[0] = 5 ether;
+
+    vm.prank(address(liquidTokenManager));
+    vm.expectRevert(
+        abi.encodeWithSelector(
+            ILiquidToken.UnsupportedAsset.selector,
+            address(assetsToRetrieve[0])
+        )
+    );
+    liquidToken.transferAssets(assetsToRetrieve, amountsToRetrieve);
+}
+
 }
