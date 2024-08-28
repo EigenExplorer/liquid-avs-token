@@ -31,8 +31,9 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param token The token address
     /// @param newRate The new rate for the token
     function updateRate(IERC20 token, uint256 newRate) external onlyRole(RATE_UPDATER_ROLE) {
+        uint256 oldRate = tokenRegistry.getTokenInfo(token).pricePerUnit;
         tokenRegistry.updatePrice(token, newRate);
-        emit RateUpdated(token, newRate);
+        emit TokenRateUpdated(token, oldRate, newRate, msg.sender);
     }
 
     /// @notice Updates rates for multiple tokens in a single transaction
@@ -42,8 +43,9 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
         require(tokens.length == newRates.length, "Mismatched array lengths");
 
         for (uint256 i = 0; i < tokens.length; i++) {
+            uint256 oldRate = tokenRegistry.getTokenInfo(tokens[i]).pricePerUnit;
             tokenRegistry.updatePrice(tokens[i], newRates[i]);
-            emit RateUpdated(tokens[i], newRates[i]);
+            emit TokenRateUpdated(tokens[i], oldRate, newRates[i], msg.sender);
         }
     }
 

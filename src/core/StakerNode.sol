@@ -69,7 +69,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                 asset,
                 amount
             );
-            emit DepositedToStrategy(asset, strategy, amount, eigenShares);
+            emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
         }
     }
 
@@ -85,7 +85,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
 
-        emit Delegated(operator);
+        emit NodeDelegated(operator, msg.sender);
     }
 
     /// @notice Undelegates the StakerNode's assets from the current operator
@@ -99,7 +99,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             address(this)
         );
 
-        emit Undelegated(withdrawalRoots);
+        emit NodeUndelegated(withdrawalRoots, msg.sender);
     }
 
     /// @notice Returns the address of the current implementation contract

@@ -64,7 +64,7 @@ contract TokenRegistry is
         });
         supportedTokens.push(address(token));
 
-        emit TokenAdded(token, decimals, initialPrice);
+        emit TokenAdded(token, decimals, initialPrice, msg.sender);
     }
 
     /// @notice Removes a token from the registry
@@ -84,7 +84,7 @@ contract TokenRegistry is
             }
         }
 
-        emit TokenRemoved(token);
+        emit TokenRemoved(token, msg.sender);
     }
 
     /// @notice Updates the price of a token
@@ -98,8 +98,9 @@ contract TokenRegistry is
             revert TokenNotSupported(token);
         if (newPrice == 0) revert InvalidPrice();
 
+        uint256 oldPrice = tokens[address(token)].pricePerUnit;
         tokens[address(token)].pricePerUnit = newPrice;
-        emit PriceUpdated(token, newPrice);
+        emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
     }
 
     /// @notice Checks if a token is supported

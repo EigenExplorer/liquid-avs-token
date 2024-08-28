@@ -33,8 +33,8 @@ interface ILiquidToken is IERC20 {
         bool fulfilled;
     }
 
-    /// @notice Emitted when a deposit is made
-    event Deposit(
+    /// @notice Emitted when an asset is deposited
+    event AssetDeposited(
         address indexed sender,
         address indexed receiver,
         IERC20 indexed asset,
@@ -47,7 +47,8 @@ interface ILiquidToken is IERC20 {
         bytes32 indexed requestId,
         address indexed user,
         IERC20[] assets,
-        uint256[] shareAmounts
+        uint256[] shareAmounts,
+        uint256 timestamp
     );
 
     /// @notice Emitted when a withdrawal is fulfilled
@@ -55,14 +56,16 @@ interface ILiquidToken is IERC20 {
         bytes32 indexed requestId,
         address indexed user,
         IERC20[] assets,
-        uint256[] amounts
+        uint256[] amounts,
+        uint256 timestamp
     );
 
     /// @notice Emitted when an asset is transferred
     event AssetTransferred(
         IERC20 indexed asset,
         uint256 amount,
-        address destination
+        address indexed destination,
+        address indexed initiator
     );
 
     /// @notice Error for unsupported asset

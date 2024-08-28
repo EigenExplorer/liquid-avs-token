@@ -78,7 +78,7 @@ contract LiquidToken is
         assets[address(asset)].balance += amount;
         _mint(receiver, shares);
 
-        emit Deposit(msg.sender, receiver, asset, amount, shares);
+        emit AssetDeposited(msg.sender, receiver, asset, amount, shares);
         return shares;
     }
 
@@ -132,7 +132,8 @@ contract LiquidToken is
             requestId,
             msg.sender,
             withdrawAssets,
-            shareAmounts
+            shareAmounts,
+            block.timestamp
         );
     }
 
@@ -166,7 +167,8 @@ contract LiquidToken is
             requestId,
             msg.sender,
             request.assets,
-            amounts
+            amounts,
+            block.timestamp
         );
     }
 
@@ -200,7 +202,7 @@ contract LiquidToken is
             assets[address(asset)].balance -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
-            emit AssetTransferred(asset, amount, address(liquidTokenManager));
+            emit AssetTransferred(asset, amount, address(liquidTokenManager), msg.sender);
         }
     }
 

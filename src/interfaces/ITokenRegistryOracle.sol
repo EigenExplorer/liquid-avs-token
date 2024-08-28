@@ -23,6 +23,9 @@ interface ITokenRegistryOracle {
     /// @param newRate The new rate for the token
     event RateUpdated(IERC20 indexed token, uint256 newRate);
 
+    /// @notice Emitted when a token's rate is updated
+    event TokenRateUpdated(IERC20 indexed token, uint256 oldRate, uint256 newRate, address indexed updater);
+
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initial owner and price updater addresses
     function initialize(Init memory init) external;

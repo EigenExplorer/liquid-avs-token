@@ -86,9 +86,10 @@ contract LiquidTokenManager is
             }
 
             strategies[init.assets[i]] = init.strategies[i];
-            emit StrategyAdded(
-                address(init.assets[i]),
-                address(init.strategies[i])
+            emit StrategySet(
+                init.assets[i],
+                init.strategies[i],
+                msg.sender
             );
         }
     }
@@ -165,14 +166,15 @@ contract LiquidTokenManager is
             assets[i].safeTransfer(address(node), amounts[i]);
         }
 
-        emit StakedAssetsToNode(nodeId, assets, amounts);
+        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
 
         node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
 
-        emit DepositedToEigenlayer(
+        emit AssetsDepositedToEigenlayer(
             depositAssets,
             depositAmounts,
-            strategiesForNode
+            strategiesForNode,
+            address(node)
         );
     }
 
@@ -187,7 +189,7 @@ contract LiquidTokenManager is
             revert ZeroAddress();
         }
         strategies[asset] = strategy;
-        emit StrategyAdded(address(asset), address(strategy));
+        emit StrategySet(asset, strategy, msg.sender);
     }
 
     /// @notice Gets the staked balance of an asset for a specific node

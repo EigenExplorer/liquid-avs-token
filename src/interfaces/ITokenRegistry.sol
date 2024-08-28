@@ -29,20 +29,25 @@ interface ITokenRegistry {
     /// @param token The address of the added token
     /// @param decimals The number of decimals for the token
     /// @param initialPrice The initial price set for the token
+    /// @param adder The address of the user who added the token
     event TokenAdded(
         IERC20 indexed token,
         uint256 decimals,
-        uint256 initialPrice
+        uint256 initialPrice,
+        address indexed adder
     );
 
     /// @notice Emitted when a token is removed from the registry
     /// @param token The address of the removed token
-    event TokenRemoved(IERC20 indexed token);
+    /// @param remover The address of the user who removed the token
+    event TokenRemoved(IERC20 indexed token, address indexed remover);
 
     /// @notice Emitted when a token's price is updated
     /// @param token The address of the token whose price was updated
+    /// @param oldPrice The old price for the token
     /// @param newPrice The new price for the token
-    event PriceUpdated(IERC20 indexed token, uint256 newPrice);
+    /// @param updater The address of the user who updated the price
+    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
 
     /// @notice Error thrown when an operation is attempted on an unsupported token
     /// @param token The address of the unsupported token

@@ -17,13 +17,13 @@ interface IStakerNode {
     }
 
     /// @notice Emitted when the StakerNode is delegated to an operator
-    event Delegated(address indexed operator);
+    event NodeDelegated(address indexed operator, address indexed delegator);
 
     /// @notice Emitted when the StakerNode is undelegated from the current operator
-    event Undelegated(bytes32[] withdrawalRoots);
+    event NodeUndelegated(bytes32[] withdrawalRoots, address indexed undelegator);
 
     /// @notice Emitted when assets are deposited into an Eigenlayer strategy
-    event DepositedToStrategy(
+    event AssetDepositedToStrategy(
         IERC20 indexed asset,
         IStrategy indexed strategy,
         uint256 amount,

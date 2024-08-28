@@ -24,22 +24,16 @@ interface IStakerNodeCoordinator {
     }
 
     /// @notice Emitted when a new staker node is created
-    event StakerNodeCreated(uint256 nodeId, IStakerNode node);
+    event NodeCreated(uint256 indexed nodeId, IStakerNode indexed node, address indexed creator);
 
-    /// @notice Emitted when a staker node is removed
-    event StakerNodeRemoved(IStakerNode node);
+    /// @notice Emitted when the staker node implementation is changed
+    event NodeImplementationChanged(address indexed upgradeableBeaconAddress, address indexed implementationContract, bool isInitialRegistration);
 
     /// @notice Emitted when the maximum number of nodes is updated
-    event MaxNodesUpdated(uint256 maxNodes);
-
-    /// @notice Emitted when a new staker node implementation is registered
-    event RegisteredStakerNodeImplementation(address upgradeableBeaconAddress, address implementationContract);
-
-    /// @notice Emitted when the staker node implementation is upgraded
-    event UpgradedStakerNodeImplementation(address implementationContract, uint256 nodesCount);
+    event MaxNodesUpdated(uint256 oldMaxNodes, uint256 newMaxNodes, address indexed updater);
 
     /// @notice Emitted when a node is initialized
-    event NodeInitialized(address nodeAddress, uint64 initializedVersion);
+    event NodeInitialized(address indexed nodeAddress, uint64 initializedVersion, uint256 indexed nodeId);
 
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);

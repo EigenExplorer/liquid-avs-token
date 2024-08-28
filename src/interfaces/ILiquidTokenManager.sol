@@ -31,21 +31,23 @@ interface ILiquidTokenManager {
         uint256[] amounts;
     }
 
-    /// @notice Emitted when a new strategy is added
-    event StrategyAdded(address indexed asset, address indexed strategy);
+    /// @notice Emitted when a new strategy is set for an asset
+    event StrategySet(IERC20 indexed asset, IStrategy indexed strategy, address indexed setter);
 
     /// @notice Emitted when assets are staked to a node
-    event StakedAssetsToNode(
+    event AssetsStakedToNode(
         uint256 indexed nodeId,
         IERC20[] assets,
-        uint256[] amounts
+        uint256[] amounts,
+        address indexed staker
     );
 
     /// @notice Emitted when assets are deposited to Eigenlayer
-    event DepositedToEigenlayer(
+    event AssetsDepositedToEigenlayer(
         IERC20[] assets,
         uint256[] amounts,
-        IStrategy[] strategies
+        IStrategy[] strategies,
+        address indexed depositor
     );
 
     /// @notice Error for zero address
