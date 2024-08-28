@@ -362,14 +362,14 @@ contract LiquidTokenTest is BaseTest {
 
     IERC20[] memory assets = new IERC20[](1);
     assets[0] = IERC20(address(testToken));
-    uint256[] memory user1Amount = new uint256[](1);
-    user1Amount[0] = 5 ether;
-    liquidToken.requestWithdrawal(assets, user1Amount);
+    uint256[] memory withdrawal1Amount = new uint256[](1);
+    withdrawal1Amount[0] = 5 ether;
+    liquidToken.requestWithdrawal(assets, withdrawal1Amount);
 
     // Second withdrawal request before fulfilling the first
-    uint256[] memory user2Amount = new uint256[](1);
-    user2Amount[0] = 2 ether;
-    liquidToken.requestWithdrawal(assets, user2Amount);
+    uint256[] memory withdrawal2Amount = new uint256[](1);
+    withdrawal2Amount[0] = 2 ether;
+    liquidToken.requestWithdrawal(assets, withdrawal2Amount);
 
     assertEq(
         liquidToken.balanceOf(user1), 
