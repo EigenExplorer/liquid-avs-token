@@ -150,6 +150,7 @@ contract LiquidToken is
 
         request.fulfilled = true;
         uint256[] memory amounts = new uint256[](request.assets.length);
+        uint256 totalShares = 0;
 
         for (uint256 i = 0; i < request.assets.length; i++) {
             amounts[i] = calculateAmount(
@@ -157,7 +158,11 @@ contract LiquidToken is
                 request.shareAmounts[i]
             );
             request.assets[i].safeTransfer(msg.sender, amounts[i]);
+            totalShares += request.shareAmounts[i];
         }
+
+        // Burn the shares that were transferred to the contract during the withdrawal request
+        _burn(address(this), totalShares);
 
         emit WithdrawalFulfilled(
             requestId,

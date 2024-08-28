@@ -71,6 +71,9 @@ contract LiquidTokenTest is BaseTest {
 
         bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
 
+        // Record the total supply before fulfillment
+        uint256 totalSupplyBefore = liquidToken.totalSupply();
+
         // Fast forward time
         vm.warp(block.timestamp + 15 days);
 
@@ -81,6 +84,27 @@ contract LiquidTokenTest is BaseTest {
             testToken.balanceOf(user1),
             95 ether,
             "Incorrect token balance after withdrawal"
+        );
+
+        // Check if the correct amount of tokens were burned
+        assertEq(
+            liquidToken.totalSupply(),
+            totalSupplyBefore - 5 ether,
+            "Incorrect total supply after withdrawal (tokens not burned)"
+        );
+
+        // Check the user's remaining balance
+        assertEq(
+            liquidToken.balanceOf(user1),
+            5 ether,
+            "Incorrect remaining balance after withdrawal"
+        );
+
+        // Check that the contract's balance of liquid tokens has decreased
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after fulfillment"
         );
     }
 
