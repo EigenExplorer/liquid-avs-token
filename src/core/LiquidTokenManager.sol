@@ -104,7 +104,7 @@ contract LiquidTokenManager is
         uint256 nodeId,
         IERC20[] memory assets,
         uint256[] memory amounts
-    ) public onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
         _stakeAssetsToNode(nodeId, assets, amounts);
     }
 
@@ -163,13 +163,9 @@ contract LiquidTokenManager is
         uint256[] memory depositAmounts = new uint256[](amountsLength);
 
         for (uint256 i = 0; i < assetsLength; i++) {
-            (IERC20 depositAsset, uint256 depositAmount) = _parseDeposits(
-                assets[i],
-                amounts[i]
-            );
-            depositAssets[i] = depositAsset;
-            depositAmounts[i] = depositAmount;
-            depositAsset.safeTransfer(address(node), depositAmount);
+            depositAssets[i] = assets[i];
+            depositAmounts[i] = amounts[i];
+            assets[i].safeTransfer(address(node), amounts[i]);
         }
 
         emit StakedAssetsToNode(nodeId, assets, amounts);
@@ -210,22 +206,5 @@ contract LiquidTokenManager is
             revert StrategyNotFound(address(asset));
         }
         return strategy.userUnderlyingView(address(uint160(nodeId)));
-    }
-
-    // ------------------------------------------------------------------------------
-    // Internal functions
-    // ------------------------------------------------------------------------------
-
-    /// @notice Parses deposit information for an asset
-    /// @param asset The asset token address
-    /// @param amount The amount to deposit
-    /// @return depositAsset The asset to be deposited
-    /// @return depositAmount The amount to be deposited
-    function _parseDeposits(
-        IERC20 asset,
-        uint256 amount
-    ) internal pure returns (IERC20 depositAsset, uint256 depositAmount) {
-        depositAsset = asset;
-        depositAmount = amount;
     }
 }

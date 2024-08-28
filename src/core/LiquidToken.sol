@@ -89,7 +89,7 @@ contract LiquidToken is
     function requestWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
-    ) external whenNotPaused {
+    ) external nonReentrant whenNotPaused {
         if (withdrawAssets.length != shareAmounts.length)
             revert ArrayLengthMismatch();
 
@@ -98,7 +98,7 @@ contract LiquidToken is
             if (!tokenRegistry.tokenIsSupported(withdrawAssets[i]))
                 revert UnsupportedAsset(withdrawAssets[i]);
             if (shareAmounts[i] == 0)
-                revert("Share amount must be greater than 0");
+                revert ZeroAmount();
             totalShares += shareAmounts[i];
         }
 
@@ -128,7 +128,7 @@ contract LiquidToken is
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[msg.sender].push(requestId);
 
-        transferFrom(msg.sender, address(this), totalShares);
+        _transfer(msg.sender, address(this), totalShares);
 
         emit WithdrawalRequested(
             requestId,
@@ -140,7 +140,9 @@ contract LiquidToken is
 
     /// @notice Allows users to fulfill a withdrawal request after the withdrawal delay has passed
     /// @param requestId The unique identifier of the withdrawal request
-    function fulfillWithdrawal(bytes32 requestId) external whenNotPaused {
+    function fulfillWithdrawal(
+        bytes32 requestId
+    ) external nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
         if (request.user != msg.sender) revert InvalidWithdrawalRequest();
