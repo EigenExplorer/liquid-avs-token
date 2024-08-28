@@ -454,19 +454,14 @@ contract LiquidTokenTest is BaseTest {
         vm.stopPrank();
 
         // Attempt to transfer assets with a zero address
-        IERC20[] memory assetsToRetrieve = new IERC20[](1);
-        assetsToRetrieve[0] = IERC20(address(0));
-        uint256[] memory amountsToRetrieve = new uint256[](1);
-        amountsToRetrieve[0] = 5 ether;
-
         vm.prank(address(liquidTokenManager));
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILiquidToken.UnsupportedAsset.selector,
-                address(assetsToRetrieve[0])
+                address(assets[0])
             )
         );
-        liquidToken.transferAssets(assetsToRetrieve, amountsToRetrieve);
+        liquidToken.transferAssets(assets, amounts);
     }
 
     function testMultipleStakersMultipleWithdrawals() public {
