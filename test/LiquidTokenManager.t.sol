@@ -141,14 +141,6 @@ contract LiquidTokenManagerTest is BaseTest {
         ) = strategyManager.getDeposits(address(stakerNode));
         assertEq(address(depositStrategies[0]), address(mockStrategy));
         assertEq(depositAmounts[0], 1 ether);
-
-        uint256 user1Shares = liquidToken.balanceOf(user1);
-        uint256 user1TestTokenShares = testToken.balanceOf(user1);
-    //     uint256 user2Shares = liquidToken.balanceOf(user2);
-
-    //     assertEq(user1Shares, 20 ether, "User1 shares are incorrect after price change");
-        // assertEq(user1Shares,10 ether,"Staking ke baad kuch withdrawal");
-        // assertEq(user1TestTokenShares,10 ether,"Staking ke baad test token  kuch withdrawal");
     }
 
     function testStakeAssetsToNodeUnauthorized() public {
