@@ -91,14 +91,16 @@ interface ILiquidTokenManager {
     /// @param allocations The allocations of assets to nodes
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
-    /// @notice Gets the staked asset balance for a specific asset and node
+    /// @notice Gets the staked asset balance for all nodes
+    /// @param asset The asset to check the balance for
+    /// @return The total staked balance of the asset across all nodes
+    function getStakedAssetBalance(IERC20 asset) external view returns (uint256);
+
+    /// @notice Gets the staked asset balance for a specific node
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
-    /// @return The staked balance of the asset for the node
-    function getStakedAssetBalance(
-        IERC20 asset,
-        uint256 nodeId
-    ) external view returns (uint256);
+    /// @return The staked balance of the asset for the specific node
+    function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
 
     /// @notice Returns the StrategyManager contract
     /// @return The IStrategyManager interface
