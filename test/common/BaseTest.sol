@@ -42,6 +42,7 @@ contract BaseTest is Test {
     MockERC20 public testToken;
     MockERC20 public testToken2;
     MockStrategy public mockStrategy;
+    MockStrategy public mockStrategy2;
 
     // Addresses
     address public admin = address(this);
@@ -81,6 +82,10 @@ contract BaseTest is Test {
         mockStrategy = new MockStrategy(
             strategyManager,
             IERC20(address(testToken))
+        );
+        mockStrategy2 = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken2))
         );
     }
 
@@ -180,7 +185,7 @@ contract BaseTest is Test {
         init.assets[0] = IERC20(address(testToken));
         init.assets[1] = IERC20(address(testToken2));
         init.strategies[0] = IStrategy(address(mockStrategy));
-        init.strategies[1] = IStrategy(address(mockStrategy));
+        init.strategies[1] = IStrategy(address(mockStrategy2));
         liquidTokenManager.initialize(init);
     }
 
