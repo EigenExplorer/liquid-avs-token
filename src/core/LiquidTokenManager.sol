@@ -86,11 +86,7 @@ contract LiquidTokenManager is
             }
 
             strategies[init.assets[i]] = init.strategies[i];
-            emit StrategySet(
-                init.assets[i],
-                init.strategies[i],
-                msg.sender
-            );
+            emit StrategySet(init.assets[i], init.strategies[i], msg.sender);
         }
     }
 
@@ -192,11 +188,29 @@ contract LiquidTokenManager is
         emit StrategySet(asset, strategy, msg.sender);
     }
 
+    /// @notice Gets the staked balance of an asset for all nodes
+    /// @param asset The asset token address
+    /// @return The staked balance of the asset for all nodes
+    function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
+        IStrategy strategy = strategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        uint256 totalBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalBalance += _getStakedAssetBalanceNode(asset, nodes[i]);
+        }
+
+        return totalBalance;
+    }
+
     /// @notice Gets the staked balance of an asset for a specific node
     /// @param asset The asset token address
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the node
-    function getStakedAssetBalance(
+    function getStakedAssetBalanceNode(
         IERC20 asset,
         uint256 nodeId
     ) public view returns (uint256) {
@@ -204,6 +218,27 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
-        return strategy.userUnderlyingView(address(uint160(nodeId)));
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        if (address(node) == address(0)) {
+            revert InvalidNodeId(nodeId);
+        }
+
+        return _getStakedAssetBalanceNode(asset, node);
+    }
+
+    /// @notice Gets the staked balance of an asset for a specific node
+    /// @param asset The asset token address
+    /// @param node The node to get the staked balance for
+    /// @return The staked balance of the asset for the node
+    function _getStakedAssetBalanceNode(
+        IERC20 asset,
+        IStakerNode node
+    ) internal view returns (uint256) {
+        IStrategy strategy = strategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+        return strategy.userUnderlyingView(address(node));
     }
 }

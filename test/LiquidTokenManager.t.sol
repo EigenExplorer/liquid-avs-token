@@ -162,7 +162,7 @@ contract LiquidTokenManagerTest is BaseTest {
                 address(0x123)
             )
         );
-        liquidTokenManager.getStakedAssetBalance(
+        liquidTokenManager.getStakedAssetBalanceNode(
             IERC20(address(0x123)),
             nodeId
         );

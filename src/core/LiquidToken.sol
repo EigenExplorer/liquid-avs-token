@@ -263,21 +263,25 @@ contract LiquidToken is
 
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
+            // Asset Balances
             total += tokenRegistry.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceAsset(supportedTokens[i])
             );
+
+            // Staked Asset Balances
+            total += liquidTokenManager.getStakedAssetBalance(supportedTokens[i]);
         }
 
         return total;
     }
 
     function balanceAssets(
-        IERC20[] calldata assets
+        IERC20[] calldata assetList
     ) public view returns (uint256[] memory) {
-        uint256[] memory balances = new uint256[](assets.length);
-        for (uint256 i = 0; i < assets.length; i++) {
-            balances[i] = _balanceAsset(assets[i]);
+        uint256[] memory balances = new uint256[](assetList.length);
+        for (uint256 i = 0; i < assetList.length; i++) {
+            balances[i] = _balanceAsset(assetList[i]);
         }
         return balances;
     }
