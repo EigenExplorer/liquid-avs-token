@@ -202,7 +202,12 @@ contract LiquidToken is
             assets[address(asset)].balance -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
-            emit AssetTransferred(asset, amount, address(liquidTokenManager), msg.sender);
+            emit AssetTransferred(
+                asset,
+                amount,
+                address(liquidTokenManager),
+                msg.sender
+            );
         }
     }
 
@@ -254,7 +259,27 @@ contract LiquidToken is
     /// @notice Returns the total value of assets managed by the contract
     /// @return The total value of assets in the unit of account
     function totalAssets() public view returns (uint256) {
-        return tokenRegistry.totalAssets();
+        IERC20[] memory supportedTokens = tokenRegistry.getSupportedTokens();
+
+        uint256 total = 0;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            total += tokenRegistry.convertToUnitOfAccount(
+                supportedTokens[i],
+                _balanceAsset(supportedTokens[i])
+            );
+        }
+
+        return total;
+    }
+
+    function balanceAssets(
+        IERC20[] calldata assets
+    ) public view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](assets.length);
+        for (uint256 i = 0; i < assets.length; i++) {
+            balances[i] = _balanceAsset(assets[i]);
+        }
+        return balances;
     }
 
     // ------------------------------------------------------------------------------
@@ -283,6 +308,10 @@ contract LiquidToken is
         }
 
         return (shares * totalAsset) / supply;
+    }
+
+    function _balanceAsset(IERC20 asset) internal view returns (uint256) {
+        return assets[address(asset)].balance;
     }
 
     // ------------------------------------------------------------------------------

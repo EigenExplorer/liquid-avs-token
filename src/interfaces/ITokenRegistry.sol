@@ -92,13 +92,9 @@ interface ITokenRegistry {
     /// @return The converted amount in the specified token
     function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
 
-    /// @notice Calculates the total assets in the unit of account
-    /// @return The total assets value in the unit of account
-    function totalAssets() external view returns (uint256);
-
     /// @notice Retrieves the list of supported tokens
     /// @return An array of addresses of supported tokens
-    function getSupportedTokens() external view returns (address[] memory);
+    function getSupportedTokens() external view returns (IERC20[] memory);
 
     /// @notice Retrieves the information for a specific token
     /// @param token The address of the token to get information for
