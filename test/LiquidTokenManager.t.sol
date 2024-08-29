@@ -74,7 +74,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         assertEq(
             address(liquidTokenManager.strategies(IERC20(address(testToken2)))),
-            address(mockStrategy)
+            address(mockStrategy2)
         );
         assertTrue(
             liquidTokenManager.hasRole(
@@ -173,7 +173,7 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.startPrank(admin);
         tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units 
+        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
         tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
 
@@ -189,8 +189,16 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 totalSupply = liquidToken.totalSupply();
 
         // Validate the total supply and total assets
-        assertEq(totalSupply, 40 ether, "Total supply after deposits is incorrect");
-        assertEq(totalAssets, 40 ether, "Total assets after deposits is incorrect");
+        assertEq(
+            totalSupply,
+            40 ether,
+            "Total supply after deposits is incorrect"
+        );
+        assertEq(
+            totalAssets,
+            40 ether,
+            "Total assets after deposits is incorrect"
+        );
 
         // Validate the individual user shares
         uint256 user1Shares = liquidToken.balanceOf(user1);
@@ -219,8 +227,16 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 initialTotalAssets = liquidToken.totalAssets();
         uint256 initialTotalSupply = liquidToken.totalSupply();
 
-        assertEq(initialTotalSupply, 40 ether, "Initial total supply after deposits is incorrect");
-        assertEq(initialTotalAssets, 40 ether, "Initial total assets after deposits is incorrect");
+        assertEq(
+            initialTotalSupply,
+            40 ether,
+            "Initial total supply after deposits is incorrect"
+        );
+        assertEq(
+            initialTotalAssets,
+            40 ether,
+            "Initial total assets after deposits is incorrect"
+        );
 
         // Simulate a value increase
         vm.startPrank(admin);
@@ -231,15 +247,31 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 totalAssetsAfterPriceChange = liquidToken.totalAssets();
         uint256 totalSupplyAfterPriceChange = liquidToken.totalSupply();
 
-        assertEq(totalSupplyAfterPriceChange, initialTotalSupply, "Total supply should not change after price increase");
-        assertEq(totalAssetsAfterPriceChange, 50 ether, "Total assets after price increase are incorrect");
+        assertEq(
+            totalSupplyAfterPriceChange,
+            initialTotalSupply,
+            "Total supply should not change after price increase"
+        );
+        assertEq(
+            totalAssetsAfterPriceChange,
+            50 ether,
+            "Total assets after price increase are incorrect"
+        );
 
         // Validate the individual user shares remain unchanged
         uint256 user1Shares = liquidToken.balanceOf(user1);
         uint256 user2Shares = liquidToken.balanceOf(user2);
 
-        assertEq(user1Shares, 20 ether, "User1 shares are incorrect after price change");
-        assertEq(user2Shares, 20 ether, "User2 shares are incorrect after price change");
+        assertEq(
+            user1Shares,
+            20 ether,
+            "User1 shares are incorrect after price change"
+        );
+        assertEq(
+            user2Shares,
+            20 ether,
+            "User2 shares are incorrect after price change"
+        );
     }
 
     function testWithdrawalFailureDueToInsufficientBalance() public {
@@ -252,29 +284,21 @@ contract LiquidTokenManagerTest is BaseTest {
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
-        
+
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
         // User1 tries to request a withdrawal for 9 ether (should eventually fail in fulfillment)
         vm.startPrank(user1);
         uint256[] memory withdrawalAmounts = new uint256[](1);
-        withdrawalAmounts[0] = 9 ether; // More than available 
+        withdrawalAmounts[0] = 9 ether; // More than available
 
         liquidToken.requestWithdrawal(assets, withdrawalAmounts);
         vm.warp(block.timestamp + 15 days);
 
         bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
-        vm.expectRevert();
-        // Expecting revert during the fulfillment process due to insufficient liquid assets
-    //     vm.expectRevert(
-    //     abi.encodeWithSignature(
-    //         "ERC20InsufficientBalance(address,uint256,uint256)",
-    //         address(this),
-    //         5 ether,
-    //         9 ether
-    //     )
-    // );
+        vm.expectRevert(); // TODO: Check if this is the correct revert message
+
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
     }
@@ -289,19 +313,17 @@ contract LiquidTokenManagerTest is BaseTest {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 5 ether; 
-        
+        amounts[0] = 5 ether;
+
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
         uint256 availableBalance = liquidToken.balanceOf(user1);
-        assertEq(availableBalance, 10 ether, "User1 liquid balance should be 10 ether after staking.");
-
-        // uint256 testTokenBalanceofLiquidTokenContract = testToken.balanceOf(address(liquidToken));
-        // uint256 testTokenBalanceofLiquidTokenManagerContract = testToken.balanceOf(address(liquidToken));
-
-        // assertEq(testTokenBalanceofLiquidTokenContract,5 ether,"testTokenBalanceofLiquidTokenContract");
-        // assertEq(testTokenBalanceofLiquidTokenManagerContract,5 ether,"testTokenBalanceofLiquidTokenManagerContract");
+        assertEq(
+            availableBalance,
+            10 ether,
+            "User1 liquid balance should be 10 ether after staking."
+        );
 
         // User1 requests a withdrawal for the available amount (should pass)
         vm.startPrank(user1);
@@ -316,19 +338,16 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
 
         assertEq(
-            liquidToken.balanceOf(user1), 
-            5 ether, 
+            liquidToken.balanceOf(user1),
+            5 ether,
             "User1 remaining balance after withdrawal is incorrect"
         );
         assertEq(
-            IERC20(address(testToken)).balanceOf(user1), 
-            95 ether, 
+            IERC20(address(testToken)).balanceOf(user1),
+            95 ether,
             "User1 token balance after withdrawal is incorrect"
         );
 
         vm.stopPrank();
-}
-
-
-
+    }
 }
