@@ -16,8 +16,8 @@ import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 /**
  * @title StakerNode
- * @dev Implements staking node functionality for tokens, enabling token staking, delegation, and rewards management.
- * This contract interacts with the Eigenlayer protocol to deposit assets, delegate staking operations, and manage staking rewards.
+ * @notice Implements staking node functionality for tokens, enabling token staking, delegation, and rewards management
+ * @dev Interacts with the Eigenlayer protocol to deposit assets, delegate staking operations, and manage staking rewards
  */
 contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
@@ -69,7 +69,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                 asset,
                 amount
             );
-            emit DepositedToStrategy(asset, strategy, amount, eigenShares);
+            emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
         }
     }
 
@@ -85,7 +85,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
 
-        emit Delegated(operator);
+        emit NodeDelegated(operator, msg.sender);
     }
 
     /// @notice Undelegates the StakerNode's assets from the current operator
@@ -99,7 +99,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             address(this)
         );
 
-        emit Undelegated(withdrawalRoots);
+        emit NodeUndelegated(withdrawalRoots, msg.sender);
     }
 
     /// @notice Returns the address of the current implementation contract

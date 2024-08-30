@@ -11,6 +11,11 @@ import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
+/**
+ * @title StakerNodeCoordinator
+ * @notice Coordinates the creation and management of staker nodes
+ * @dev Manages the upgradeability and initialization of staker nodes
+ */
 contract StakerNodeCoordinator is
     IStakerNodeCoordinator,
     AccessControlUpgradeable
@@ -71,7 +76,7 @@ contract StakerNodeCoordinator is
 
         stakerNodes.push(node);
 
-        emit StakerNodeCreated(nodeId, node);
+        emit NodeCreated(nodeId, node, msg.sender);
 
         return node;
     }
@@ -88,7 +93,7 @@ contract StakerNodeCoordinator is
             );
 
             initializedVersion = node.getInitializedVersion();
-            emit NodeInitialized(address(node), initializedVersion);
+            emit NodeInitialized(address(node), initializedVersion, nodeId);
         }
     }
 
@@ -112,10 +117,7 @@ contract StakerNodeCoordinator is
             address(this)
         );
 
-        emit RegisteredStakerNodeImplementation(
-            address(upgradeableBeacon),
-            _implementationContract
-        );
+        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, true);
     }
 
     /// @notice Upgrades the staker node implementation
@@ -141,10 +143,7 @@ contract StakerNodeCoordinator is
             initializeStakerNode(IStakerNode(stakerNodes[i]), i);
         }
 
-        emit UpgradedStakerNodeImplementation(
-            _implementationContract,
-            nodeCount
-        );
+        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, false);
     }
 
     /// @notice Sets the maximum number of staker nodes
@@ -153,8 +152,9 @@ contract StakerNodeCoordinator is
     function setMaxNodes(
         uint256 _maxNodes
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldMaxNodes = maxNodes;
         maxNodes = _maxNodes;
-        emit MaxNodesUpdated(_maxNodes);
+        emit MaxNodesUpdated(oldMaxNodes, _maxNodes, msg.sender);
     }
 
     /// @notice Checks if an address has the STAKER_NODES_DELEGATOR_ROLE

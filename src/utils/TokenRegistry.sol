@@ -19,10 +19,10 @@ contract TokenRegistry is
     using Math for uint256;
 
     /// @notice Mapping of token addresses to their TokenInfo
-    mapping(address => TokenInfo) public tokens;
+    mapping(IERC20 => TokenInfo) public tokens;
 
     /// @notice Array of supported token addresses
-    address[] public supportedTokens;
+    IERC20[] public supportedTokens;
 
     /// @notice Number of decimal places used for price representation
     uint256 public constant PRICE_DECIMALS = 18;
@@ -53,29 +53,29 @@ contract TokenRegistry is
         uint256 decimals,
         uint256 initialPrice
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokens[address(token)].isSupported)
+        if (tokens[token].isSupported)
             revert TokenAlreadySupported(token);
         if (initialPrice == 0) revert InvalidPrice();
 
-        tokens[address(token)] = TokenInfo({
+        tokens[token] = TokenInfo({
             isSupported: true,
             decimals: decimals,
             pricePerUnit: initialPrice
         });
-        supportedTokens.push(address(token));
+        supportedTokens.push(token);
 
-        emit TokenAdded(token, decimals, initialPrice);
+        emit TokenAdded(token, decimals, initialPrice, msg.sender);
     }
 
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!tokens[address(token)].isSupported)
+        if (!tokens[token].isSupported)
             revert TokenNotSupported(token);
 
-        delete tokens[address(token)];
+        delete tokens[token];
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == address(token)) {
+            if (supportedTokens[i] == token) {
                 supportedTokens[i] = supportedTokens[
                     supportedTokens.length - 1
                 ];
@@ -84,7 +84,7 @@ contract TokenRegistry is
             }
         }
 
-        emit TokenRemoved(token);
+        emit TokenRemoved(token, msg.sender);
     }
 
     /// @notice Updates the price of a token
@@ -94,12 +94,13 @@ contract TokenRegistry is
         IERC20 token,
         uint256 newPrice
     ) external onlyRole(PRICE_UPDATER_ROLE) {
-        if (!tokens[address(token)].isSupported)
+        if (!tokens[token].isSupported)
             revert TokenNotSupported(token);
         if (newPrice == 0) revert InvalidPrice();
 
-        tokens[address(token)].pricePerUnit = newPrice;
-        emit PriceUpdated(token, newPrice);
+        uint256 oldPrice = tokens[token].pricePerUnit;
+        tokens[token].pricePerUnit = newPrice;
+        emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
     }
 
     /// @notice Checks if a token is supported
@@ -108,7 +109,7 @@ contract TokenRegistry is
     function tokenIsSupported(
         IERC20 token
     ) public view override returns (bool) {
-        return tokens[address(token)].isSupported;
+        return tokens[token].isSupported;
     }
 
     /// @notice Converts a token amount to the unit of account
@@ -119,7 +120,7 @@ contract TokenRegistry is
         IERC20 token,
         uint256 amount
     ) public view override returns (uint256) {
-        TokenInfo memory info = tokens[address(token)];
+        TokenInfo memory info = tokens[token];
         if (!info.isSupported) revert TokenNotSupported(token);
 
         return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
@@ -133,27 +134,15 @@ contract TokenRegistry is
         IERC20 token,
         uint256 amount
     ) public view override returns (uint256) {
-        TokenInfo memory info = tokens[address(token)];
+        TokenInfo memory info = tokens[token];
         if (!info.isSupported) revert TokenNotSupported(token);
 
         return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
     }
 
-    /// @notice Calculates the total assets in the unit of account
-    /// @return The total assets value in the unit of account
-    function totalAssets() public view override returns (uint256) {
-        uint256 total = 0;
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            IERC20 token = IERC20(supportedTokens[i]);
-            uint256 balance = token.balanceOf(address(this));
-            total += convertToUnitOfAccount(token, balance);
-        }
-        return total;
-    }
-
     /// @notice Retrieves the list of supported tokens
     /// @return An array of addresses of supported tokens
-    function getSupportedTokens() external view returns (address[] memory) {
+    function getSupportedTokens() external view returns (IERC20[] memory) {
         return supportedTokens;
     }
 
@@ -163,6 +152,6 @@ contract TokenRegistry is
     function getTokenInfo(
         IERC20 token
     ) external view returns (TokenInfo memory) {
-        return tokens[address(token)];
+        return tokens[token];
     }
 }
