@@ -372,22 +372,24 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.requestWithdrawal(assets, withdrawal2Amounts);
 
         assertEq(
-            liquidToken.balanceOf(user1), 
-            3 ether, 
+            liquidToken.balanceOf(user1),
+            3 ether,
             "Incorrect balance after second withdrawal request"
         );
 
         // There should be two withdrawal requests in the queue
         assertEq(
-            liquidToken.getUserWithdrawalRequests(user1).length, 
-            2, 
+            liquidToken.getUserWithdrawalRequests(user1).length,
+            2,
             "Incorrect number of withdrawal requests"
         );
 
         vm.warp(block.timestamp + 15 days);
 
         // Fulfill the first withdrawal request
-        bytes32 firstRequestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+        bytes32 firstRequestId = liquidToken.getUserWithdrawalRequests(user1)[
+            0
+        ];
         uint256 totalSupplyBeforeFirstFulfillment = liquidToken.totalSupply();
         liquidToken.fulfillWithdrawal(firstRequestId);
 
@@ -404,7 +406,9 @@ contract LiquidTokenTest is BaseTest {
         );
 
         // Fulfill the second withdrawal request
-        bytes32 secondRequestId = liquidToken.getUserWithdrawalRequests(user1)[1];
+        bytes32 secondRequestId = liquidToken.getUserWithdrawalRequests(user1)[
+            1
+        ];
         uint256 totalSupplyBeforeSecondFulfillment = liquidToken.totalSupply();
         liquidToken.fulfillWithdrawal(secondRequestId);
 
@@ -425,7 +429,7 @@ contract LiquidTokenTest is BaseTest {
 
     function testZeroAddressInput() public {
         vm.startPrank(user1);
-        
+
         // Attempt to deposit with an incorrect address (address(0))
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -478,13 +482,23 @@ contract LiquidTokenTest is BaseTest {
         amountsUser1Withdrawal1[0] = 5 ether;
         liquidToken.requestWithdrawal(assets, amountsUser1Withdrawal1);
 
-        bytes32 requestIdUser1 = liquidToken.getUserWithdrawalRequests(user1)[0];
+        bytes32 requestIdUser1 = liquidToken.getUserWithdrawalRequests(user1)[
+            0
+        ];
         vm.warp(block.timestamp + 15 days);
         liquidToken.fulfillWithdrawal(requestIdUser1);
 
         // Check balances for User1
-        assertEq(testToken.balanceOf(user1), 95 ether, "Incorrect token balance after withdrawal for User1");
-        assertEq(liquidToken.balanceOf(user1), 5 ether, "Incorrect remaining balance after withdrawal for User1");
+        assertEq(
+            testToken.balanceOf(user1),
+            95 ether,
+            "Incorrect token balance after withdrawal for User1"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1),
+            5 ether,
+            "Incorrect remaining balance after withdrawal for User1"
+        );
 
         vm.stopPrank();
         vm.startPrank(user2);
@@ -493,13 +507,23 @@ contract LiquidTokenTest is BaseTest {
         amountsUser2Withdrawal1[0] = 10 ether;
         liquidToken.requestWithdrawal(assets, amountsUser2Withdrawal1);
 
-        bytes32 requestIdUser2 = liquidToken.getUserWithdrawalRequests(user2)[0];
+        bytes32 requestIdUser2 = liquidToken.getUserWithdrawalRequests(user2)[
+            0
+        ];
         vm.warp(block.timestamp + 15 days);
         liquidToken.fulfillWithdrawal(requestIdUser2);
 
         // Check balances for User2
-        assertEq(testToken.balanceOf(user2), 90 ether, "Incorrect token balance after withdrawal for User2");
-        assertEq(liquidToken.balanceOf(user2), 10 ether, "Incorrect remaining balance after withdrawal for User2");
+        assertEq(
+            testToken.balanceOf(user2),
+            90 ether,
+            "Incorrect token balance after withdrawal for User2"
+        );
+        assertEq(
+            liquidToken.balanceOf(user2),
+            10 ether,
+            "Incorrect remaining balance after withdrawal for User2"
+        );
 
         vm.stopPrank();
 
