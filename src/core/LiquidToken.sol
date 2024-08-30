@@ -156,8 +156,15 @@ contract LiquidToken is
                 request.assets[i],
                 request.shareAmounts[i]
             );
-            request.assets[i].safeTransfer(msg.sender, amounts[i]);
             totalShares += request.shareAmounts[i];
+        }
+
+        for (uint256 i = 0; i < amounts.length; i++) {
+            // Transfer the amount back to the user
+            request.assets[i].safeTransfer(msg.sender, amounts[i]);
+
+            // Reduce the tracked balance of the asset
+            assets[address(request.assets[i])].balance -= amounts[i];
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request

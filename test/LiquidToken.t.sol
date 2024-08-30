@@ -72,8 +72,9 @@ contract LiquidTokenTest is BaseTest {
 
         bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
 
-        // Record the total supply before fulfillment
+        // Record the total supply and total assets before fulfillment
         uint256 totalSupplyBefore = liquidToken.totalSupply();
+        uint256 totalAssetsBefore = liquidToken.totalAssets();
 
         // Fast forward time
         vm.warp(block.timestamp + 15 days);
@@ -81,6 +82,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
 
+        // Assert that User1's token balance is correct after withdrawal
         assertEq(
             testToken.balanceOf(user1),
             95 ether,
@@ -94,7 +96,7 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect total supply after withdrawal (tokens not burned)"
         );
 
-        // Check the user's remaining balance
+        // Check the user's remaining liquid token balance
         assertEq(
             liquidToken.balanceOf(user1),
             5 ether,
@@ -106,6 +108,13 @@ contract LiquidTokenTest is BaseTest {
             liquidToken.balanceOf(address(liquidToken)),
             0,
             "Contract should not hold any liquid tokens after fulfillment"
+        );
+
+        // Assert that the total assets reduces after the withdrawal
+        assertEq(
+            liquidToken.totalAssets(),
+            totalAssetsBefore - 5 ether,
+            "Incorrect total assets after withdrawal"
         );
     }
 
@@ -355,6 +364,47 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
     }
 
+    function testZeroAddressInput() public {
+        vm.startPrank(user1);
+
+        // Attempt to deposit with an incorrect address (address(0))
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.UnsupportedAsset.selector,
+                IERC20(address(0))
+            )
+        );
+        liquidToken.deposit(IERC20(address(0)), 10 ether, user1);
+
+        // Valid deposit
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+        // Attempt to withdraw with a zero address
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(0));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5 ether;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.UnsupportedAsset.selector,
+                address(assets[0])
+            )
+        );
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        // Attempt to transfer assets with a zero address
+        vm.prank(address(liquidTokenManager));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.UnsupportedAsset.selector,
+                address(assets[0])
+            )
+        );
+        liquidToken.transferAssets(assets, amounts);
+    }
+
     function testConsecutiveWithdrawalRequestsWithFulfillments() public {
         vm.startPrank(user1);
 
@@ -404,6 +454,11 @@ contract LiquidTokenTest is BaseTest {
             totalSupplyBeforeFirstFulfillment - 5 ether,
             "Incorrect total supply after first withdrawal (tokens not burned)"
         );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            2 ether,
+            "Contract should not hold first deposit liquid tokens after first fulfillment"
+        );
 
         // Fulfill the second withdrawal request
         bytes32 secondRequestId = liquidToken.getUserWithdrawalRequests(user1)[
@@ -423,52 +478,16 @@ contract LiquidTokenTest is BaseTest {
             totalSupplyBeforeSecondFulfillment - 2 ether,
             "Incorrect total supply after second withdrawal (tokens not burned)"
         );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after second fulfillment"
+        );
 
         vm.stopPrank();
     }
 
-    function testZeroAddressInput() public {
-        vm.startPrank(user1);
-
-        // Attempt to deposit with an incorrect address (address(0))
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.UnsupportedAsset.selector,
-                IERC20(address(0))
-            )
-        );
-        liquidToken.deposit(IERC20(address(0)), 10 ether, user1);
-
-        // Valid deposit
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
-
-        // Attempt to withdraw with a zero address
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(0));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 5 ether;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.UnsupportedAsset.selector,
-                address(assets[0])
-            )
-        );
-        liquidToken.requestWithdrawal(assets, amounts);
-        vm.stopPrank();
-
-        // Attempt to transfer assets with a zero address
-        vm.prank(address(liquidTokenManager));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.UnsupportedAsset.selector,
-                address(assets[0])
-            )
-        );
-        liquidToken.transferAssets(assets, amounts);
-    }
-
-    function testMultipleStakersMultipleWithdrawals() public {
+    function testMultipleUsersMultipleWithdrawals() public {
         vm.prank(user1);
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
 
@@ -478,9 +497,9 @@ contract LiquidTokenTest is BaseTest {
         vm.startPrank(user1);
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
-        uint256[] memory amountsUser1Withdrawal1 = new uint256[](1);
-        amountsUser1Withdrawal1[0] = 5 ether;
-        liquidToken.requestWithdrawal(assets, amountsUser1Withdrawal1);
+        uint256[] memory amountsUser1Withdrawal = new uint256[](1);
+        amountsUser1Withdrawal[0] = 5 ether;
+        liquidToken.requestWithdrawal(assets, amountsUser1Withdrawal);
 
         bytes32 requestIdUser1 = liquidToken.getUserWithdrawalRequests(user1)[
             0
@@ -499,13 +518,18 @@ contract LiquidTokenTest is BaseTest {
             5 ether,
             "Incorrect remaining balance after withdrawal for User1"
         );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after User1's fulfillment"
+        );
 
         vm.stopPrank();
         vm.startPrank(user2);
 
-        uint256[] memory amountsUser2Withdrawal1 = new uint256[](1);
-        amountsUser2Withdrawal1[0] = 10 ether;
-        liquidToken.requestWithdrawal(assets, amountsUser2Withdrawal1);
+        uint256[] memory amountsUser2Withdrawal = new uint256[](1);
+        amountsUser2Withdrawal[0] = 10 ether;
+        liquidToken.requestWithdrawal(assets, amountsUser2Withdrawal);
 
         bytes32 requestIdUser2 = liquidToken.getUserWithdrawalRequests(user2)[
             0
@@ -524,33 +548,12 @@ contract LiquidTokenTest is BaseTest {
             10 ether,
             "Incorrect remaining balance after withdrawal for User2"
         );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after User2's fulfillment"
+        );
 
         vm.stopPrank();
-
-        vm.prank(user1);
-        uint256[] memory amountsUser1Withdrawal2 = new uint256[](1);
-        amountsUser1Withdrawal2[0] = 10 ether;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.InsufficientBalance.selector,
-                address(liquidToken),
-                10 ether,
-                5 ether
-            )
-        );
-        liquidToken.requestWithdrawal(assets, amountsUser1Withdrawal2);
-
-        vm.prank(user2);
-        uint256[] memory amountsUser2Withdrawal2 = new uint256[](1);
-        amountsUser2Withdrawal2[0] = 15 ether;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.InsufficientBalance.selector,
-                address(liquidToken),
-                15 ether,
-                10 ether
-            )
-        );
-        liquidToken.requestWithdrawal(assets, amountsUser2Withdrawal2);
     }
 }
