@@ -96,7 +96,7 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect total supply after withdrawal (tokens not burned)"
         );
 
-        // Check the user's remaining liquid token balance
+        // Check the user's remaining balance
         assertEq(
             liquidToken.balanceOf(user1),
             5 ether,
