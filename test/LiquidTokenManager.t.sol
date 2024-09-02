@@ -182,18 +182,20 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
+        IERC20[] memory assetsToDepositUser1 = new IERC20[](1);
+        assetsToDepositUser1[0] = IERC20(address(testToken));
         uint256[] memory amountsToDepositUser1 = new uint256[](1);
         amountsToDepositUser1[0] = 10 ether;
         
-        liquidToken.deposit(assets, amountsToDepositUser1, user1);
+        liquidToken.deposit(assetsToDepositUser1, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
+        IERC20[] memory assetsToDepositUser2 = new IERC20[](1);
+        assetsToDepositUser2[0] = IERC20(address(testToken2));
         uint256[] memory amountsToDepositUser2 = new uint256[](1);
         amountsToDepositUser2[0] = 20 ether;
-        liquidToken.deposit(assets, amountsToDepositUser2, user2);
+        liquidToken.deposit(assetsToDepositUser2, amountsToDepositUser2, user2);
 
         uint256 totalAssets = liquidToken.totalAssets();
         uint256 totalSupply = liquidToken.totalSupply();
@@ -228,18 +230,20 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
+        IERC20[] memory assetsToDepositUser1 = new IERC20[](1);
+        assetsToDepositUser1[0] = IERC20(address(testToken));
         uint256[] memory amountsToDepositUser1 = new uint256[](1);
         amountsToDepositUser1[0] = 10 ether;
         
-        liquidToken.deposit(assets, amountsToDepositUser1, user1);
+        liquidToken.deposit(assetsToDepositUser1, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
+        IERC20[] memory assetsToDepositUser2 = new IERC20[](1);
+        assetsToDepositUser2[0] = IERC20(address(testToken2));
         uint256[] memory amountsToDepositUser2 = new uint256[](1);
         amountsToDepositUser2[0] = 20 ether;
-        liquidToken.deposit(assets, amountsToDepositUser2, user2);
+        liquidToken.deposit(assetsToDepositUser2, amountsToDepositUser2, user2);
 
         uint256 initialTotalAssets = liquidToken.totalAssets();
         uint256 initialTotalSupply = liquidToken.totalSupply();
@@ -330,15 +334,17 @@ contract LiquidTokenManagerTest is BaseTest {
 
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 5 ether;
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(assets, amounts, user1);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
         vm.stopPrank();
 
         uint256 nodeId = 0;
+        uint256[] memory amountsToStake = new uint256[](1);
+        amountsToStake[0] = 5 ether;
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amountsToStake);
 
         uint256 availableBalance = liquidToken.balanceOf(user1);
         assertEq(

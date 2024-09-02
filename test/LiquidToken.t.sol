@@ -448,6 +448,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
 
         // Attempt to withdraw with a zero address
+        assets[0] = IERC20(address(0));
         uint256[] memory amountsToWithdraw = new uint256[](1);
         amountsToWithdraw[0] = 5 ether;
 
