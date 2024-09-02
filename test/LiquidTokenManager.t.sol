@@ -121,12 +121,15 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testStakeAssetsToNode() public {
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256 nodeId = 0;
 
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1 ether;
         IStrategy[] memory strategiesForNode = new IStrategy[](1);
@@ -179,11 +182,18 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDepositUser1 = new uint256[](1);
+        amountsToDepositUser1[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
-        liquidToken.deposit(IERC20(address(testToken2)), 20 ether, user2);
+        uint256[] memory amountsToDepositUser2 = new uint256[](1);
+        amountsToDepositUser2[0] = 20 ether;
+        liquidToken.deposit(assets, amountsToDepositUser2, user2);
 
         uint256 totalAssets = liquidToken.totalAssets();
         uint256 totalSupply = liquidToken.totalSupply();
@@ -218,11 +228,18 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDepositUser1 = new uint256[](1);
+        amountsToDepositUser1[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
-        liquidToken.deposit(IERC20(address(testToken2)), 20 ether, user2);
+        uint256[] memory amountsToDepositUser2 = new uint256[](1);
+        amountsToDepositUser2[0] = 20 ether;
+        liquidToken.deposit(assets, amountsToDepositUser2, user2);
 
         uint256 initialTotalAssets = liquidToken.totalAssets();
         uint256 initialTotalSupply = liquidToken.totalSupply();
@@ -277,11 +294,15 @@ contract LiquidTokenManagerTest is BaseTest {
     function testWithdrawalFailureDueToInsufficientBalance() public {
         // User1 deposits 10 ether
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
 
-        uint256 nodeId = 0;
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
 
@@ -306,15 +327,16 @@ contract LiquidTokenManagerTest is BaseTest {
     function testSuccessfulWithdrawal() public {
         // User1 deposits 10 ether
         vm.startPrank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
-        vm.stopPrank();
 
-        uint256 nodeId = 0;
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
 
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        uint256 nodeId = 0;
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 

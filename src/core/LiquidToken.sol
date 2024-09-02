@@ -57,29 +57,45 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
     }
 
-    /// @notice Allows users to deposit an asset and receive shares
-    /// @param asset The ERC20 asset to deposit
-    /// @param amount The amount of the asset to deposit
+    /// @notice Allows users to deposit multiple assets and receive shares
+    /// @param assets The ERC20 assets to deposit
+    /// @param amounts The amounts of the respective assets to deposit
     /// @param receiver The address to receive the minted shares
-    /// @return shares The number of shares minted
+    /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20 asset,
-        uint256 amount,
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
         address receiver
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        if (amount == 0) revert ZeroAmount();
-        if (!tokenRegistry.tokenIsSupported(asset))
-            revert UnsupportedAsset(asset);
+    ) external nonReentrant whenNotPaused returns (uint256[] memory) {
+        if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        uint256 shares = calculateShares(asset, amount);
-        if (shares == 0) revert ZeroShares();
+        uint256[] memory sharesArray = new uint256[](assets.length);
 
-        asset.safeTransferFrom(msg.sender, address(this), amount);
-        assetBalances[address(asset)] += amount;
-        _mint(receiver, shares);
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (amounts[i] == 0) revert ZeroAmount();
+            if (!tokenRegistry.tokenIsSupported(assets[i]))
+                revert UnsupportedAsset(assets[i]);
 
-        emit AssetDeposited(msg.sender, receiver, asset, amount, shares);
-        return shares;
+            uint256 shares = calculateShares(assets[i], amounts[i]);
+            if (shares == 0) revert ZeroShares();
+
+            assets[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
+            assetBalances[address(assets[i])] += amounts[i];
+
+            _mint(receiver, shares);
+
+            sharesArray[i] = shares;
+
+            emit AssetDeposited(
+                msg.sender,
+                receiver,
+                assets[i],
+                amounts[i],
+                shares
+            );
+        }
+
+        return sharesArray;
     }
 
     /// @notice Allows users to request a withdrawal of their shares
