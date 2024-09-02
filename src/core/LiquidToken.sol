@@ -31,7 +31,8 @@ contract LiquidToken is
     ILiquidTokenManager public liquidTokenManager;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
-    mapping(address => Asset) public assets;
+    mapping(IERC20 => Asset) public assets;
+    mapping(address => mapping(IERC20 => uint256)) public userShares;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
@@ -75,7 +76,8 @@ contract LiquidToken is
         if (shares == 0) revert ZeroShares();
 
         asset.safeTransferFrom(msg.sender, address(this), amount);
-        assets[address(asset)].balance += amount;
+        assets[asset].balance += amount;
+        userShares[receiver][asset] += shares;
         _mint(receiver, shares);
 
         emit AssetDeposited(msg.sender, receiver, asset, amount, shares);
@@ -94,12 +96,26 @@ contract LiquidToken is
 
         uint256 totalShares = 0;
         for (uint256 i = 0; i < withdrawAssets.length; i++) {
+            // Test if the asset is supported
             if (!tokenRegistry.tokenIsSupported(withdrawAssets[i]))
                 revert UnsupportedAsset(withdrawAssets[i]);
+
+            // Test if the share amount is zero
             if (shareAmounts[i] == 0) revert ZeroAmount();
+
+            // Test if the user has enough shares
+            if (userShares[msg.sender][withdrawAssets[i]] < shareAmounts[i])
+                revert InsufficientUserShares(
+                    withdrawAssets[i],
+                    shareAmounts[i],
+                    userShares[msg.sender][withdrawAssets[i]]
+                );
+
+            // Add the total shares
             totalShares += shareAmounts[i];
         }
 
+        // Test if the user has enough liquid token balance
         if (balanceOf(msg.sender) < totalShares)
             revert InsufficientBalance(
                 IERC20(address(this)),
@@ -107,6 +123,7 @@ contract LiquidToken is
                 balanceOf(msg.sender)
             );
 
+        // Create a unique request ID
         bytes32 requestId = keccak256(
             abi.encodePacked(
                 msg.sender,
@@ -115,6 +132,8 @@ contract LiquidToken is
                 block.timestamp
             )
         );
+
+        // Create a withdrawal request
         WithdrawalRequest memory request = WithdrawalRequest({
             user: msg.sender,
             assets: withdrawAssets,
@@ -123,11 +142,14 @@ contract LiquidToken is
             fulfilled: false
         });
 
+        // Store the request
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[msg.sender].push(requestId);
 
+        // Transfer the shares to the contract
         _transfer(msg.sender, address(this), totalShares);
 
+        // Emit the withdrawal requested event
         emit WithdrawalRequested(
             requestId,
             msg.sender,
@@ -140,22 +162,34 @@ contract LiquidToken is
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
+        // Get the withdrawal request
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
+        // Test if the request is valid
         if (request.user != msg.sender) revert InvalidWithdrawalRequest();
+
+        // Test if the withdrawal delay is met
         if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
             revert WithdrawalDelayNotMet();
+
+        // Test if the request is already fulfilled
         if (request.fulfilled) revert WithdrawalAlreadyFulfilled();
 
+        // Mark the request as fulfilled
         request.fulfilled = true;
+
+        // Calculate the amounts to transfer back to the user
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
 
         for (uint256 i = 0; i < request.assets.length; i++) {
+            // Calculate the amount to transfer
             amounts[i] = calculateAmount(
                 request.assets[i],
                 request.shareAmounts[i]
             );
+
+            // Add the total shares
             totalShares += request.shareAmounts[i];
         }
 
@@ -164,12 +198,16 @@ contract LiquidToken is
             request.assets[i].safeTransfer(msg.sender, amounts[i]);
 
             // Reduce the tracked balance of the asset
-            assets[address(request.assets[i])].balance -= amounts[i];
+            assets[request.assets[i]].balance -= amounts[i];
+
+            // Reduce the user's shares
+            userShares[msg.sender][request.assets[i]] -= request.shareAmounts[i];
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request
         _burn(address(this), totalShares);
 
+        // Emit the withdrawal fulfilled event
         emit WithdrawalFulfilled(
             requestId,
             msg.sender,
@@ -199,14 +237,14 @@ contract LiquidToken is
             if (!tokenRegistry.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
-            if (amount > assets[address(asset)].balance)
+            if (amount > assets[asset].balance)
                 revert InsufficientBalance(
-                    IERC20(address(asset)),
-                    assets[address(asset)].balance,
+                    asset,
+                    assets[asset].balance,
                     amount
                 );
 
-            assets[address(asset)].balance -= amount;
+            assets[asset].balance -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
             emit AssetTransferred(
@@ -277,7 +315,9 @@ contract LiquidToken is
             );
 
             // Staked Asset Balances
-            total += liquidTokenManager.getStakedAssetBalance(supportedTokens[i]);
+            total += liquidTokenManager.getStakedAssetBalance(
+                supportedTokens[i]
+            );
         }
 
         return total;
@@ -322,7 +362,7 @@ contract LiquidToken is
     }
 
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
-        return assets[address(asset)].balance;
+        return assets[asset].balance;
     }
 
     // ------------------------------------------------------------------------------

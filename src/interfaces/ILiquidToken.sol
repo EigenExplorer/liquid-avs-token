@@ -102,6 +102,13 @@ interface ILiquidToken is IERC20 {
         uint256 available
     );
 
+    /// @notice Error for insufficient user shares
+    error InsufficientUserShares(
+        IERC20 asset,
+        uint256 required,
+        uint256 available
+    );
+
     /// @notice Deposits an asset and mints shares
     /// @param asset The asset to deposit
     /// @param amount The amount to deposit
@@ -158,17 +165,23 @@ interface ILiquidToken is IERC20 {
     /// @notice Returns the withdrawal requests for a user
     /// @param user The address of the user
     /// @return An array of withdrawal request IDs
-    function getUserWithdrawalRequests(address user) external view returns (bytes32[] memory);
+    function getUserWithdrawalRequests(
+        address user
+    ) external view returns (bytes32[] memory);
 
     /// @notice Returns the details of a withdrawal request
     /// @param requestId The ID of the withdrawal request
     /// @return The withdrawal request details
-    function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);
+    function getWithdrawalRequest(
+        bytes32 requestId
+    ) external view returns (WithdrawalRequest memory);
 
     /// @notice Returns the balances of multiple assets
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
-    function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+    function balanceAssets(
+        IERC20[] calldata assetList
+    ) external view returns (uint256[] memory);
 
     /// @notice Pauses the contract
     function pause() external;

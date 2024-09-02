@@ -281,7 +281,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(IERC20(address(unsupportedToken)), 10 ether, user1);
     }
 
-    function testRequestWithdrawalInsufficientBalance() public {
+    function testRequestWithdrawalInsufficientUserShares() public {
         vm.startPrank(user1);
         liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
 
@@ -292,8 +292,8 @@ contract LiquidTokenTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ILiquidToken.InsufficientBalance.selector,
-                address(liquidToken),
+                ILiquidToken.InsufficientUserShares.selector,
+                testToken,
                 11 ether,
                 10 ether
             )
