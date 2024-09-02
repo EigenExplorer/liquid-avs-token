@@ -7,4 +7,4 @@ build:
 	forge build
 
 tests:
-	forge test --fork-url $(RPC_URL) -vvvv
+	forge test --fork-url $(RPC_URL)

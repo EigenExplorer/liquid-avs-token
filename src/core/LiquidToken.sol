@@ -31,7 +31,7 @@ contract LiquidToken is
     ILiquidTokenManager public liquidTokenManager;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
-    mapping(address => Asset) public assets;
+    mapping(address => uint256) public assetBalances;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
@@ -75,7 +75,7 @@ contract LiquidToken is
         if (shares == 0) revert ZeroShares();
 
         asset.safeTransferFrom(msg.sender, address(this), amount);
-        assets[address(asset)].balance += amount;
+        assetBalances[address(asset)] += amount;
         _mint(receiver, shares);
 
         emit AssetDeposited(msg.sender, receiver, asset, amount, shares);
@@ -164,7 +164,7 @@ contract LiquidToken is
             request.assets[i].safeTransfer(msg.sender, amounts[i]);
 
             // Reduce the tracked balance of the asset
-            assets[address(request.assets[i])].balance -= amounts[i];
+            assetBalances[address(request.assets[i])] -= amounts[i];
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request
@@ -199,14 +199,14 @@ contract LiquidToken is
             if (!tokenRegistry.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
-            if (amount > assets[address(asset)].balance)
+            if (amount > assetBalances[address(asset)])
                 revert InsufficientBalance(
                     IERC20(address(asset)),
-                    assets[address(asset)].balance,
+                    assetBalances[address(asset)],
                     amount
                 );
 
-            assets[address(asset)].balance -= amount;
+            assetBalances[address(asset)] -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
             emit AssetTransferred(
@@ -322,7 +322,7 @@ contract LiquidToken is
     }
 
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
-        return assets[address(asset)].balance;
+        return assetBalances[address(asset)];
     }
 
     // ------------------------------------------------------------------------------
