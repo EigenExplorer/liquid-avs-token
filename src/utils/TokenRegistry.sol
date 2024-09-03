@@ -63,6 +63,7 @@ contract TokenRegistry is
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals != 0)
             revert TokenAlreadySupported(token);
+        if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
 
         tokens[token] = TokenInfo({

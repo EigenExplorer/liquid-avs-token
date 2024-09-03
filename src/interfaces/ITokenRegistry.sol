@@ -55,6 +55,9 @@ interface ITokenRegistry {
     /// @param token The address of the token that is already supported
     error TokenAlreadySupported(IERC20 token);
 
+    /// @notice Error thrown when an invalid decimals value is provided
+    error InvalidDecimals();
+
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
 
