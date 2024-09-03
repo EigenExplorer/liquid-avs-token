@@ -43,6 +43,26 @@ contract StakerNodeCoordinator is
     function initialize(Init calldata init) external override initializer {
         __AccessControl_init();
 
+        // Zero address checks
+        if (init.initialOwner == address(0)) {
+            revert("Initial owner cannot be the zero address");
+        }
+        if (init.stakerNodeCreator == address(0)) {
+            revert("Staker node creator cannot be the zero address");
+        }
+        if (init.stakerNodesDelegator == address(0)) {
+            revert("Staker nodes delegator cannot be the zero address");
+        }
+        if (address(init.liquidTokenManager) == address(0)) {
+            revert("LiquidTokenManager cannot be the zero address");
+        }
+        if (address(init.strategyManager) == address(0)) {
+            revert("StrategyManager cannot be the zero address");
+        }
+        if (address(init.delegationManager) == address(0)) {
+            revert("DelegationManager cannot be the zero address");
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);

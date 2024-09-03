@@ -40,6 +40,14 @@ contract TokenRegistry is
     function initialize(Init memory init) public initializer {
         __AccessControl_init();
 
+        // Zero address checks
+        if (init.initialOwner == address(0)) {
+            revert("Initial owner cannot be the zero address");
+        }
+        if (init.priceUpdater == address(0)) {
+            revert("Price updater cannot be the zero address");
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
     }

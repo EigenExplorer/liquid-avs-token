@@ -50,6 +50,20 @@ contract LiquidToken is
         __AccessControl_init();
         __Pausable_init();
 
+        // Zero address checks
+        if (init.initialOwner == address(0)) {
+            revert("Initial owner cannot be the zero address");
+        }
+        if (init.pauser == address(0)) {
+            revert("Pauser cannot be the zero address");
+        }
+        if (address(init.tokenRegistry) == address(0)) {
+            revert("TokenRegistry cannot be the zero address");
+        }
+        if (address(init.liquidTokenManager) == address(0)) {
+            revert("LiquidTokenManager cannot be the zero address");
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
