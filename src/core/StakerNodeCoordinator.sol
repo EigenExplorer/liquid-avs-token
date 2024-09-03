@@ -172,6 +172,13 @@ contract StakerNodeCoordinator is
     function setMaxNodes(
         uint256 _maxNodes
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 nodeCount = stakerNodes.length;
+        if (_maxNodes < nodeCount) {
+            revert(
+                "maxNodes cannot be set to a value lower than the current number of staker nodes"
+            );
+        }
+
         uint256 oldMaxNodes = maxNodes;
         maxNodes = _maxNodes;
         emit MaxNodesUpdated(oldMaxNodes, _maxNodes, msg.sender);
