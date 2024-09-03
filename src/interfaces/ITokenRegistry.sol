@@ -16,11 +16,9 @@ interface ITokenRegistry {
     }
 
     /// @notice Struct to hold token information
-    /// @param isSupported Whether the token is supported
     /// @param decimals The number of decimals for the token
     /// @param pricePerUnit The price per unit of the token
     struct TokenInfo {
-        bool isSupported;
         uint256 decimals;
         uint256 pricePerUnit;
     }

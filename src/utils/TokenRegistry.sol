@@ -61,12 +61,11 @@ contract TokenRegistry is
         uint256 decimals,
         uint256 initialPrice
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokens[token].isSupported)
+        if (tokens[token].decimals != 0)
             revert TokenAlreadySupported(token);
         if (initialPrice == 0) revert InvalidPrice();
 
         tokens[token] = TokenInfo({
-            isSupported: true,
             decimals: decimals,
             pricePerUnit: initialPrice
         });
@@ -78,7 +77,7 @@ contract TokenRegistry is
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!tokens[token].isSupported)
+        if (tokens[token].decimals == 0)
             revert TokenNotSupported(token);
 
         delete tokens[token];
@@ -102,7 +101,7 @@ contract TokenRegistry is
         IERC20 token,
         uint256 newPrice
     ) external onlyRole(PRICE_UPDATER_ROLE) {
-        if (!tokens[token].isSupported)
+        if (tokens[token].decimals == 0)
             revert TokenNotSupported(token);
         if (newPrice == 0) revert InvalidPrice();
 
@@ -117,7 +116,7 @@ contract TokenRegistry is
     function tokenIsSupported(
         IERC20 token
     ) public view override returns (bool) {
-        return tokens[token].isSupported;
+        return tokens[token].decimals != 0;
     }
 
     /// @notice Converts a token amount to the unit of account
@@ -129,7 +128,7 @@ contract TokenRegistry is
         uint256 amount
     ) public view override returns (uint256) {
         TokenInfo memory info = tokens[token];
-        if (!info.isSupported) revert TokenNotSupported(token);
+        if (info.decimals == 0) revert TokenNotSupported(token);
 
         return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
     }
@@ -143,7 +142,7 @@ contract TokenRegistry is
         uint256 amount
     ) public view override returns (uint256) {
         TokenInfo memory info = tokens[token];
-        if (!info.isSupported) revert TokenNotSupported(token);
+        if (info.decimals == 0) revert TokenNotSupported(token);
 
         return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
     }
