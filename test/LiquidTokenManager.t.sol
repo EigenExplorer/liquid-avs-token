@@ -12,6 +12,7 @@ import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
+import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
@@ -156,6 +157,38 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.prank(user1);
         vm.expectRevert(); // TODO: Check if this is the correct revert message
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function testGetStakedAssetBalanceInvalidNodeId() public {
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        uint256 invalidNodeId = 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.NodeIdOutOfRange.selector,
+                invalidNodeId
+            )
+        );
+        liquidTokenManager.getStakedAssetBalanceNode(
+            testToken,
+            invalidNodeId
+        );
     }
 
     function testGetStakedAssetBalanceInvalidStrategy() public {
