@@ -174,9 +174,7 @@ contract StakerNodeCoordinator is
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 nodeCount = stakerNodes.length;
         if (_maxNodes < nodeCount) {
-            revert(
-                "maxNodes cannot be set to a value lower than the current number of staker nodes"
-            );
+            revert MaxNodesLowerThanCurrent(nodeCount, _maxNodes);
         }
 
         uint256 oldMaxNodes = maxNodes;
