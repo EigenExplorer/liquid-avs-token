@@ -34,7 +34,7 @@ uint256 public constant WITHDRAWAL_DELAY = 14 days;
 ### assets
 
 ```solidity
-mapping(address => Asset) public assets;
+mapping(address => uint256) public assetBalances;
 ```
 
 

@@ -19,11 +19,6 @@ interface ILiquidToken is IERC20 {
         address pauser;
     }
 
-    /// @notice Represents an asset held by the contract
-    struct Asset {
-        uint256 balance;
-    }
-
     /// @notice Represents a withdrawal request
     struct WithdrawalRequest {
         address user;
