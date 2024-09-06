@@ -105,17 +105,26 @@ contract TokenRateProviderTest is BaseTest {
 
     function testRemoveTokenSuccess() public {
         tokenRegistry.removeToken(testToken);
-        assertFalse(tokenRegistry.tokenIsSupported(testToken), "Token should be removed");
+        assertFalse(
+            tokenRegistry.tokenIsSupported(testToken),
+            "Token should be removed"
+        );
 
         IERC20[] memory supportedTokens = tokenRegistry.getSupportedTokens();
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            assertFalse(supportedTokens[i] == testToken, "Token should be removed from the supported tokens array");
+            assertFalse(
+                supportedTokens[i] == testToken,
+                "Token should be removed from the supported tokens array"
+            );
         }
     }
 
     function testRemoveTokenFailsForUnsupportedToken() public {
         tokenRegistry.removeToken(testToken);
-        assertFalse(tokenRegistry.tokenIsSupported(testToken), "Token should not be supported before attempting to remove");
+        assertFalse(
+            tokenRegistry.tokenIsSupported(testToken),
+            "Token should not be supported before attempting to remove"
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITokenRegistry.TokenNotSupported.selector,
@@ -126,8 +135,11 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testRemoveTokenFailsForNonAdmin() public {
-        assertTrue(tokenRegistry.tokenIsSupported(testToken), "Token should be supported before non-admin attempts to remove");
-        vm.prank(user1); 
+        assertTrue(
+            tokenRegistry.tokenIsSupported(testToken),
+            "Token should be supported before non-admin attempts to remove"
+        );
+        vm.prank(user1);
         vm.expectRevert();
         tokenRegistry.removeToken(testToken);
     }
@@ -140,12 +152,21 @@ contract TokenRateProviderTest is BaseTest {
         tokenRegistry.addToken(newToken, decimals, initialPrice);
 
         // Verify that the token was successfully added
-        ITokenRegistry.TokenInfo memory tokenInfo = tokenRegistry.getTokenInfo(newToken);
+        ITokenRegistry.TokenInfo memory tokenInfo = tokenRegistry.getTokenInfo(
+            newToken
+        );
         assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
-        assertEq(tokenInfo.pricePerUnit, initialPrice, "Incorrect initial price");
+        assertEq(
+            tokenInfo.pricePerUnit,
+            initialPrice,
+            "Incorrect initial price"
+        );
 
         // Verify that the token is now supported
-        assertTrue(tokenRegistry.tokenIsSupported(newToken), "Token should be supported");
+        assertTrue(
+            tokenRegistry.tokenIsSupported(newToken),
+            "Token should be supported"
+        );
 
         // Verify that the token is included in the supportedTokens array
         IERC20[] memory supportedTokens = tokenRegistry.getSupportedTokens();
@@ -156,7 +177,10 @@ contract TokenRateProviderTest is BaseTest {
                 break;
             }
         }
-        assertTrue(isTokenInArray, "Token should be in the supportedTokens array");
+        assertTrue(
+            isTokenInArray,
+            "Token should be in the supportedTokens array"
+        );
     }
 
     function testAddTokenFailsIfAlreadySupported() public {
@@ -198,7 +222,11 @@ contract TokenRateProviderTest is BaseTest {
         uint256 newPrice = 2e18;
         tokenRegistry.updatePrice(testToken, newPrice);
         // Verify the price has been updated correctly
-        assertEq(tokenRegistry.getTokenInfo(testToken).pricePerUnit, newPrice, "Price should be updated successfully");
+        assertEq(
+            tokenRegistry.getTokenInfo(testToken).pricePerUnit,
+            newPrice,
+            "Price should be updated successfully"
+        );
     }
 
     function testUpdatePriceFailsForUnsupportedToken() public {
@@ -226,5 +254,4 @@ contract TokenRateProviderTest is BaseTest {
         vm.expectRevert();
         tokenRegistry.updatePrice(testToken, 2e18);
     }
-
 }

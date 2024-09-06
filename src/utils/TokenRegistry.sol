@@ -61,8 +61,7 @@ contract TokenRegistry is
         uint256 decimals,
         uint256 initialPrice
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokens[token].decimals != 0)
-            revert TokenAlreadySupported(token);
+        if (tokens[token].decimals != 0) revert TokenAlreadySupported(token);
         if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
 
@@ -78,8 +77,7 @@ contract TokenRegistry is
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokens[token].decimals == 0)
-            revert TokenNotSupported(token);
+        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
 
         delete tokens[token];
         for (uint256 i = 0; i < supportedTokens.length; i++) {
@@ -102,8 +100,7 @@ contract TokenRegistry is
         IERC20 token,
         uint256 newPrice
     ) external onlyRole(PRICE_UPDATER_ROLE) {
-        if (tokens[token].decimals == 0)
-            revert TokenNotSupported(token);
+        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
         if (newPrice == 0) revert InvalidPrice();
 
         uint256 oldPrice = tokens[token].pricePerUnit;
