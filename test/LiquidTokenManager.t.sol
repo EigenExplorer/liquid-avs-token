@@ -120,6 +120,16 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
+    function testSetStrategyZeroAddress() public {
+        MockStrategy newStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken))
+        );
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
+        liquidTokenManager.setStrategy(IERC20(address(0)), IStrategy(address(newStrategy)));
+    }
+
     function testStakeAssetsToNode() public {
         vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
@@ -156,6 +166,31 @@ contract LiquidTokenManagerTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(); // TODO: Check if this is the correct revert message
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function testStakeAssetsToMultipleNodesLengthMismatch() public {
+        uint256 nodeId = 0;
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 1 ether;
+        amounts[1] = 2 ether;
+        
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.LengthMismatch.selector, 1, 2));
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function testInvalidStakingAmount() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 0 ether;
+    
+        uint256 nodeId = 0;
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.InvalidStakingAmount.selector, 0)); // Expect InvalidStakingAmount with 0 value
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
     }
 
