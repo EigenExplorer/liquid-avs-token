@@ -65,7 +65,7 @@ interface ITokenRegistry {
     /// @param token The address of the token to add
     /// @param decimals The number of decimals for the token
     /// @param initialPrice The initial price for the token
-    function addToken(IERC20 token, uint256 decimals, uint256 initialPrice) external;
+    function addToken(IERC20 token, uint8 decimals, uint256 initialPrice) external;
 
     /// @notice Removes a token from the registry
     /// @param token The address of the token to remove

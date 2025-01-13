@@ -9,7 +9,7 @@ import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
 
 contract TokenRateProviderTest is BaseTest {
     function setUp() public override {
@@ -146,7 +146,7 @@ contract TokenRateProviderTest is BaseTest {
 
     function testAddTokenSuccess() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
 
         tokenRegistry.addToken(newToken, decimals, initialPrice);
@@ -156,6 +156,11 @@ contract TokenRateProviderTest is BaseTest {
             newToken
         );
         assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(
+             tokenInfo.decimals,
+             IERC20Metadata(address(newToken)).decimals(),
+             "Incorrect decimals"
+         );
         assertEq(
             tokenInfo.pricePerUnit,
             initialPrice,
@@ -184,7 +189,7 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testAddTokenFailsIfAlreadySupported() public {
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
 
         // Attempt to add the same token again and expect a revert
@@ -199,17 +204,42 @@ contract TokenRateProviderTest is BaseTest {
 
     function testAddTokenFailsForZeroDecimals() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 zeroDecimals = 0;
+        uint8 zeroDecimals = 0;
         uint256 price = 1e18;
 
-        // Attempt to add the token with zero dedcimals and expect a revert
+        // Attempt to add the token with zero decimals and expect a revert
         vm.expectRevert(ITokenRegistry.InvalidDecimals.selector);
         tokenRegistry.addToken(newToken, zeroDecimals, price);
     }
 
+    function testAddTokenFailsForMismatchedDecimals() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 6; // Actual decimals is 18
+        uint256 price = 1e18;
+
+        // Attempt to add the token with zero decimals and expect a revert
+        vm.expectRevert(ITokenRegistry.InvalidDecimals.selector);
+        tokenRegistry.addToken(newToken, decimals, price);
+    }
+
+    function testAddTokenSuccessForNoDecimalsFunction() public {
+        IERC20 newToken = IERC20(address(new MockERC20NoDecimals())); // Does not have a `decimals()` function
+        uint8 decimals = 6;
+        uint256 price = 1e18;
+
+        // Attempt to add the token with custom decimals
+        tokenRegistry.addToken(newToken, decimals, price);
+
+        // Verify that the token was successfully added with the
+        ITokenRegistry.TokenInfo memory tokenInfo = tokenRegistry.getTokenInfo(
+            newToken
+        );
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+    }
+
     function testAddTokenFailsForZeroInitialPrice() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 zeroPrice = 0;
 
         // Attempt to add the token with zero initial price and expect a revert
