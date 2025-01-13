@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -58,12 +59,19 @@ contract TokenRegistry is
     /// @param initialPrice Initial price for the token
     function addToken(
         IERC20 token,
-        uint256 decimals,
+        uint8 decimals,
         uint256 initialPrice
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals != 0) revert TokenAlreadySupported(token);
-        if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
+        if (decimals == 0) revert InvalidDecimals();
+
+        try IERC20Metadata(address(token)).decimals() returns (
+            uint8 decimalsFromContract
+        ) {
+            if (decimalsFromContract == 0) revert InvalidDecimals();
+            if (decimals != decimalsFromContract) revert InvalidDecimals();
+        } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
         tokens[token] = TokenInfo({
             decimals: decimals,
