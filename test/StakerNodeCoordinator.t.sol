@@ -6,6 +6,7 @@ import {StakerNodeCoordinator} from "../src/core/StakerNodeCoordinator.sol";
 import {StakerNode} from "../src/core/StakerNode.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 contract StakerNodeCoordinatorTest is BaseTest {
     function setUp() public override {
@@ -23,14 +24,23 @@ contract StakerNodeCoordinatorTest is BaseTest {
     }
 
     function testUpgradeStakerNodeImplementationSuccess() public {
+        // Retrieve the old implementation address from the UpgradeableBeacon
+        address oldImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon())).implementation();
         address newImplementation = address(new StakerNode());
 
-        // Upgrade to a new implementation
+        assertTrue(newImplementation != oldImplementation);
+
+        // Upgrade to the new implementation
         vm.prank(admin);
         stakerNodeCoordinator.upgradeStakerNodeImplementation(newImplementation);
 
-        // Check if upgrade has succeeded
+        // Retrieve the upgraded implementation address from the UpgradeableBeacon
+        address upgradedImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon())).implementation();
+
+        // Check if the upgrade has succeeded
         assertEq(address(stakerNodeCoordinator.upgradeableBeacon()) != address(0), true);
+        assertEq(upgradedImplementation, newImplementation);
+        assertTrue(upgradedImplementation != oldImplementation);
     }
 
     function testSetMaxNodesSuccess() public {
