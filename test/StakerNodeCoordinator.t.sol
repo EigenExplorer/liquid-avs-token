@@ -19,6 +19,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         assertEq(address(node) != address(0), true);
         assertEq(stakerNodeCoordinator.getStakerNodesCount(), 1);
+        assertEq(address(node), address(stakerNodeCoordinator.getNodeById(0)));
     }
 
     function testUpgradeStakerNodeImplementationSuccess() public {
