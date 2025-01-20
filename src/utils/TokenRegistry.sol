@@ -100,7 +100,9 @@ contract TokenRegistry is
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
 
         // Check for pending withdrawals of this token
-        if (liquidToken.balanceAssets([token]) > 0 revert TokenInUse(token);)
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = token;
+        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Additional check for any nodes with outstanding shares of this token
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();

@@ -8,12 +8,62 @@ import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
 import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
+import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract TokenRateProviderTest is BaseTest {
+    IStakerNode public stakerNode;
+
     function setUp() public override {
         super.setUp();
+
+        // Create a node
+        vm.prank(admin);
+        stakerNodeCoordinator.createStakerNode();
+        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+
+        // Register a mock operator to EL
+        address operatorAddress = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(block.timestamp, block.prevrandao)
+                    )
+                )
+            )
+        );
+
+        vm.prank(operatorAddress);
+        delegationManager.registerAsOperator(
+            IDelegationManager.OperatorDetails({
+                __deprecated_earningsReceiver: operatorAddress,
+                delegationApprover: address(0),
+                stakerOptOutWindowBlocks: 1
+            }),
+            "ipfs://"
+        );
+
+        // Strategy whitelist
+        ISignatureUtils.SignatureWithExpiry memory signature;
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
+
+        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        thirdPartyTransfersForbiddenValues[0] = false;
+
+        vm.prank(strategyManager.strategyWhitelister());
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbiddenValues
+        );
+
+        // Delegate the staker node to EL
+        stakerNode.delegate(operatorAddress, signature, bytes32(0));
     }
 
     function testInitialize() public {
@@ -141,6 +191,63 @@ contract TokenRateProviderTest is BaseTest {
         );
         vm.prank(user1);
         vm.expectRevert();
+        tokenRegistry.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNonZeroBalance() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITokenRegistry.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        tokenRegistry.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNodeHasShares() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        // Mock balanceAssets for the token to return 0
+        uint256[] memory zeroAmounts = new uint256[](1);
+        zeroAmounts[0] = 0;
+        vm.mockCall(
+            address(liquidToken),
+            abi.encodeWithSelector(
+                ILiquidToken.balanceAssets.selector,
+                assets
+            ),
+            abi.encode(zeroAmounts)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITokenRegistry.TokenInUse.selector,
+                address(testToken)
+            )
+        );
         tokenRegistry.removeToken(testToken);
     }
 

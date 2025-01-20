@@ -166,7 +166,10 @@ contract BaseTest is Test {
     function _initializeTokenRegistry() private {
         ITokenRegistry.Init memory init = ITokenRegistry.Init({
             initialOwner: admin,
-            priceUpdater: address(tokenRegistryOracle)
+            priceUpdater: address(tokenRegistryOracle),
+            stakerNodeCoordinator: stakerNodeCoordinator,
+            liquidTokenManager: liquidTokenManager,
+            liquidToken: liquidToken
         });
         tokenRegistry.initialize(init);
     }
