@@ -11,6 +11,7 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
 
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
@@ -295,6 +296,18 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
+    function testDepositArrayLengthMismatch() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](2); // Mismatch in length
+        amountsToDeposit[0] = 5 ether;
+        amountsToDeposit[1] = 5 ether;
+
+        vm.prank(user1);
+        vm.expectRevert(ILiquidToken.ArrayLengthMismatch.selector);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+    }
+
     function testDepositZeroAmount() public {
         vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
@@ -324,6 +337,63 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
+    function testDepositZeroShares() public {
+        // Mock a scenario where the conversion rate makes the shares zero
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10;
+
+        vm.mockCall(
+            address(tokenRegistry),
+            abi.encodeWithSelector(
+                ITokenRegistry.convertToUnitOfAccount.selector,
+                IERC20(address(testToken)),
+                10
+            ),
+            abi.encode(0) // Conversion returns zero, leading to ZeroShares
+        );
+
+        vm.prank(user1);
+        vm.expectRevert(ILiquidToken.ZeroShares.selector);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+    }
+
+    function testRequestWithdrawalArrayLengthMismatch() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToWithdraw = new uint256[](2); // Mismatch in length
+        amountsToWithdraw[0] = 5 ether;
+        amountsToWithdraw[1] = 5 ether;
+
+        vm.prank(user1);
+        vm.expectRevert(ILiquidToken.ArrayLengthMismatch.selector);
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+    }
+
+    function testRequestWithdrawalUnsupportedAsset() public {
+        IERC20 unsupportedToken = new MockERC20("Unsupported Token", "UT");
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = unsupportedToken;
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 10 ether;
+
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidToken.UnsupportedAsset.selector, address(unsupportedToken)));
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+    }
+
+    function testRequestWithdrawalZeroAmount() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 0; // Zero withdrawal amount
+
+        vm.prank(user1);
+        vm.expectRevert(ILiquidToken.ZeroAmount.selector);
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+    }
+
     function testRequestWithdrawalInsufficientBalance() public {
         vm.startPrank(user1);
 
@@ -346,6 +416,50 @@ contract LiquidTokenTest is BaseTest {
             )
         );
         liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+        vm.stopPrank();
+    }
+
+    function testInvalidWithdrawalRequest() public {
+            IERC20[] memory assets = new IERC20[](1);
+            assets[0] = IERC20(address(testToken));
+            uint256[] memory amountsToDeposit = new uint256[](1);
+            amountsToDeposit[0] = 10 ether;
+
+            vm.startPrank(user1);
+            liquidToken.deposit(assets, amountsToDeposit, user1);
+            
+            uint256[] memory amountsToWithdraw = new uint256[](1);
+            amountsToWithdraw[0] = 5 ether;
+            liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+            vm.stopPrank();
+
+            // User2 attempts to fulfill User1's withdrawal request
+            bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+
+            vm.prank(user2);
+            vm.expectRevert(ILiquidToken.InvalidWithdrawalRequest.selector);
+            liquidToken.fulfillWithdrawal(requestId);
+    }
+
+    function testWithdrawalAlreadyFulfilled() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        vm.startPrank(user1);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 5 ether;
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+        vm.warp(block.timestamp + 15 days);
+        liquidToken.fulfillWithdrawal(requestId);
+        
+        // User attempts to fulfill the same withdrawal request again
+        vm.expectRevert(ILiquidToken.WithdrawalAlreadyFulfilled.selector);
+        liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
     }
 
@@ -391,6 +505,30 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.transferAssets(assets, amounts);
     }
 
+    function testTransferAssetsInsufficientBalance() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256[] memory amountsToTransfer = new uint256[](1);
+        amountsToTransfer[0] = 20 ether; // More than available
+
+        vm.prank(address(liquidTokenManager));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.InsufficientBalance.selector,
+                address(testToken),
+                10 ether,
+                20 ether
+            )
+        );
+        liquidToken.transferAssets(assets, amountsToTransfer);
+    }
+
     function testPause() public {
         vm.prank(pauser);
         liquidToken.pause();
@@ -425,6 +563,12 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 10 ether;
 
         liquidToken.deposit(assets, amountsToDeposit, user1);
+    }
+
+    function testPauseUnauthorized() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        liquidToken.pause();
     }
 
     function testZeroAddressInput() public {
