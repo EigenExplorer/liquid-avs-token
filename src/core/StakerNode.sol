@@ -121,6 +121,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         return _getInitializedVersion();
     }
 
+    /// @notice Returns the id of the StakerNode
+    /// @return id The StakerNode's id as uint256
+    function getId() external view override returns (uint256) {
+        return id;
+    }  
+
     /// @dev Reverts if the caller doesn't have the required role
     /// @param role The role to check for
     modifier onlyRole(bytes32 role) {

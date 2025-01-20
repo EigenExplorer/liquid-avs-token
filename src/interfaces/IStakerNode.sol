@@ -79,4 +79,8 @@ interface IStakerNode {
     /// @notice Returns the version of the contract that was last initialized
     /// @return The initialized version as a uint64
     function getInitializedVersion() external view returns (uint64);
+
+    /// @notice Returns the id of the StakerNode
+    /// @return The StakerNode's id as uint256
+    function getId() external view returns (uint256);
 }

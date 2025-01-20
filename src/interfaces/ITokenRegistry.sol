@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
+
 /// @title ITokenRegistry Interface
 /// @notice Interface for the TokenRegistry contract
 /// @dev This interface defines the functions and events for managing token information and prices
@@ -13,6 +17,9 @@ interface ITokenRegistry {
     struct Init {
         address initialOwner;
         address priceUpdater;
+        IStakerNodeCoordinator stakerNodeCoordinator;
+        ILiquidTokenManager liquidTokenManager;
+        ILiquidToken liquidToken;
     }
 
     /// @notice Struct to hold token information
@@ -54,6 +61,10 @@ interface ITokenRegistry {
     /// @notice Error thrown when attempting to add a token that is already supported
     /// @param token The address of the token that is already supported
     error TokenAlreadySupported(IERC20 token);
+
+    /// @notice Error thrown when attempting to remove a token that is currently in use
+    /// @param token The address of the token that attempted to be removed
+    error TokenInUse(IERC20 token);
 
     /// @notice Error thrown when an invalid decimals value is provided
     error InvalidDecimals();

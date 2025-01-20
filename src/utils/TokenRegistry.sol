@@ -7,6 +7,10 @@ import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Ini
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 
 /// @title TokenRegistry
 /// @notice A contract for managing token information and prices
@@ -17,6 +21,13 @@ contract TokenRegistry is
     AccessControlUpgradeable
 {
     using Math for uint256;
+
+    /// @notice The StakerNodeCoordinator contract
+    IStakerNodeCoordinator public stakerNodeCoordinator;
+    /// @notice The LiquidTokenManager contract
+    ILiquidTokenManager public liquidTokenManager;
+    /// @notice The LiquidToken contract
+    ILiquidToken public liquidToken;
 
     /// @notice Mapping of token addresses to their TokenInfo
     mapping(IERC20 => TokenInfo) public tokens;
@@ -47,9 +58,18 @@ contract TokenRegistry is
         if (init.priceUpdater == address(0)) {
             revert("Price updater cannot be the zero address");
         }
+        if (address(init.stakerNodeCoordinator) == address(0)) {
+            revert("StakerNodeCoordinator cannot be the zero address");
+        }
+        if (address(init.liquidTokenManager) == address(0)) {
+            revert("LiquidTokenManager cannot be the zero address");
+        }
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
+        stakerNodeCoordinator = init.stakerNodeCoordinator;
+        liquidTokenManager = init.liquidTokenManager;
+        liquidToken = init.liquidToken;
     }
 
     /// @notice Adds a new token to the registry
@@ -78,6 +98,21 @@ contract TokenRegistry is
     /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
+
+        // Check for pending withdrawals of this token
+        if (liquidToken.balanceAssets([token]) > 0 revert TokenInUse(token);)
+
+        // Additional check for any nodes with outstanding shares of this token
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        for (uint256 i = 0; i < nodes.length; i++) {
+            uint256 stakedBalance = liquidTokenManager.getStakedAssetBalanceNode(
+                token,
+                nodes[i].getId()
+            );
+            if (stakedBalance > 0) {
+                revert TokenInUse(token);
+            }
+        }
 
         delete tokens[token];
         for (uint256 i = 0; i < supportedTokens.length; i++) {
