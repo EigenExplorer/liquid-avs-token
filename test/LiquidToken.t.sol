@@ -789,8 +789,15 @@ contract LiquidTokenTest is BaseTest {
 
         // User1 deposits 10 ether of testToken and 10 ether of testToken2
         vm.startPrank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
-        liquidToken.deposit(IERC20(address(testToken2)), 10 ether, user1);
+        
+        IERC20[] memory depositAssets = new IERC20[](2);
+        depositAssets[0] = IERC20(address(testToken));
+        depositAssets[1] = IERC20(address(testToken2));
+        uint256[] memory depositAmounts = new uint256[](2);
+        depositAmounts[0] = 10 ether;
+        depositAmounts[1] = 10 ether;
+        
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
 
         // Check totalSupply, totalAssets, and contract balances after deposits
         assertEq(
@@ -887,8 +894,15 @@ contract LiquidTokenTest is BaseTest {
 
         // User1 deposits 10 ether of testToken and 10 ether of testToken2
         vm.startPrank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
-        liquidToken.deposit(IERC20(address(testToken2)), 10 ether, user1);
+        
+        IERC20[] memory depositAssets = new IERC20[](2);
+        depositAssets[0] = IERC20(address(testToken));
+        depositAssets[1] = IERC20(address(testToken2));
+        uint256[] memory depositAmounts = new uint256[](2);
+        depositAmounts[0] = 10 ether;
+        depositAmounts[1] = 10 ether;
+        
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
 
         // Check totalSupply, totalAssets, and contract balances after deposits
         assertEq(
