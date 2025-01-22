@@ -32,6 +32,9 @@ interface IStakerNodeCoordinator {
     /// @notice Emitted when the maximum number of nodes is updated
     event MaxNodesUpdated(uint256 oldMaxNodes, uint256 newMaxNodes, address indexed updater);
 
+    /// @notice Error thrown when trying to set maxNodes lower than the current number of nodes0
+    error MaxNodesLowerThanCurrent(uint256 currentNodeCount, uint256 newMaxNodes);
+
     /// @notice Emitted when a node is initialized
     event NodeInitialized(address indexed nodeAddress, uint64 initializedVersion, uint256 indexed nodeId);
 

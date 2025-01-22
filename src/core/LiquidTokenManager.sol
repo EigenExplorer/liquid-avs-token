@@ -134,9 +134,6 @@ contract LiquidTokenManager is
         }
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-        if (address(node) == address(0)) {
-            revert InvalidNodeId(nodeId);
-        }
 
         IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
         for (uint256 i = 0; i < assetsLength; i++) {
@@ -220,9 +217,6 @@ contract LiquidTokenManager is
         }
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-        if (address(node) == address(0)) {
-            revert InvalidNodeId(nodeId);
-        }
 
         return _getStakedAssetBalanceNode(asset, node);
     }

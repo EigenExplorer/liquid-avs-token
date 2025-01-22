@@ -16,11 +16,9 @@ interface ITokenRegistry {
     }
 
     /// @notice Struct to hold token information
-    /// @param isSupported Whether the token is supported
     /// @param decimals The number of decimals for the token
     /// @param pricePerUnit The price per unit of the token
     struct TokenInfo {
-        bool isSupported;
         uint256 decimals;
         uint256 pricePerUnit;
     }
@@ -56,6 +54,9 @@ interface ITokenRegistry {
     /// @notice Error thrown when attempting to add a token that is already supported
     /// @param token The address of the token that is already supported
     error TokenAlreadySupported(IERC20 token);
+
+    /// @notice Error thrown when an invalid decimals value is provided
+    error InvalidDecimals();
 
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();

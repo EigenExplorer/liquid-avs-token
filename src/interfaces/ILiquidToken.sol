@@ -19,11 +19,6 @@ interface ILiquidToken is IERC20 {
         address pauser;
     }
 
-    /// @notice Represents an asset held by the contract
-    struct Asset {
-        uint256 balance;
-    }
-
     /// @notice Represents a withdrawal request
     struct WithdrawalRequest {
         address user;
@@ -102,16 +97,17 @@ interface ILiquidToken is IERC20 {
         uint256 available
     );
 
-    /// @notice Deposits an asset and mints shares
-    /// @param asset The asset to deposit
-    /// @param amount The amount to deposit
+    /// @notice Deposits multiple assets and mints shares
+    /// @param assets The array of assets to deposit
+    /// @param amounts The array of amounts to deposit for each asset
     /// @param receiver The address to receive the minted shares
-    /// @return The number of shares minted
+    /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20 asset,
-        uint256 amount,
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
         address receiver
-    ) external returns (uint256);
+    ) external returns (uint256[] memory);
+
 
     /// @notice Allows users to request a withdrawal of their shares
     /// @param withdrawAssets The ERC20 assets to withdraw

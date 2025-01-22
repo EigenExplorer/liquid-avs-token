@@ -12,6 +12,7 @@ import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
+import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
@@ -119,14 +120,27 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
+    function testSetStrategyZeroAddress() public {
+        MockStrategy newStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(testToken))
+        );
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
+        liquidTokenManager.setStrategy(IERC20(address(0)), IStrategy(address(newStrategy)));
+    }
+
     function testStakeAssetsToNode() public {
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256 nodeId = 0;
 
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1 ether;
         IStrategy[] memory strategiesForNode = new IStrategy[](1);
@@ -155,6 +169,63 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
     }
 
+    function testStakeAssetsToMultipleNodesLengthMismatch() public {
+        uint256 nodeId = 0;
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 1 ether;
+        amounts[1] = 2 ether;
+        
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.LengthMismatch.selector, 1, 2));
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function testInvalidStakingAmount() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 0 ether;
+    
+        uint256 nodeId = 0;
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.InvalidStakingAmount.selector, 0)); // Expect InvalidStakingAmount with 0 value
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+    }
+
+    function testGetStakedAssetBalanceInvalidNodeId() public {
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        uint256 invalidNodeId = 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.NodeIdOutOfRange.selector,
+                invalidNodeId
+            )
+        );
+        liquidTokenManager.getStakedAssetBalanceNode(
+            testToken,
+            invalidNodeId
+        );
+    }
+
     function testGetStakedAssetBalanceInvalidStrategy() public {
         uint256 nodeId = 1;
         vm.expectRevert(
@@ -179,11 +250,20 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assetsToDepositUser1 = new IERC20[](1);
+        assetsToDepositUser1[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDepositUser1 = new uint256[](1);
+        amountsToDepositUser1[0] = 10 ether;
+        
+        liquidToken.deposit(assetsToDepositUser1, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
-        liquidToken.deposit(IERC20(address(testToken2)), 20 ether, user2);
+        IERC20[] memory assetsToDepositUser2 = new IERC20[](1);
+        assetsToDepositUser2[0] = IERC20(address(testToken2));
+        uint256[] memory amountsToDepositUser2 = new uint256[](1);
+        amountsToDepositUser2[0] = 20 ether;
+        liquidToken.deposit(assetsToDepositUser2, amountsToDepositUser2, user2);
 
         uint256 totalAssets = liquidToken.totalAssets();
         uint256 totalSupply = liquidToken.totalSupply();
@@ -218,11 +298,20 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // User1 deposits 10 ether of testToken
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        IERC20[] memory assetsToDepositUser1 = new IERC20[](1);
+        assetsToDepositUser1[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDepositUser1 = new uint256[](1);
+        amountsToDepositUser1[0] = 10 ether;
+        
+        liquidToken.deposit(assetsToDepositUser1, amountsToDepositUser1, user1);
 
         // User2 deposits 20 ether of testToken2
         vm.prank(user2);
-        liquidToken.deposit(IERC20(address(testToken2)), 20 ether, user2);
+        IERC20[] memory assetsToDepositUser2 = new IERC20[](1);
+        assetsToDepositUser2[0] = IERC20(address(testToken2));
+        uint256[] memory amountsToDepositUser2 = new uint256[](1);
+        amountsToDepositUser2[0] = 20 ether;
+        liquidToken.deposit(assetsToDepositUser2, amountsToDepositUser2, user2);
 
         uint256 initialTotalAssets = liquidToken.totalAssets();
         uint256 initialTotalSupply = liquidToken.totalSupply();
@@ -277,11 +366,15 @@ contract LiquidTokenManagerTest is BaseTest {
     function testWithdrawalFailureDueToInsufficientBalance() public {
         // User1 deposits 10 ether
         vm.prank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
 
-        uint256 nodeId = 0;
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
 
@@ -306,17 +399,20 @@ contract LiquidTokenManagerTest is BaseTest {
     function testSuccessfulWithdrawal() public {
         // User1 deposits 10 ether
         vm.startPrank(user1);
-        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+
+        liquidToken.deposit(assets, amountsToDeposit, user1);
         vm.stopPrank();
 
         uint256 nodeId = 0;
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 5 ether;
-
+        uint256[] memory amountsToStake = new uint256[](1);
+        amountsToStake[0] = 5 ether;
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amountsToStake);
 
         uint256 availableBalance = liquidToken.balanceOf(user1);
         assertEq(

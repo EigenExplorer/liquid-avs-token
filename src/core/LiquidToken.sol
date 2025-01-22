@@ -31,7 +31,7 @@ contract LiquidToken is
     ILiquidTokenManager public liquidTokenManager;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
-    mapping(address => Asset) public assets;
+    mapping(address => uint256) public assetBalances;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
@@ -50,6 +50,20 @@ contract LiquidToken is
         __AccessControl_init();
         __Pausable_init();
 
+        // Zero address checks
+        if (init.initialOwner == address(0)) {
+            revert("Initial owner cannot be the zero address");
+        }
+        if (init.pauser == address(0)) {
+            revert("Pauser cannot be the zero address");
+        }
+        if (address(init.tokenRegistry) == address(0)) {
+            revert("TokenRegistry cannot be the zero address");
+        }
+        if (address(init.liquidTokenManager) == address(0)) {
+            revert("LiquidTokenManager cannot be the zero address");
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
@@ -57,29 +71,45 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
     }
 
-    /// @notice Allows users to deposit an asset and receive shares
-    /// @param asset The ERC20 asset to deposit
-    /// @param amount The amount of the asset to deposit
+    /// @notice Allows users to deposit multiple assets and receive shares
+    /// @param assets The ERC20 assets to deposit
+    /// @param amounts The amounts of the respective assets to deposit
     /// @param receiver The address to receive the minted shares
-    /// @return shares The number of shares minted
+    /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20 asset,
-        uint256 amount,
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
         address receiver
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        if (amount == 0) revert ZeroAmount();
-        if (!tokenRegistry.tokenIsSupported(asset))
-            revert UnsupportedAsset(asset);
+    ) external nonReentrant whenNotPaused returns (uint256[] memory) {
+        if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        uint256 shares = calculateShares(asset, amount);
-        if (shares == 0) revert ZeroShares();
+        uint256[] memory sharesArray = new uint256[](assets.length);
 
-        asset.safeTransferFrom(msg.sender, address(this), amount);
-        assets[address(asset)].balance += amount;
-        _mint(receiver, shares);
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (amounts[i] == 0) revert ZeroAmount();
+            if (!tokenRegistry.tokenIsSupported(assets[i]))
+                revert UnsupportedAsset(assets[i]);
 
-        emit AssetDeposited(msg.sender, receiver, asset, amount, shares);
-        return shares;
+            uint256 shares = calculateShares(assets[i], amounts[i]);
+            if (shares == 0) revert ZeroShares();
+
+            assets[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
+            assetBalances[address(assets[i])] += amounts[i];
+
+            _mint(receiver, shares);
+
+            sharesArray[i] = shares;
+
+            emit AssetDeposited(
+                msg.sender,
+                receiver,
+                assets[i],
+                amounts[i],
+                shares
+            );
+        }
+
+        return sharesArray;
     }
 
     /// @notice Allows users to request a withdrawal of their shares
@@ -164,7 +194,7 @@ contract LiquidToken is
             request.assets[i].safeTransfer(msg.sender, amounts[i]);
 
             // Reduce the tracked balance of the asset
-            assets[address(request.assets[i])].balance -= amounts[i];
+            assetBalances[address(request.assets[i])] -= amounts[i];
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request
@@ -199,14 +229,14 @@ contract LiquidToken is
             if (!tokenRegistry.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
-            if (amount > assets[address(asset)].balance)
+            if (amount > assetBalances[address(asset)])
                 revert InsufficientBalance(
                     IERC20(address(asset)),
-                    assets[address(asset)].balance,
+                    assetBalances[address(asset)],
                     amount
                 );
 
-            assets[address(asset)].balance -= amount;
+            assetBalances[address(asset)] -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
             emit AssetTransferred(
@@ -322,7 +352,7 @@ contract LiquidToken is
     }
 
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
-        return assets[address(asset)].balance;
+        return assetBalances[address(asset)];
     }
 
     // ------------------------------------------------------------------------------
