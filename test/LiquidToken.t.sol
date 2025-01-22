@@ -556,4 +556,200 @@ contract LiquidTokenTest is BaseTest {
 
         vm.stopPrank();
     }
+
+    function testMultipleTokensWithdrawalsWithPriceChangeAfterDeposit() public {
+        vm.startPrank(admin);
+        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+
+        tokenRegistry.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
+        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
+        vm.stopPrank();
+
+        // User1 deposits 10 ether of testToken and 10 ether of testToken2
+        vm.startPrank(user1);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        liquidToken.deposit(IERC20(address(testToken2)), 10 ether, user1);
+
+        // Check totalSupply, totalAssets, and contract balances after deposits
+        assertEq(
+            liquidToken.totalSupply(),
+            20 ether,
+            "Incorrect total supply after deposits"
+        );
+        assertEq(
+            liquidToken.totalAssets(),
+            20 ether,
+            "Incorrect total assets after deposits"
+        );
+        assertEq(
+            testToken.balanceOf(address(liquidToken)),
+            10 ether,
+            "Incorrect testToken balance in contract after deposits"
+        );
+        assertEq(
+            testToken2.balanceOf(address(liquidToken)),
+            10 ether,
+            "Incorrect testToken2 balance in contract after deposits"
+        );
+
+        vm.stopPrank();
+
+        // Simulate a price increase for testToken
+        vm.startPrank(admin);
+        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
+        tokenRegistry.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
+        vm.stopPrank();
+
+        // User1 requests complete withdrawal
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+
+        amounts[0] = 12 ether;
+        amounts[1] = 8 ether;
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        // Fulfill withdrawal
+        vm.startPrank(user1);
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+        vm.warp(block.timestamp + 15 days);
+        liquidToken.fulfillWithdrawal(requestId);
+        vm.stopPrank();
+
+        assertEq(
+            testToken.balanceOf(address(liquidToken)),
+            0 ether,
+            "Incorrect testToken balance in contract after withdrawal fulfillment"
+        );
+        assertEq(
+            testToken2.balanceOf(address(liquidToken)),
+            0 ether,
+            "Incorrect testToken2 balance in contract after withdrawal fulfillment"
+        );
+
+        // Check totalSupply, totalAssets, and contract balances after withdrawal fulfillment
+        assertEq(
+            liquidToken.totalSupply(),
+            0 ether,
+            "Incorrect total supply after withdrawal fulfillment"
+        );
+
+        // Check balances for User1
+        assertEq(
+            testToken.balanceOf(user1),
+            100 ether,
+            "Incorrect testToken balance after withdrawal for User1"
+        );
+        assertEq(
+            testToken2.balanceOf(user1),
+            100 ether,
+            "Incorrect testToken2 balance after withdrawal for User1"
+        );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after User1's fulfillment"
+        );
+    }
+
+    function testMultipleTokensWithdrawalsWithPriceChangeAfterRequest() public {
+        vm.startPrank(admin);
+        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+
+        tokenRegistry.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
+        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
+        vm.stopPrank();
+
+        // User1 deposits 10 ether of testToken and 10 ether of testToken2
+        vm.startPrank(user1);
+        liquidToken.deposit(IERC20(address(testToken)), 10 ether, user1);
+        liquidToken.deposit(IERC20(address(testToken2)), 10 ether, user1);
+
+        // Check totalSupply, totalAssets, and contract balances after deposits
+        assertEq(
+            liquidToken.totalSupply(),
+            20 ether,
+            "Incorrect total supply after deposits"
+        );
+        assertEq(
+            liquidToken.totalAssets(),
+            20 ether,
+            "Incorrect total assets after deposits"
+        );
+        assertEq(
+            testToken.balanceOf(address(liquidToken)),
+            10 ether,
+            "Incorrect testToken balance in contract after deposits"
+        );
+        assertEq(
+            testToken2.balanceOf(address(liquidToken)),
+            10 ether,
+            "Incorrect testToken2 balance in contract after deposits"
+        );
+
+        vm.stopPrank();
+
+        // User1 requests complete withdrawal
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+
+        amounts[0] = 12 ether;
+        amounts[1] = 8 ether;
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        // Simulate a price increase for testToken
+        vm.startPrank(admin);
+        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
+        tokenRegistry.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
+        vm.stopPrank();
+
+        // Fulfill withdrawal
+        vm.startPrank(user1);
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+        vm.warp(block.timestamp + 15 days);
+        liquidToken.fulfillWithdrawal(requestId);
+        vm.stopPrank();
+
+        assertEq(
+            testToken.balanceOf(address(liquidToken)),
+            0 ether,
+            "Incorrect testToken balance in contract after withdrawal fulfillment"
+        );
+        assertEq(
+            testToken2.balanceOf(address(liquidToken)),
+            0 ether,
+            "Incorrect testToken2 balance in contract after withdrawal fulfillment"
+        );
+
+        // Check totalSupply, totalAssets, and contract balances after withdrawal fulfillment
+        assertEq(
+            liquidToken.totalSupply(),
+            0 ether,
+            "Incorrect total supply after withdrawal fulfillment"
+        );
+
+        // Check balances for User1
+        assertEq(
+            testToken.balanceOf(user1),
+            100 ether,
+            "Incorrect testToken balance after withdrawal for User1"
+        );
+        assertEq(
+            testToken2.balanceOf(user1),
+            100 ether,
+            "Incorrect testToken2 balance after withdrawal for User1"
+        );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)),
+            0,
+            "Contract should not hold any liquid tokens after User1's fulfillment"
+        );
+    }
 }
