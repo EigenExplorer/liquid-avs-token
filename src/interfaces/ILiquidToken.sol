@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
 /// @title ILiquidToken Interface
@@ -13,7 +12,6 @@ interface ILiquidToken is IERC20 {
     struct Init {
         string name;
         string symbol;
-        ITokenRegistry tokenRegistry;
         ILiquidTokenManager liquidTokenManager;
         address initialOwner;
         address pauser;

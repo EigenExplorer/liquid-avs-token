@@ -11,12 +11,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
-import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
 
 /**
  * @title LiquidToken
  * @notice Implements a liquid staking token with deposit, withdrawal, and asset management functionalities
- * @dev Interacts with TokenRegistry and LiquidTokenManager to manage assets and handle user requests
+ * @dev Interacts with LiquidTokenManager to manage assets and handle user requests
  */
 contract LiquidToken is
     ILiquidToken,
@@ -27,7 +26,6 @@ contract LiquidToken is
 {
     using SafeERC20 for IERC20;
 
-    ITokenRegistry public tokenRegistry;
     ILiquidTokenManager public liquidTokenManager;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
@@ -57,9 +55,6 @@ contract LiquidToken is
         if (init.pauser == address(0)) {
             revert("Pauser cannot be the zero address");
         }
-        if (address(init.tokenRegistry) == address(0)) {
-            revert("TokenRegistry cannot be the zero address");
-        }
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
@@ -67,7 +62,6 @@ contract LiquidToken is
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
-        tokenRegistry = init.tokenRegistry;
         liquidTokenManager = init.liquidTokenManager;
     }
 
@@ -87,7 +81,7 @@ contract LiquidToken is
 
         for (uint256 i = 0; i < assets.length; i++) {
             if (amounts[i] == 0) revert ZeroAmount();
-            if (!tokenRegistry.tokenIsSupported(assets[i]))
+            if (!liquidTokenManager.tokenIsSupported(assets[i]))
                 revert UnsupportedAsset(assets[i]);
 
             uint256 shares = calculateShares(assets[i], amounts[i]);
@@ -124,7 +118,7 @@ contract LiquidToken is
 
         uint256 totalShares = 0;
         for (uint256 i = 0; i < withdrawAssets.length; i++) {
-            if (!tokenRegistry.tokenIsSupported(withdrawAssets[i]))
+            if (!liquidTokenManager.tokenIsSupported(withdrawAssets[i]))
                 revert UnsupportedAsset(withdrawAssets[i]);
             if (shareAmounts[i] == 0) revert ZeroAmount();
             totalShares += shareAmounts[i];
@@ -226,7 +220,7 @@ contract LiquidToken is
             IERC20 asset = assetsToRetrieve[i];
             uint256 amount = amounts[i];
 
-            if (!tokenRegistry.tokenIsSupported(asset))
+            if (!liquidTokenManager.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
             if (amount > assetBalances[address(asset)])
@@ -256,7 +250,7 @@ contract LiquidToken is
         IERC20 asset,
         uint256 amount
     ) public view returns (uint256) {
-        uint256 assetAmountInUnitOfAccount = tokenRegistry
+        uint256 assetAmountInUnitOfAccount = liquidTokenManager
             .convertToUnitOfAccount(asset, amount);
         return _convertToShares(assetAmountInUnitOfAccount);
     }
@@ -271,7 +265,7 @@ contract LiquidToken is
     ) public view returns (uint256) {
         uint256 amountInUnitOfAccount = _convertToAssets(shares);
         return
-            tokenRegistry.convertFromUnitOfAccount(
+            liquidTokenManager.convertFromUnitOfAccount(
                 asset,
                 amountInUnitOfAccount
             );
@@ -296,12 +290,12 @@ contract LiquidToken is
     /// @notice Returns the total value of assets managed by the contract
     /// @return The total value of assets in the unit of account
     function totalAssets() public view returns (uint256) {
-        IERC20[] memory supportedTokens = tokenRegistry.getSupportedTokens();
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
 
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             // Asset Balances
-            total += tokenRegistry.convertToUnitOfAccount(
+            total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceAsset(supportedTokens[i])
             );

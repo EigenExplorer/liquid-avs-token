@@ -9,6 +9,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -25,9 +26,15 @@ contract LiquidTokenManager is
     ReentrancyGuardUpgradeable
 {
     using SafeERC20 for IERC20;
+    using Math for uint256;
 
+    /// @notice Role identifier for price update operations
     bytes32 public constant STRATEGY_CONTROLLER_ROLE =
         keccak256("STRATEGY_CONTROLLER_ROLE");
+
+    /// @notice Role identifier for price update operations
+    bytes32 public constant PRICE_UPDATER_ROLE =
+        keccak256("PRICE_UPDATER_ROLE");
 
     /// @notice The EigenLayer StrategyManager contract
     IStrategyManager public strategyManager;
@@ -39,7 +46,13 @@ contract LiquidTokenManager is
     ILiquidToken public liquidToken;
 
     /// @notice Mapping of assets to their corresponding EigenLayer strategies
-    mapping(IERC20 => IStrategy) public strategies;
+    mapping(IERC20 => TokenInfo) public tokens;
+
+    /// @notice Array of supported token addresses
+    IERC20[] public supportedTokens;
+
+    /// @notice Number of decimal places used for price representation
+    uint256 public constant PRICE_DECIMALS = 18;
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -54,17 +67,20 @@ contract LiquidTokenManager is
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
+        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
 
         if (
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0) ||
-            address(init.liquidToken) == address(0)
+            address(init.liquidToken) == address(0) ||
+            address(init.initialOwner) == address(0) ||
+            address(init.priceUpdater) == address(0)
         ) {
             revert ZeroAddress();
         }
 
-        if (init.assets.length != init.strategies.length) {
-            revert LengthMismatch(init.assets.length, init.strategies.length);
+        if (init.assets.length != init.tokenInfo.length) {
+            revert LengthMismatch(init.assets.length, init.tokenInfo.length);
         }
 
         liquidToken = init.liquidToken;
@@ -76,18 +92,153 @@ contract LiquidTokenManager is
         for (uint256 i = 0; i < init.assets.length; i++) {
             if (
                 address(init.assets[i]) == address(0) ||
-                address(init.strategies[i]) == address(0)
+                address(init.tokenInfo[i].strategy) == address(0)
             ) {
                 revert ZeroAddress();
             }
 
-            if (address(strategies[init.assets[i]]) != address(0)) {
-                revert StrategyAssetExists(address(init.assets[i]));
+            if (address(tokens[init.assets[i]].strategy) != address(0)) {
+                revert TokenExists(address(init.assets[i]));
             }
 
-            strategies[init.assets[i]] = init.strategies[i];
-            emit StrategySet(init.assets[i], init.strategies[i], msg.sender);
+            tokens[init.assets[i]] = init.tokenInfo[i];
+            emit TokenSet(
+                init.assets[i],
+                init.tokenInfo[i].decimals,
+                init.tokenInfo[i].pricePerUnit,
+                address(init.tokenInfo[i].strategy),
+                msg.sender
+            );
         }
+    }
+
+    /// @notice Adds a new token to the registry
+    /// @param token Address of the token to add
+    /// @param decimals Number of decimals for the token
+    /// @param initialPrice Initial price for the token
+    /// @param strategy Strategy corresponding to the token
+    function addToken(
+        IERC20 token,
+        uint256 decimals,
+        uint256 initialPrice,
+        IStrategy strategy
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(tokens[token].strategy) != address(0)) revert TokenExists(address(token));
+        if (decimals == 0) revert InvalidDecimals();
+        if (initialPrice == 0) revert InvalidPrice();
+        if (address(strategy) == address(0)) revert ZeroAddress();
+
+        tokens[token] = TokenInfo({
+            decimals: decimals,
+            pricePerUnit: initialPrice,
+            strategy: strategy
+        });
+        supportedTokens.push(token);
+
+        emit TokenSet(token, decimals, initialPrice, address(strategy), msg.sender);
+    }
+
+    /// @notice Removes a token from the registry
+    /// @param token Address of the token to remove
+    function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
+
+        // Check for pending withdrawals of this token
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = token;
+        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
+
+        // Additional check for any nodes with outstanding shares of this token
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        for (uint256 i = 0; i < nodes.length; i++) {
+            uint256 stakedBalance = getStakedAssetBalanceNode(
+                token,
+                nodes[i].getId()
+            );
+            if (stakedBalance > 0) {
+                revert TokenInUse(token);
+            }
+        }
+
+        delete tokens[token];
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == token) {
+                supportedTokens[i] = supportedTokens[
+                    supportedTokens.length - 1
+                ];
+                supportedTokens.pop();
+                break;
+            }
+        }
+
+        emit TokenRemoved(token, msg.sender);
+    }
+
+    /// @notice Updates the price of a token
+    /// @param token Address of the token to update
+    /// @param newPrice New price for the token
+    function updatePrice(
+        IERC20 token,
+        uint256 newPrice
+    ) external onlyRole(PRICE_UPDATER_ROLE) {
+        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
+        if (newPrice == 0) revert InvalidPrice();
+
+        uint256 oldPrice = tokens[token].pricePerUnit;
+        tokens[token].pricePerUnit = newPrice;
+        emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
+    }
+
+    /// @notice Checks if a token is supported
+    /// @param token Address of the token to check
+    /// @return bool indicating whether the token is supported
+    function tokenIsSupported(
+        IERC20 token
+    ) public view override returns (bool) {
+        return tokens[token].decimals != 0;
+    }
+
+    /// @notice Converts a token amount to the unit of account
+    /// @param token Address of the token to convert
+    /// @param amount Amount of tokens to convert
+    /// @return The converted amount in the unit of account
+    function convertToUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) public view override returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
+
+        return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
+    }
+
+    /// @notice Converts an amount in the unit of account to a token amount
+    /// @param token Address of the token to convert to
+    /// @param amount Amount in the unit of account to convert
+    /// @return The converted amount in the specified token
+    function convertFromUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) public view override returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
+
+        return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
+    }
+
+    /// @notice Retrieves the list of supported tokens
+    /// @return An array of addresses of supported tokens
+    function getSupportedTokens() external view returns (IERC20[] memory) {
+        return supportedTokens;
+    }
+
+    /// @notice Retrieves the information for a specific token
+    /// @param token Address of the token to get information for
+    /// @return TokenInfo struct containing the token's information
+    function getTokenInfo(
+        IERC20 token
+    ) external view returns (TokenInfo memory) {
+        return tokens[token];
     }
 
     /// @notice Stakes assets to a specific node
@@ -141,7 +292,7 @@ contract LiquidTokenManager is
             if (amounts[i] == 0) {
                 revert InvalidStakingAmount(amounts[i]);
             }
-            IStrategy strategy = strategies[asset];
+            IStrategy strategy = tokens[asset].strategy;
             if (address(strategy) == address(0)) {
                 revert StrategyNotFound(address(asset));
             }
@@ -171,25 +322,11 @@ contract LiquidTokenManager is
         );
     }
 
-    /// @notice Sets or updates the strategy for a given asset
-    /// @param asset The asset token address
-    /// @param strategy The strategy contract address
-    function setStrategy(
-        IERC20 asset,
-        IStrategy strategy
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        if (address(asset) == address(0) || address(strategy) == address(0)) {
-            revert ZeroAddress();
-        }
-        strategies[asset] = strategy;
-        emit StrategySet(asset, strategy, msg.sender);
-    }
-
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
     function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
-        IStrategy strategy = strategies[asset];
+        IStrategy strategy = tokens[asset].strategy;
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
@@ -211,7 +348,7 @@ contract LiquidTokenManager is
         IERC20 asset,
         uint256 nodeId
     ) public view returns (uint256) {
-        IStrategy strategy = strategies[asset];
+        IStrategy strategy = tokens[asset].strategy;
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
@@ -229,7 +366,7 @@ contract LiquidTokenManager is
         IERC20 asset,
         IStakerNode node
     ) internal view returns (uint256) {
-        IStrategy strategy = strategies[asset];
+        IStrategy strategy = tokens[asset].strategy;
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
