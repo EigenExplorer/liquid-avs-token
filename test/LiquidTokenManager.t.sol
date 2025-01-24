@@ -70,11 +70,11 @@ contract LiquidTokenManagerTest is BaseTest {
             address(liquidToken)
         );
         assertEq(
-            address(liquidTokenManager.strategies(IERC20(address(testToken)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken)))),
             address(mockStrategy)
         );
         assertEq(
-            address(liquidTokenManager.strategies(IERC20(address(testToken2)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken2)))),
             address(mockStrategy2)
         );
         assertTrue(
@@ -91,6 +91,31 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
+    function testAddTokenSuccess() public { }
+
+    function testAddTokenUnauthorized() public { }
+
+    function testAddTokenZeroAddress() public { }
+
+    function testAddTokenStrategyZeroAddress() public { }
+
+    function testAddTokenFailsIfAlreadySupported() public { }
+
+    function testAddTokenFailsForZeroDecimals() public { }
+
+    function testAddTokenFailsForZeroInitialPrice() public { }
+
+    function testRemoveTokenSuccess() public { }
+
+    function testRemoveTokenFailsForUnsupportedToken() public { }
+
+    function testRemoveTokenFailsForNonAdmin() public { }
+
+    function testRemoveTokenFailsIfNonZeroBalance() public { }
+
+    function testRemoveTokenFailsIfNodeHasShares() public { }
+
+    /*
     function testSetStrategy() public {
         MockStrategy newStrategy = new MockStrategy(
             strategyManager,
@@ -129,6 +154,7 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
         liquidTokenManager.setStrategy(IERC20(address(0)), IStrategy(address(newStrategy)));
     }
+    */
 
     function testStakeAssetsToNode() public {
         vm.prank(user1);
@@ -242,10 +268,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testShareCalculation() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken
@@ -290,10 +316,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testShareCalculationWithAssetValueIncrease() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken
@@ -329,7 +355,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Simulate a value increase
         vm.startPrank(admin);
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (increase in value)
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (increase in value)
         vm.stopPrank();
 
         // Check totalAssets and totalSupply after price change

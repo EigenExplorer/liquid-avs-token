@@ -16,6 +16,7 @@ interface ILiquidTokenManager {
     struct Init {
         IERC20[] assets;
         TokenInfo[] tokenInfo;
+        IStrategy [] strategies;
         ILiquidToken liquidToken;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
@@ -32,7 +33,6 @@ interface ILiquidTokenManager {
     struct TokenInfo {
         uint256 decimals;
         uint256 pricePerUnit;
-        IStrategy strategy;
     }
 
     /// @notice Represents an allocation of assets to a node
@@ -111,7 +111,12 @@ interface ILiquidTokenManager {
     /// @param token The address of the token to add
     /// @param decimals The number of decimals for the token
     /// @param initialPrice The initial price for the token
-    function addToken(IERC20 token, uint256 decimals, uint256 initialPrice) external;
+    function addToken(
+        IERC20 token,
+        uint256 decimals,
+        uint256 initialPrice,
+        IStrategy strategy
+    ) external;
 
     /// @notice Removes a token from the registry
     /// @param token The address of the token to remove
@@ -147,6 +152,11 @@ interface ILiquidTokenManager {
     /// @param token The address of the token to get information for
     /// @return TokenInfo struct containing the token's information
     function getTokenInfo(IERC20 token) external view returns (TokenInfo memory);
+
+    /// @notice Returns the strategy for a given asset
+    /// @param asset The asset to get the strategy for
+    /// @return The IStrategy interface for the corresponding strategy
+    function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
 
     /// @notice Stakes assets to a specific node
     /// @param nodeId The ID of the node to stake to
@@ -191,9 +201,4 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
-
-    /// @notice Returns the strategy for a given asset
-    /// @param asset The asset to get the strategy for
-    /// @return The IStrategy interface for the asset
-    function strategies(IERC20 asset) external view returns (IStrategy);
 }

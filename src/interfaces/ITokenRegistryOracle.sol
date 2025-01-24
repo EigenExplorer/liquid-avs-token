@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ITokenRegistry} from "./ITokenRegistry.sol";
+import {ILiquidTokenManager} from "./ILiquidTokenManager.sol";
 
 /// @title ITokenRegistryOracle Interface
 /// @notice Interface for the TokenRegistryOracle contract
@@ -15,7 +15,7 @@ interface ITokenRegistryOracle {
     struct Init {
         address initialOwner;
         address priceUpdater;
-        ITokenRegistry tokenRegistry;
+        ILiquidTokenManager liquidTokenManager;
     }
 
     /// @notice Emitted when a token's rate is updated
@@ -45,7 +45,7 @@ interface ITokenRegistryOracle {
     /// @return The current rate of the token
     function getRate(IERC20 token) external view returns (uint256);
 
-    /// @notice Returns the address of the associated TokenRegistry contract
-    /// @return The address of the TokenRegistry contract
-    function tokenRegistry() external view returns (ITokenRegistry);
+    /// @notice Returns the address of the associated LiquidTokenManager contract
+    /// @return The address of the LiquidTokenManager contract
+    function liquidTokenManager() external view returns (ILiquidTokenManager);
 }
