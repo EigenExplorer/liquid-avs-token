@@ -138,6 +138,7 @@ contract LiquidTokenManager is
         IStrategy strategy
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(tokenStrategies[token]) != address(0)) revert TokenExists(address(token));
+        if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
         if (address(strategy) == address(0)) revert ZeroAddress();
@@ -176,6 +177,7 @@ contract LiquidTokenManager is
         }
 
         delete tokens[token];
+        delete tokenStrategies[token];
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             if (supportedTokens[i] == token) {
                 supportedTokens[i] = supportedTokens[

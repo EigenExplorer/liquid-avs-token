@@ -159,7 +159,7 @@ contract BaseTest is Test {
             stakerNodeCoordinator: stakerNodeCoordinator,
             initialOwner: admin,
             strategyController: admin,
-            priceUpdater: admin
+            priceUpdater: address(tokenRegistryOracle)
         });
         init.assets[0] = IERC20(address(testToken));
         init.assets[1] = IERC20(address(testToken2));

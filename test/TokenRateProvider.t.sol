@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/*
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
@@ -105,121 +104,6 @@ contract TokenRateProviderTest is BaseTest {
         tokenRegistryOracle.batchUpdateRates(tokens, rates);
     }
 
-    function testRemoveTokenSuccess() public {
-        liquidTokenManager.removeToken(testToken);
-        assertFalse(
-            liquidTokenManager.tokenIsSupported(testToken),
-            "Token should be removed"
-        );
-
-        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            assertFalse(
-                supportedTokens[i] == testToken,
-                "Token should be removed from the supported tokens array"
-            );
-        }
-    }
-
-    function testRemoveTokenFailsForUnsupportedToken() public {
-        liquidTokenManager.removeToken(testToken);
-        assertFalse(
-            liquidTokenManager.tokenIsSupported(testToken),
-            "Token should not be supported before attempting to remove"
-        );
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidTokenManager.TokenNotSupported.selector,
-                address(testToken)
-            )
-        );
-        liquidTokenManager.removeToken(testToken);
-    }
-
-    function testRemoveTokenFailsForNonAdmin() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(testToken),
-            "Token should be supported before non-admin attempts to remove"
-        );
-        vm.prank(user1);
-        vm.expectRevert();
-        liquidTokenManager.removeToken(testToken);
-    }
-
-    function testAddTokenSuccess() public {
-        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
-        uint256 initialPrice = 1e18;
-        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
-
-        liquidTokenManager.addToken(newToken, decimals, initialPrice, newStrategy);
-
-        // Verify that the token was successfully added
-        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(
-            newToken
-        );
-        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
-        assertEq(
-            tokenInfo.pricePerUnit,
-            initialPrice,
-            "Incorrect initial price"
-        );
-
-        // Verify that the token is now supported
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(newToken),
-            "Token should be supported"
-        );
-
-        // Verify that the token is included in the supportedTokens array
-        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
-        bool isTokenInArray = false;
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == newToken) {
-                isTokenInArray = true;
-                break;
-            }
-        }
-        assertTrue(
-            isTokenInArray,
-            "Token should be in the supportedTokens array"
-        );
-    }
-
-    function testAddTokenFailsIfAlreadySupported() public {
-        uint256 decimals = 18;
-        uint256 initialPrice = 1e18;
-
-        // Attempt to add the same token again and expect a revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidTokenManager.TokenExists.selector,
-                address(testToken)
-            )
-        );
-        liquidTokenManager.addToken(testToken, decimals, initialPrice);
-    }
-
-    function testAddTokenFailsForZeroDecimals() public {
-        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 zeroDecimals = 0;
-        uint256 price = 1e18;
-
-        // Attempt to add the token with zero dedcimals and expect a revert
-        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
-        liquidTokenManager.addToken(newToken, zeroDecimals, price);
-    }
-
-    function testAddTokenFailsForZeroInitialPrice() public {
-        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
-        uint256 zeroPrice = 0;
-
-        // Attempt to add the token with zero initial price and expect a revert
-        vm.expectRevert(ILiquidTokenManager.InvalidPrice.selector);
-        liquidTokenManager.addToken(newToken, decimals, zeroPrice);
-    }
-
     function testUpdatePriceSuccess() public {
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
         uint256 newPrice = 2e18;
@@ -258,4 +142,3 @@ contract TokenRateProviderTest is BaseTest {
         liquidTokenManager.updatePrice(testToken, 2e18);
     }
 }
-*/
