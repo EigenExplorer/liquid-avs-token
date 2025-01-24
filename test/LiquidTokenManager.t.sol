@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {BaseTest} from "./common/BaseTest.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
 
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
@@ -13,6 +13,7 @@ import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.s
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
@@ -96,7 +97,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenSuccess() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 
@@ -108,6 +109,11 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         IStrategy strategy = liquidTokenManager.getTokenStrategy(newToken);
         assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(
+              tokenInfo.decimals,
+              IERC20Metadata(address(newToken)).decimals(),
+              "Incorrect decimals"
+        );
         assertEq(
             tokenInfo.pricePerUnit,
             initialPrice,
@@ -142,7 +148,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenUnauthorized() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 
@@ -152,7 +158,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenZeroAddress() public {
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         MockStrategy newStrategy = new MockStrategy(strategyManager, IERC20(address(0)));
 
@@ -163,7 +169,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenStrategyZeroAddress() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
 
         vm.prank(admin);
@@ -173,7 +179,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenFailsIfAlreadySupported() public {
         // Try to add testToken which was already added in setUp()
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         MockStrategy duplicateStrategy = new MockStrategy(strategyManager, testToken);
 
@@ -195,9 +201,33 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(newToken, 0, initialPrice, newStrategy);
     }
 
+    function testAddTokenFailsForMismatchedDecimals() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 6; // Actual decimals value is 18
+        uint256 price = 1e18;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        liquidTokenManager.addToken(newToken, decimals, price, newStrategy);
+    }
+
+    function testAddTokenSuccessForNoDecimalsFunction() public {
+        IERC20 newToken = IERC20(address(new MockERC20NoDecimals())); // Doesn't have a `decimals()` function
+        uint8 decimals = 6;
+        uint256 price = 1e18;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        liquidTokenManager.addToken(newToken, decimals, price, newStrategy);
+
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(
+            newToken
+        );
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+    }
+
     function testAddTokenFailsForZeroInitialPrice() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 
         vm.prank(admin);
@@ -208,7 +238,7 @@ contract LiquidTokenManagerTest is BaseTest {
     function testRemoveTokenSuccess() public {
         // First add a new token that we'll remove
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
-        uint256 decimals = 18;
+        uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 

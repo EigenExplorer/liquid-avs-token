@@ -8,6 +8,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -133,7 +134,7 @@ contract LiquidTokenManager is
     /// @param strategy Strategy corresponding to the token
     function addToken(
         IERC20 token,
-        uint256 decimals,
+        uint8 decimals,
         uint256 initialPrice,
         IStrategy strategy
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -142,6 +143,11 @@ contract LiquidTokenManager is
         if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
         if (address(strategy) == address(0)) revert ZeroAddress();
+
+        try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
+            if (decimalsFromContract == 0) revert InvalidDecimals();
+            if (decimals != decimalsFromContract) revert InvalidDecimals();
+        } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
         tokens[token] = TokenInfo({
             decimals: decimals,

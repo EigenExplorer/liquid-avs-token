@@ -113,7 +113,7 @@ interface ILiquidTokenManager {
     /// @param initialPrice The initial price for the token
     function addToken(
         IERC20 token,
-        uint256 decimals,
+        uint8 decimals,
         uint256 initialPrice,
         IStrategy strategy
     ) external;
