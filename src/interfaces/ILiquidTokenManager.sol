@@ -29,10 +29,11 @@ interface ILiquidTokenManager {
     /// @notice Struct to hold token information
     /// @param decimals The number of decimals for the token
     /// @param pricePerUnit The price per unit of the token
-    /// @param strategy The strategy corresponding to the token
+    /// @param volatilityThreshold The allowed change ratio for price update, in 1e18. Must be 0 (disabled) or >= 0.01 * 1e18 and <= 1 * 1e18.
     struct TokenInfo {
         uint256 decimals;
         uint256 pricePerUnit;
+        uint256 volatilityThreshold;
     }
 
     /// @notice Represents an allocation of assets to a node
@@ -47,6 +48,7 @@ interface ILiquidTokenManager {
         IERC20 indexed token,
         uint256 decimals,
         uint256 initialPrice,
+        uint256 volatilityThreshold,
         address indexed strategy,
         address indexed setter
     );
@@ -88,6 +90,12 @@ interface ILiquidTokenManager {
     /// @notice Emitted when a token's price is updated
     event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
 
+    /// @notice Emitted when the volatility threshold for an asset is updated
+    event VolatilityThresholdUpdated(IERC20 indexed asset, uint256 oldThreshold, uint256 newThreshold, address indexed updatedBy);
+
+    /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
+    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
+
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
 
@@ -103,6 +111,12 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
 
+    /// @notice Error thrown when an invalid volatility threshold is provided
+    error InvalidThreshold();
+
+    /// @notice Error thrown when a price update fails due to change exceeding the volatility threshold
+    error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
+
     /// @notice Initializes the LiquidTokenManager contract
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
@@ -110,11 +124,13 @@ interface ILiquidTokenManager {
     /// @notice Adds a new token to the registry
     /// @param token The address of the token to add
     /// @param decimals The number of decimals for the token
+    /// @param volatilityThreshold The volatility threshold for the token in 1e18
     /// @param initialPrice The initial price for the token
     function addToken(
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
+        uint256 volatilityThreshold,
         IStrategy strategy
     ) external;
 
@@ -182,6 +198,11 @@ interface ILiquidTokenManager {
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the specific node
     function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+
+    /// @notice Updates the volatility threshold for price updates
+    /// @param asset The asset to update threshold for
+    /// @param newThreshold The new volatility threshold (in 1e18 precision)
+    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external;
 
     /// @notice Returns the StrategyManager contract
     /// @return The IStrategyManager interface

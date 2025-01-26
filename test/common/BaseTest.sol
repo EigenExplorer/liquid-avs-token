@@ -165,11 +165,13 @@ contract BaseTest is Test {
         init.assets[1] = IERC20(address(testToken2));
         init.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
             decimals: 18,
-            pricePerUnit: 1e18
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0.1 * 1e18
         });
         init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
             decimals: 18,
-            pricePerUnit: 1e18
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0
         });
         init.strategies[0] = IStrategy(address(mockStrategy));
         init.strategies[1] = IStrategy(address(mockStrategy2));

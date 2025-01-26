@@ -15,6 +15,7 @@ import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
         super.setUp();
+        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable volatility check
     }
 
     function testDeposit() public {

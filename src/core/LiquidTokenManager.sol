@@ -109,6 +109,16 @@ contract LiquidTokenManager is
                 revert InvalidDecimals();
             }
 
+            if (
+                init.tokenInfo[i].volatilityThreshold != 0 &&
+                (
+                    init.tokenInfo[i].volatilityThreshold < 1e16 || 
+                    init.tokenInfo[i].volatilityThreshold > 1e18
+                )
+            ) {
+                revert InvalidThreshold();
+            }
+
             if (tokens[init.assets[i]].decimals != 0) {
                 revert TokenExists(address(init.assets[i]));
             }
@@ -121,6 +131,7 @@ contract LiquidTokenManager is
                 init.assets[i],
                 init.tokenInfo[i].decimals,
                 init.tokenInfo[i].pricePerUnit,
+                init.tokenInfo[i].volatilityThreshold,
                 address(init.strategies[i]),
                 msg.sender
             );
@@ -136,12 +147,14 @@ contract LiquidTokenManager is
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
+        uint256 volatilityThreshold,
         IStrategy strategy
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(tokenStrategies[token]) != address(0)) revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
+        if (volatilityThreshold != 0 && (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
@@ -151,13 +164,14 @@ contract LiquidTokenManager is
 
         tokens[token] = TokenInfo({
             decimals: decimals,
-            pricePerUnit: initialPrice
+            pricePerUnit: initialPrice,
+            volatilityThreshold: volatilityThreshold 
         });
         tokenStrategies[token] = strategy;
 
         supportedTokens.push(token);
 
-        emit TokenSet(token, decimals, initialPrice, address(strategy), msg.sender);
+        emit TokenSet(token, decimals, initialPrice, volatilityThreshold, address(strategy), msg.sender);
     }
 
     /// @notice Removes a token from the registry
@@ -208,6 +222,20 @@ contract LiquidTokenManager is
         if (newPrice == 0) revert InvalidPrice();
 
         uint256 oldPrice = tokens[token].pricePerUnit;
+        if (oldPrice == 0) revert InvalidPrice();
+
+        if (tokens[token].volatilityThreshold != 0) {
+            uint256 absPriceDiff = (newPrice > oldPrice)
+                ? newPrice - oldPrice
+                : oldPrice - newPrice;
+            uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
+            
+            if (changeRatio > tokens[token].volatilityThreshold) {
+                emit VolatilityCheckFailed(token, oldPrice, newPrice, changeRatio);
+                revert VolatilityThresholdHit(token, changeRatio);
+            }
+        }
+
         tokens[token].pricePerUnit = newPrice;
         emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
     }
@@ -419,5 +447,18 @@ contract LiquidTokenManager is
             revert StrategyNotFound(address(asset));
         }
         return strategy.userUnderlyingView(address(node));
+    }
+
+    /// @notice Sets the volatility threshold for a given asset
+    /// @param asset The asset token address
+    /// @param newThreshold The new volatility threshold value to update to
+    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(asset) == address(0)) revert ZeroAddress();
+        if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
+        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();
+
+        emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
+
+        tokens[asset].volatilityThreshold = newThreshold;
     }
 }

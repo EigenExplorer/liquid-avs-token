@@ -15,6 +15,7 @@ import {MockStrategy} from "./mocks/MockStrategy.sol";
 contract TokenRateProviderTest is BaseTest {
     function setUp() public override {
         super.setUp();
+        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable volatility check
     }
 
     function testInitialize() public {
