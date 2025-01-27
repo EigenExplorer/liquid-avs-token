@@ -142,9 +142,15 @@ contract LiquidToken is
                 msg.sender,
                 withdrawAssets,
                 shareAmounts,
-                block.timestamp
+                block.timestamp,
+                userWithdrawalRequests[msg.sender].length
             )
         );
+
+        if (withdrawalRequests[requestId].user != address(0)) {
+            revert DuplicateRequestId(requestId);
+        }
+
         WithdrawalRequest memory request = WithdrawalRequest({
             user: msg.sender,
             assets: withdrawAssets,

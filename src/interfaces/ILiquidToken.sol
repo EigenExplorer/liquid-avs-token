@@ -83,6 +83,9 @@ interface ILiquidToken is IERC20 {
 
     /// @notice Error when withdrawal is already fulfilled
     error WithdrawalAlreadyFulfilled();
+    
+    /// @notice Error when a new withdrawal is attempted with an existing request ID
+    error DuplicateRequestId(bytes32 requestId);
 
     /// @notice Error for unsupported asset
     error AssetNotSupported(IERC20 asset);
