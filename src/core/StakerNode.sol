@@ -24,6 +24,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     IStakerNodeCoordinator public coordinator;
     uint256 public id;
+    IERC20[] public assets;
 
     bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
         keccak256("LIQUID_TOKEN_MANAGER_ROLE");
@@ -46,19 +47,19 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assets Array of ERC20 token addresses to deposit
+    /// @param assetsToDeposit Array of ERC20 token addresses to deposit
     /// @param amounts Array of amounts to deposit for each asset
     /// @param strategies Array of Eigenlayer strategies to deposit into
     function depositAssets(
-        IERC20[] calldata assets,
+        IERC20[] calldata assetsToDeposit,
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         IStrategyManager strategyManager = coordinator.strategyManager();
 
-        uint256 assetsLength = assets.length;
+        uint256 assetsLength = assetsToDeposit.length;
         for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assets[i];
+            IERC20 asset = assetsToDeposit[i];
             uint256 amount = amounts[i];
             IStrategy strategy = strategies[i];
 
@@ -69,6 +70,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                 asset,
                 amount
             );
+
+            assets.push(asset); // TODO: Hard to track. Consider a mapping on SNC
             emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
         }
     }
@@ -119,6 +122,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @return The initialized version as a uint64
     function getInitializedVersion() external view override returns (uint64) {
         return _getInitializedVersion();
+    }
+
+    function getAssets() external view override returns (IERC20[] memory) {
+        return assets;
     }
 
     /// @dev Reverts if the caller doesn't have the required role

@@ -32,6 +32,7 @@ contract LiquidToken is
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
     mapping(address => uint256) public assetBalances;
+    mapping(address => uint256) public queuedAssetBalances;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
@@ -193,8 +194,8 @@ contract LiquidToken is
             // Transfer the amount back to the user
             request.assets[i].safeTransfer(msg.sender, amounts[i]);
 
-            // Reduce the tracked balance of the asset
-            assetBalances[address(request.assets[i])] -= amounts[i];
+            // Reduce the queued balance of the asset
+            queuedAssetBalances[address(request.assets[i])] -= amounts[i];
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request
@@ -207,6 +208,21 @@ contract LiquidToken is
             amounts,
             block.timestamp
         );
+    }
+
+    function addQueuedAssetBalances (
+        IERC20[] calldata assets,
+        uint256[] calldata amounts
+    ) external whenNotPaused {
+        if (msg.sender != address(liquidTokenManager))
+            revert NotLiquidTokenManager(msg.sender);
+
+        if (assets.length != amounts.length)
+            revert ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            queuedAssetBalances[address(assets[i])] += amounts[i];
+        }
     }
 
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
@@ -300,10 +316,16 @@ contract LiquidToken is
 
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            // Asset Balances
+            // Unstaked Asset Balances
             total += tokenRegistry.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceAsset(supportedTokens[i])
+            );
+
+            // Queued Asset Balances
+            total += tokenRegistry.convertToUnitOfAccount(
+                supportedTokens[i],
+                _balanceQueuedAsset(supportedTokens[i])
             );
 
             // Staked Asset Balances
@@ -353,6 +375,10 @@ contract LiquidToken is
 
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
         return assetBalances[address(asset)];
+    }
+
+    function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
+        return queuedAssetBalances[address(asset)];
     }
 
     // ------------------------------------------------------------------------------

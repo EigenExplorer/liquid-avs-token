@@ -171,6 +171,26 @@ contract LiquidTokenManager is
         );
     }
 
+    function delegateNodesToOperators(
+        uint256[] memory nodeIds,
+        address[] memory operators
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        stakerNodeCoordinator.delegateStakerNodes(nodeIds, operators);
+    }
+
+    function undelegateNodesFromOperators(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById(nodeIds[i]);
+            IERC20[] memory assets = node.getAssets();
+            liquidToken.addQueuedAssetBalances(assets, _getStakedAssetsBalancesNode(node, assets));
+        }
+
+        stakerNodeCoordinator.undelegateStakerNodes(nodeIds, operators);
+    }
+
     /// @notice Sets or updates the strategy for a given asset
     /// @param asset The asset token address
     /// @param strategy The strategy contract address
@@ -234,5 +254,22 @@ contract LiquidTokenManager is
             revert StrategyNotFound(address(asset));
         }
         return strategy.userUnderlyingView(address(node));
+    }
+
+    function _getStakedAssetsBalancesNode(
+        IERC20[] assets,
+        IStakerNode node
+    ) internal view returns (uint256[]) {
+        uint256[] memory balances;
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            IStrategy strategy = strategies[assets[i]];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(assets[i]));
+            }
+            balances[i] = strategy.userUnderlyingView(address(node));
+        }
+
+        return balances;
     }
 }

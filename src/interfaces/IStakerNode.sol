@@ -79,4 +79,6 @@ interface IStakerNode {
     /// @notice Returns the version of the contract that was last initialized
     /// @return The initialized version as a uint64
     function getInitializedVersion() external view returns (uint64);
+
+    function getAssets() external view returns (IERC20[] memory);
 }

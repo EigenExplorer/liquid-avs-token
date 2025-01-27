@@ -102,6 +102,16 @@ interface ILiquidTokenManager {
     /// @return The staked balance of the asset for the specific node
     function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
 
+    function delegateNodesToOperators(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    ) external;
+
+    function undelegateNodesFromOperators(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    ) external;
+
     /// @notice Returns the StrategyManager contract
     /// @return The IStrategyManager interface
     function strategyManager() external view returns (IStrategyManager);

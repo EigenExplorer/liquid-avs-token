@@ -132,4 +132,14 @@ interface IStakerNodeCoordinator {
     /// @notice Gets the maximum number of nodes allowed
     /// @return The maximum number of nodes
     function maxNodes() external view returns (uint256);
+
+    function delegateStakerNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    ) external;
+
+    function undelegateStakerNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    ) external;
 }

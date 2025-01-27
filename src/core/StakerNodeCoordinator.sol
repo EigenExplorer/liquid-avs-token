@@ -224,6 +224,28 @@ contract StakerNodeCoordinator is
         return stakerNodes[nodeId];
     }
 
+    function delegateStakerNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    )
+        public
+        override
+        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
+    {
+        // TODO: For each nodeId, call delegate() on the node
+    }
+
+    function undelegateStakerNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators
+    )
+        public
+        override
+        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
+    {
+        // TODO: For each nodeId, call undelegate() on the node
+    }
+
     modifier notZeroAddress(address _address) {
         if (_address == address(0)) {
             revert ZeroAddress();

@@ -129,6 +129,11 @@ interface ILiquidToken is IERC20 {
         uint256[] calldata amounts
     ) external;
 
+    function addQueuedAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts
+    ) external;
+
     /// @notice Calculates the number of shares for a given asset amount
     /// @param asset The asset to calculate shares for
     /// @param amount The amount of the asset
