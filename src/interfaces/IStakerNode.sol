@@ -86,6 +86,10 @@ interface IStakerNode {
     /// @return The initialized version as a uint64
     function getInitializedVersion() external view returns (uint64);
 
+    /// @notice Returns the id of the StakerNode
+    /// @return The StakerNode's id as uint256
+    function getId() external view returns (uint256);
+
     /// Returns the address of the operator the node is delegate to
     /// @return The address of the delegated operator or zero address if not delegated
     function getOperatorDelegation() external view returns (address);

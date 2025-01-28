@@ -128,6 +128,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         return _getInitializedVersion();
     }
 
+    /// @notice Returns the id of the StakerNode
+    /// @return id The StakerNode's id as uint256
+    function getId() external view override returns (uint256) {
+        return id;
+    }
+
     /// Returns the address of the operator the node is delegate to
     /// @return The address of the delegated operator or zero address if not delegated
     function getOperatorDelegation() external view override returns (address) {
