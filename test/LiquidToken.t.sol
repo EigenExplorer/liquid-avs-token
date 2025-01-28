@@ -67,7 +67,7 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
-    function testWithdrawalRequestIdsArAlwaysUnique() public {
+    function testWithdrawalRequestIdsAreAlwaysUnique() public {
         vm.startPrank(user1);
 
         // Setup initial deposit
