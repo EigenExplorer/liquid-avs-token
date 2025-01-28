@@ -56,11 +56,11 @@ interface IStakerNode {
     function initialize(Init memory init) external;
 
     /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assetsToDeposit Array of ERC20 token addresses to deposit
+    /// @param assets Array of ERC20 token addresses to deposit
     /// @param amounts Array of amounts to deposit for each asset
     /// @param strategies Array of Eigenlayer strategies to deposit into
     function depositAssets(
-        IERC20[] calldata assetsToDeposit,
+        IERC20[] calldata assets,
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external;

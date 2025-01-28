@@ -48,19 +48,19 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assetsToDeposit Array of ERC20 token addresses to deposit
+    /// @param assets Array of ERC20 token addresses to deposit
     /// @param amounts Array of amounts to deposit for each asset
     /// @param strategies Array of Eigenlayer strategies to deposit into
     function depositAssets(
-        IERC20[] calldata assetsToDeposit,
+        IERC20[] calldata assets,
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         IStrategyManager strategyManager = coordinator.strategyManager();
 
-        uint256 assetsLength = assetsToDeposit.length;
+        uint256 assetsLength = assets.length;
         for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assetsToDeposit[i];
+            IERC20 asset = assets[i];
             uint256 amount = amounts[i];
             IStrategy strategy = strategies[i];
 
