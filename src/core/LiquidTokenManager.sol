@@ -429,20 +429,6 @@ contract LiquidTokenManager is
         stakerNodeCoordinator.undelegateStakerNodes(nodeIds);
     }
 
-    /// @notice Sets or updates the strategy for a given asset
-    /// @param asset The asset token address
-    /// @param strategy The strategy contract address
-    function setStrategy(
-        IERC20 asset,
-        IStrategy strategy
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        if (address(asset) == address(0) || address(strategy) == address(0)) {
-            revert ZeroAddress();
-        }
-        strategies[asset] = strategy;
-        emit StrategySet(asset, strategy, msg.sender);
-    }
-
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
@@ -500,9 +486,9 @@ contract LiquidTokenManager is
     function _getAllStakedAssetBalancesNode(
         IStakerNode node
     ) internal view returns (uint256[] memory) {
-        uint256[] memory balances;
+        uint256[] memory balances = new uint256[](supportedTokens.length);
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            IStrategy strategy = strategies[supportedTokens[i]];
+            IStrategy strategy = tokenStrategies[supportedTokens[i]];
             if (address(strategy) == address(0)) {
                 revert StrategyNotFound(address(supportedTokens[i]));
             }
@@ -510,4 +496,17 @@ contract LiquidTokenManager is
         }
         return balances;
     }
+
+    /// @notice Sets the volatility threshold for a given asset
+     /// @param asset The asset token address
+     /// @param newThreshold The new volatility threshold value to update to
+    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(asset) == address(0)) revert ZeroAddress();
+        if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
+        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();
+
+        emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
+
+        tokens[asset].volatilityThreshold = newThreshold;
+     }
 }

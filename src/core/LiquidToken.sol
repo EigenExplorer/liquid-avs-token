@@ -81,11 +81,11 @@ contract LiquidToken is
         uint256[] memory sharesArray = new uint256[](assets.length);
 
         for (uint256 i = 0; i < assets.length; i++) {
-            IERC20 memory asset = assets[i];
+            IERC20 asset = assets[i];
             uint256 amount = amounts[i];
 
             if (amount == 0) revert ZeroAmount();
-            if (!tokenRegistry.tokenIsSupported(asset))
+            if (!liquidTokenManager.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
             uint256 shares = calculateShares(asset, amount);
@@ -94,7 +94,7 @@ contract LiquidToken is
             asset.safeTransferFrom(msg.sender, address(this), amount);
             assetBalances[address(asset)] += amount;
             
-            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
                     asset, 
                     assetBalances[address(asset)], 
@@ -200,7 +200,11 @@ contract LiquidToken is
 
             // Check the contract's actual token balance
             if (asset.balanceOf(address(this)) < amount ) {
-                revert InsufficientBalance(asset, amount, asset.balanceOf(address(this)));
+                revert InsufficientBalance(
+                    asset,
+                    amount,
+                    asset.balanceOf(address(this))
+                );
             }
 
             // Transfer the amount back to the user
@@ -210,7 +214,7 @@ contract LiquidToken is
             // Note: Make sure that when this contract actually receives the funds, `queuedAssetBalances` is debited and `assetBalances` is credited
             assetBalances[address(asset)] -= amount;
 
-            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
                     asset, 
                     assetBalances[address(asset)], 
@@ -278,7 +282,7 @@ contract LiquidToken is
             assetBalances[address(asset)] -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
 
-            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
                     asset, 
                     assetBalances[address(asset)], 
@@ -347,14 +351,14 @@ contract LiquidToken is
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             // Unstaked Asset Balances
-            total += tokenRegistry.convertToUnitOfAccount(
+            total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceAsset(supportedTokens[i])
             );
 
             // Queued Asset Balances
             // This amount is counted in liquid token price calculation to prevent share inflation
-            total += tokenRegistry.convertToUnitOfAccount(
+            total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceQueuedAsset(supportedTokens[i])
             );

@@ -89,6 +89,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
+        operatorDelegation = operator;
 
         emit NodeDelegated(operator, msg.sender);
     }
@@ -105,6 +106,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         bytes32[] memory withdrawalRoots = delegationManager.undelegate(
             address(this)
         );
+        operatorDelegation = address(0);
 
         emit NodeUndelegated(withdrawalRoots, msg.sender);
     }

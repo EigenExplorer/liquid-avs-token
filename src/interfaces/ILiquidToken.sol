@@ -88,7 +88,7 @@ interface ILiquidToken is IERC20 {
     /// @notice Error for mismatched array lengths
     error ArrayLengthMismatch();
 
-    /// @notice Error for insufficient token balance in the contract
+    /// @notice Error for insufficient balance
     error InsufficientBalance(
         IERC20 asset,
         uint256 required,
