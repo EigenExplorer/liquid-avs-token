@@ -45,16 +45,22 @@ interface IStakerNode {
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
 
+    /// @notice Error for delegating node when already delegated
+    error NodeIsDelegated(address operatorDelegation);
+
+    /// @notice Error for undelegating node when not delegated
+    error NodeIsNotDelegated();
+
     /// @notice Initializes the StakerNode contract
     /// @param init Initialization parameters including coordinator address and node ID
     function initialize(Init memory init) external;
 
     /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assets Array of ERC20 token addresses to deposit
+    /// @param assetsToDeposit Array of ERC20 token addresses to deposit
     /// @param amounts Array of amounts to deposit for each asset
     /// @param strategies Array of Eigenlayer strategies to deposit into
     function depositAssets(
-        IERC20[] calldata assets,
+        IERC20[] calldata assetsToDeposit,
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external;
@@ -80,5 +86,7 @@ interface IStakerNode {
     /// @return The initialized version as a uint64
     function getInitializedVersion() external view returns (uint64);
 
-    function getAssets() external view returns (IERC20[] memory);
+    /// Returns the address of the operator the node is delegate to
+    /// @return The address of the delegated operator or zero address if not delegated
+    function getOperatorDelegation() external view returns (address);
 }

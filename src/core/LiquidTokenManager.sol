@@ -9,6 +9,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -171,24 +172,34 @@ contract LiquidTokenManager is
         );
     }
 
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
     function delegateNodesToOperators(
         uint256[] memory nodeIds,
-        address[] memory operators
+        address[] memory operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        stakerNodeCoordinator.delegateStakerNodes(nodeIds, operators);
+        stakerNodeCoordinator.delegateStakerNodes(nodeIds, operators, approverSignatureAndExpiries, approverSalts);
     }
 
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
     function undelegateNodesFromOperators(
-        uint256[] calldata nodeIds,
-        address[] calldata operators
+        uint256[] calldata nodeIds
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        // Fetch and add all asset balances from the node to queued balances
         for (uint256 i = 0; i < nodeIds.length; i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById(nodeIds[i]);
-            IERC20[] memory assets = node.getAssets();
-            liquidToken.addQueuedAssetBalances(assets, _getStakedAssetsBalancesNode(node, assets));
+            liquidToken.addQueuedAssetBalances(
+                supportedTokens, 
+                _getAllStakedAssetBalancesNode(stakerNodeCoordinator.getNodeById(nodeIds[i]))
+            );
         }
 
-        stakerNodeCoordinator.undelegateStakerNodes(nodeIds, operators);
+        stakerNodeCoordinator.undelegateStakerNodes(nodeIds);
     }
 
     /// @notice Sets or updates the strategy for a given asset
@@ -256,20 +267,20 @@ contract LiquidTokenManager is
         return strategy.userUnderlyingView(address(node));
     }
 
-    function _getStakedAssetsBalancesNode(
-        IERC20[] assets,
+    /// @notice Gets the staked balance of all assets for a specific node
+    /// @param node The node to get the staked balance for
+    /// @return The staked balances of all assets for the node
+    function _getAllStakedAssetBalancesNode(
         IStakerNode node
-    ) internal view returns (uint256[]) {
+    ) internal view returns (uint256[] memory) {
         uint256[] memory balances;
-
-        for (uint256 i = 0; i < assets.length; i++) {
-            IStrategy strategy = strategies[assets[i]];
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            IStrategy strategy = strategies[supportedTokens[i]];
             if (address(strategy) == address(0)) {
-                revert StrategyNotFound(address(assets[i]));
+                revert StrategyNotFound(address(supportedTokens[i]));
             }
             balances[i] = strategy.userUnderlyingView(address(node));
         }
-
         return balances;
     }
 }

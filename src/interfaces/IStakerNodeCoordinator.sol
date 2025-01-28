@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -74,6 +75,9 @@ interface IStakerNodeCoordinator {
     /// @notice Error when caller is not the owner
     error NotOwner();
 
+    /// @notice Error for mismatched array lengths
+    error LengthMismatch();
+
     /// @notice Initializes the StakerNodeCoordinator contract
     /// @param init Initialization parameters
     function initialize(Init calldata init) external;
@@ -133,13 +137,19 @@ interface IStakerNodeCoordinator {
     /// @return The maximum number of nodes
     function maxNodes() external view returns (uint256);
 
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
     function delegateStakerNodes(
         uint256[] calldata nodeIds,
-        address[] calldata operators
+        address[] calldata operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
     ) external;
 
-    function undelegateStakerNodes(
-        uint256[] calldata nodeIds,
-        address[] calldata operators
-    ) external;
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    function undelegateStakerNodes(uint256[] calldata nodeIds) external;
 }

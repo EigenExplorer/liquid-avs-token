@@ -90,18 +90,24 @@ interface ILiquidToken is IERC20 {
     /// @notice Error for mismatched array lengths
     error ArrayLengthMismatch();
 
-    /// @notice Error for insufficient balance
+    /// @notice Error for insufficient token balance in the contract
     error InsufficientBalance(
         IERC20 asset,
         uint256 required,
         uint256 available
     );
 
+    /// @notice Error when contract token balance is not in sync with accounting balance
+    error AssetBalanceOutOfSync(
+        IERC20 asset,
+        uint256 accountingBalance,
+        uint256 actualBalance
+    );
+
     /// @notice Deposits multiple assets and mints shares
     /// @param assets The array of assets to deposit
     /// @param amounts The array of amounts to deposit for each asset
     /// @param receiver The address to receive the minted shares
-    /// @return sharesArray The array of shares minted for each asset
     function deposit(
         IERC20[] calldata assets,
         uint256[] calldata amounts,
@@ -129,6 +135,9 @@ interface ILiquidToken is IERC20 {
         uint256[] calldata amounts
     ) external;
 
+    /// @notice Credits queued balances for a given set of asset
+    /// @param assets The assets to credit
+    /// @param amounts The credit amounts expressed in native token
     function addQueuedAssetBalances(
         IERC20[] calldata assets,
         uint256[] calldata amounts

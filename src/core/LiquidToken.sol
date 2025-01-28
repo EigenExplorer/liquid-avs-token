@@ -87,15 +87,25 @@ contract LiquidToken is
         uint256[] memory sharesArray = new uint256[](assets.length);
 
         for (uint256 i = 0; i < assets.length; i++) {
-            if (amounts[i] == 0) revert ZeroAmount();
-            if (!tokenRegistry.tokenIsSupported(assets[i]))
-                revert UnsupportedAsset(assets[i]);
+            IERC20 memory asset = assets[i];
+            uint256 amount = amounts[i];
 
-            uint256 shares = calculateShares(assets[i], amounts[i]);
+            if (amount == 0) revert ZeroAmount();
+            if (!tokenRegistry.tokenIsSupported(asset))
+                revert UnsupportedAsset(asset);
+
+            uint256 shares = calculateShares(asset, amount);
             if (shares == 0) revert ZeroShares();
 
-            assets[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
-            assetBalances[address(assets[i])] += amounts[i];
+            asset.safeTransferFrom(msg.sender, address(this), amount);
+            assetBalances[address(asset)] += amount;
+            
+            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+                revert AssetBalanceOutOfSync(
+                    asset, 
+                    assetBalances[address(asset)], 
+                    asset.balanceOf(address(this))
+                );
 
             _mint(receiver, shares);
 
@@ -104,8 +114,8 @@ contract LiquidToken is
             emit AssetDeposited(
                 msg.sender,
                 receiver,
-                assets[i],
-                amounts[i],
+                asset,
+                amount,
                 shares
             );
         }
@@ -191,11 +201,27 @@ contract LiquidToken is
         }
 
         for (uint256 i = 0; i < amounts.length; i++) {
-            // Transfer the amount back to the user
-            request.assets[i].safeTransfer(msg.sender, amounts[i]);
+            uint256 amount = amounts[i];
+            IERC20 asset = request.assets[i];
 
-            // Reduce the queued balance of the asset
-            queuedAssetBalances[address(request.assets[i])] -= amounts[i];
+            // Check the contract's actual token balance
+            if (asset.balanceOf(address(this)) < amount ) {
+                revert InsufficientBalance(asset, amount, asset.balanceOf(address(this)));
+            }
+
+            // Transfer the amount back to the user
+            asset.safeTransfer(msg.sender, amount);
+
+            // Reduce the asset balances for the asset
+            // Note: Make sure that when this contract actually receives the funds, `queuedAssetBalances` is debited and `assetBalances` is credited
+            assetBalances[address(asset)] -= amount;
+
+            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+                revert AssetBalanceOutOfSync(
+                    asset, 
+                    assetBalances[address(asset)], 
+                    asset.balanceOf(address(this))
+                );
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request
@@ -210,6 +236,9 @@ contract LiquidToken is
         );
     }
 
+    /// @notice Credits queued balances for a given set of asset
+    /// @param assets The assets to credit
+    /// @param amounts The credit amounts expressed in native token
     function addQueuedAssetBalances (
         IERC20[] calldata assets,
         uint256[] calldata amounts
@@ -254,6 +283,13 @@ contract LiquidToken is
 
             assetBalances[address(asset)] -= amount;
             asset.safeTransfer(address(liquidTokenManager), amount);
+
+            if (assetBalances[address(asset)] != asset.balanceOf(address(this))) 
+                revert AssetBalanceOutOfSync(
+                    asset, 
+                    assetBalances[address(asset)], 
+                    asset.balanceOf(address(this))
+                );
 
             emit AssetTransferred(
                 asset,
@@ -323,6 +359,7 @@ contract LiquidToken is
             );
 
             // Queued Asset Balances
+            // This amount is counted in liquid token price calculation to prevent share inflation
             total += tokenRegistry.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceQueuedAsset(supportedTokens[i])

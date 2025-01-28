@@ -5,6 +5,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
@@ -102,14 +103,22 @@ interface ILiquidTokenManager {
     /// @return The staked balance of the asset for the specific node
     function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
 
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
     function delegateNodesToOperators(
         uint256[] calldata nodeIds,
-        address[] calldata operators
+        address[] calldata operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
     ) external;
 
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
     function undelegateNodesFromOperators(
-        uint256[] calldata nodeIds,
-        address[] calldata operators
+        uint256[] calldata nodeIds
     ) external;
 
     /// @notice Returns the StrategyManager contract

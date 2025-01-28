@@ -6,6 +6,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -224,26 +225,51 @@ contract StakerNodeCoordinator is
         return stakerNodes[nodeId];
     }
 
+
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
     function delegateStakerNodes(
         uint256[] calldata nodeIds,
-        address[] calldata operators
+        address[] calldata operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
     )
-        public
+        external
         override
         onlyRole(STAKER_NODES_DELEGATOR_ROLE)
     {
-        // TODO: For each nodeId, call delegate() on the node
+        uint256 arrayLength = nodeIds.length;
+
+        if (
+            operators.length != arrayLength ||
+            approverSignatureAndExpiries.length != arrayLength ||
+            approverSalts.length != arrayLength
+        ) {
+            revert LengthMismatch();
+        }
+
+        for (uint256 i = 0; i < arrayLength; i++) {
+            IStakerNode node = getNodeById((nodeIds[i]));
+            node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
+        }
     }
 
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
     function undelegateStakerNodes(
-        uint256[] calldata nodeIds,
-        address[] calldata operators
+        uint256[] calldata nodeIds
     )
-        public
+        external
         override
         onlyRole(STAKER_NODES_DELEGATOR_ROLE)
     {
-        // TODO: For each nodeId, call undelegate() on the node
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = getNodeById((nodeIds[i]));
+            node.undelegate();
+        }
     }
 
     modifier notZeroAddress(address _address) {
