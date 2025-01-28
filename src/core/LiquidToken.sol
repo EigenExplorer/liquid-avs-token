@@ -357,7 +357,6 @@ contract LiquidToken is
             );
 
             // Queued Asset Balances
-            // This amount is counted in liquid token price calculation to prevent share inflation
             total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceQueuedAsset(supportedTokens[i])

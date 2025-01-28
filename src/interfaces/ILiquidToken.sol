@@ -106,6 +106,7 @@ interface ILiquidToken is IERC20 {
     /// @param assets The array of assets to deposit
     /// @param amounts The array of amounts to deposit for each asset
     /// @param receiver The address to receive the minted shares
+    /// @return sharesArray The array of shares minted for each asset
     function deposit(
         IERC20[] calldata assets,
         uint256[] calldata amounts,

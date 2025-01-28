@@ -498,8 +498,8 @@ contract LiquidTokenManager is
     }
 
     /// @notice Sets the volatility threshold for a given asset
-     /// @param asset The asset token address
-     /// @param newThreshold The new volatility threshold value to update to
+    /// @param asset The asset token address
+    /// @param newThreshold The new volatility threshold value to update to
     function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(asset) == address(0)) revert ZeroAddress();
         if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
@@ -508,5 +508,5 @@ contract LiquidTokenManager is
         emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
 
         tokens[asset].volatilityThreshold = newThreshold;
-     }
+    }
 }
