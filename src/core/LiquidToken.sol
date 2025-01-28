@@ -34,7 +34,7 @@ contract LiquidToken is
     mapping(address => uint256) public assetBalances;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
-    mapping(address => uint256) private _nonce;
+    mapping(address => uint256) private _withdrawalNonce;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -144,7 +144,7 @@ contract LiquidToken is
                 withdrawAssets,
                 shareAmounts,
                 block.timestamp,
-                 _nonce[msg.sender]
+                 _withdrawalNonce[msg.sender]
             )
         );
 
@@ -162,7 +162,7 @@ contract LiquidToken is
 
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[msg.sender].push(requestId);
-         _nonce[msg.sender] += 1;
+         _withdrawalNonce[msg.sender] += 1;
 
         _transfer(msg.sender, address(this), totalShares);
 
