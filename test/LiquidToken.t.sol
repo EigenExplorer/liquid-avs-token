@@ -9,13 +9,13 @@ import {BaseTest} from "./common/BaseTest.sol";
 import {LiquidToken} from "../src/core/LiquidToken.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
-import {TokenRegistry} from "../src/utils/TokenRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
-import {ITokenRegistry} from "../src/interfaces/ITokenRegistry.sol";
+import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
         super.setUp();
+        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable volatility check
     }
 
     function testDeposit() public {
@@ -345,9 +345,9 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 10;
 
         vm.mockCall(
-            address(tokenRegistry),
+            address(liquidTokenManager),
             abi.encodeWithSelector(
-                ITokenRegistry.convertToUnitOfAccount.selector,
+                ILiquidTokenManager.convertToUnitOfAccount.selector,
                 IERC20(address(testToken)),
                 10
             ),
@@ -781,10 +781,10 @@ contract LiquidTokenTest is BaseTest {
 
     function testMultipleTokensWithdrawalsWithPriceChangeAfterDeposit() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken and 10 ether of testToken2
@@ -825,8 +825,8 @@ contract LiquidTokenTest is BaseTest {
 
         // Simulate a price increase for testToken
         vm.startPrank(admin);
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
         vm.stopPrank();
 
         // User1 requests complete withdrawal
@@ -886,10 +886,10 @@ contract LiquidTokenTest is BaseTest {
 
     function testMultipleTokensWithdrawalsWithPriceChangeAfterRequest() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 1e18); // 1 testToken = 1 unit
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 units
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken and 10 ether of testToken2
@@ -942,8 +942,8 @@ contract LiquidTokenTest is BaseTest {
 
         // Simulate a price increase for testToken
         vm.startPrank(admin);
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (price increase)
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 2e18); // 1 testToken2 = 2 units (price increase)
         vm.stopPrank();
 
         // Fulfill withdrawal

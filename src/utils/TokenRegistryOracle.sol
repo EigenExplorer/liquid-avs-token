@@ -5,14 +5,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 
-import {ITokenRegistry} from "../interfaces/ITokenRegistry.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title TokenRegistryOracle
 /// @notice A contract to provide and update rates for given tokens
 /// @dev This contract interacts with a TokenRegistry to manage token rates
 contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessControlUpgradeable {
-    ITokenRegistry public tokenRegistry;
+    ILiquidTokenManager public liquidTokenManager;
 
     bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
 
@@ -24,7 +24,7 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(RATE_UPDATER_ROLE, init.priceUpdater);
 
-        tokenRegistry = init.tokenRegistry;
+        liquidTokenManager = init.liquidTokenManager;
     }
 
     /// @notice Updates the rate for a single token
@@ -49,7 +49,7 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param token The token address
     /// @return The current rate of the token
     function getRate(IERC20 token) external view returns (uint256) {
-        ITokenRegistry.TokenInfo memory tokenInfo = tokenRegistry.getTokenInfo(token);
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(token);
         return tokenInfo.pricePerUnit;
     }
 
@@ -57,8 +57,8 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param token The token address
     /// @param newRate The new rate for the token
     function _updateTokenRate(IERC20 token, uint256 newRate) internal {
-        uint256 oldRate = tokenRegistry.getTokenInfo(token).pricePerUnit;
-        tokenRegistry.updatePrice(token, newRate);
+        uint256 oldRate = liquidTokenManager.getTokenInfo(token).pricePerUnit;
+        liquidTokenManager.updatePrice(token, newRate);
         emit TokenRateUpdated(token, oldRate, newRate, msg.sender);
     }
 }

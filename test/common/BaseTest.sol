@@ -11,7 +11,6 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
-import {TokenRegistry} from "../../src/utils/TokenRegistry.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 import {StakerNode} from "../../src/core/StakerNode.sol";
@@ -21,7 +20,6 @@ import {MockStrategy} from "../mocks/MockStrategy.sol";
 import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
-import {ITokenRegistry} from "../../src/interfaces/ITokenRegistry.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
@@ -33,7 +31,6 @@ contract BaseTest is Test {
 
     // Contracts
     LiquidToken public liquidToken;
-    TokenRegistry public tokenRegistry;
     TokenRegistryOracle public tokenRegistryOracle;
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
@@ -53,7 +50,6 @@ contract BaseTest is Test {
     // Private variables (with leading underscore)
     LiquidToken private _liquidTokenImplementation;
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
-    TokenRegistry private _tokenRegistryImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
     StakerNode private _stakerNodeImplementation;
@@ -91,7 +87,6 @@ contract BaseTest is Test {
 
     function _deployMainContracts() private {
         _tokenRegistryOracleImplementation = new TokenRegistryOracle();
-        _tokenRegistryImplementation = new TokenRegistry();
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
@@ -103,15 +98,6 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_tokenRegistryOracleImplementation),
-                    address(admin),
-                    ""
-                )
-            )
-        );
-        tokenRegistry = TokenRegistry(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(_tokenRegistryImplementation),
                     address(admin),
                     ""
                 )
@@ -148,42 +134,45 @@ contract BaseTest is Test {
 
     function _initializeProxies() private {
         _initializeTokenRegistryOracle();
-        _initializeTokenRegistry();
+        _initializeLiquidTokenManager();
         _initializeStakerNodeCoordinator();
         _initializeLiquidToken();
-        _initializeLiquidTokenManager();
     }
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
             initialOwner: admin,
             priceUpdater: user2,
-            tokenRegistry: ITokenRegistry(address(tokenRegistry))
+            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
         tokenRegistryOracle.initialize(init);
-    }
-
-    function _initializeTokenRegistry() private {
-        ITokenRegistry.Init memory init = ITokenRegistry.Init({
-            initialOwner: admin,
-            priceUpdater: address(tokenRegistryOracle)
-        });
-        tokenRegistry.initialize(init);
     }
 
     function _initializeLiquidTokenManager() private {
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
             assets: new IERC20[](2),
+            tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
             strategies: new IStrategy[](2),
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             initialOwner: admin,
-            strategyController: admin
+            strategyController: admin,
+            priceUpdater: address(tokenRegistryOracle)
         });
         init.assets[0] = IERC20(address(testToken));
         init.assets[1] = IERC20(address(testToken2));
+        init.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
+            decimals: 18,
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0.1 * 1e18
+        });
+        init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
+            decimals: 18,
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0
+        });
         init.strategies[0] = IStrategy(address(mockStrategy));
         init.strategies[1] = IStrategy(address(mockStrategy2));
         liquidTokenManager.initialize(init);
@@ -195,7 +184,6 @@ contract BaseTest is Test {
             symbol: "LST",
             initialOwner: admin,
             pauser: pauser,
-            tokenRegistry: ITokenRegistry(address(tokenRegistry)),
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
         liquidToken.initialize(init);
@@ -219,9 +207,6 @@ contract BaseTest is Test {
     }
 
     function _setupTestTokens() private {
-        tokenRegistry.addToken(IERC20(address(testToken)), 18, 1e18);
-        tokenRegistry.addToken(IERC20(address(testToken2)), 18, 1e18);
-
         testToken.mint(user1, 100 ether);
         testToken.mint(user2, 100 ether);
         testToken2.mint(user1, 100 ether);

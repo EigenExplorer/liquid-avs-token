@@ -3,16 +3,20 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {BaseTest} from "./common/BaseTest.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {MockStrategy} from "./mocks/MockStrategy.sol";
+import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
+
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
-import {MockStrategy} from "./mocks/MockStrategy.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
-import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
+import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
@@ -70,11 +74,11 @@ contract LiquidTokenManagerTest is BaseTest {
             address(liquidToken)
         );
         assertEq(
-            address(liquidTokenManager.strategies(IERC20(address(testToken)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken)))),
             address(mockStrategy)
         );
         assertEq(
-            address(liquidTokenManager.strategies(IERC20(address(testToken2)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken2)))),
             address(mockStrategy2)
         );
         assertTrue(
@@ -91,43 +95,272 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
-    function testSetStrategy() public {
-        MockStrategy newStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(testToken))
+    function testAddTokenSuccess() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        liquidTokenManager.addToken(newToken, decimals, initialPrice, volatilityThreshold, newStrategy);
+
+        // Verify that the token was successfully added
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(
+            newToken
         );
-        vm.prank(admin);
-        liquidTokenManager.setStrategy(
-            IERC20(address(testToken)),
-            IStrategy(address(newStrategy))
+        IStrategy strategy = liquidTokenManager.getTokenStrategy(newToken);
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(
+              tokenInfo.decimals,
+              IERC20Metadata(address(newToken)).decimals(),
+              "Incorrect decimals"
         );
         assertEq(
-            address(liquidTokenManager.strategies(IERC20(address(testToken)))),
-            address(newStrategy)
+            tokenInfo.pricePerUnit,
+            initialPrice,
+            "Incorrect initial price"
+        );
+        assertEq(
+            address(strategy),
+            address(newStrategy),
+            "Incorrect strategy"
+        );
+
+        // Verify that the token is now supported
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(newToken),
+            "Token should be supported"
+        );
+
+        // Verify that the token is included in the supportedTokens array
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+        bool isTokenInArray = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == newToken) {
+                isTokenInArray = true;
+                break;
+            }
+        }
+        assertTrue(
+            isTokenInArray,
+            "Token should be in the supportedTokens array"
         );
     }
 
-    function testSetStrategyUnauthorized() public {
-        MockStrategy newStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(testToken))
-        );
+    function testAddTokenUnauthorized() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
         vm.prank(user1);
-        vm.expectRevert(); // TODO: Check if this is the correct revert message
-        liquidTokenManager.setStrategy(
-            IERC20(address(testToken)),
-            IStrategy(address(newStrategy))
-        );
+        vm.expectRevert(); 
+        liquidTokenManager.addToken(newToken, decimals, initialPrice, volatilityThreshold, newStrategy);
     }
 
-    function testSetStrategyZeroAddress() public {
-        MockStrategy newStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(testToken))
-        );
+    function testAddTokenZeroAddress() public {
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, IERC20(address(0)));
+
         vm.prank(admin);
         vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
-        liquidTokenManager.setStrategy(IERC20(address(0)), IStrategy(address(newStrategy)));
+        liquidTokenManager.addToken(IERC20(address(0)), decimals, initialPrice, volatilityThreshold, newStrategy);
+    }
+
+    function testAddTokenStrategyZeroAddress() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
+        liquidTokenManager.addToken(newToken, decimals, initialPrice, volatilityThreshold, IStrategy(address(0)));
+    }
+
+    function testAddTokenFailsIfAlreadySupported() public {
+        // Try to add testToken which was already added in setUp()
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy duplicateStrategy = new MockStrategy(strategyManager, testToken);
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.TokenExists.selector,
+            address(testToken)
+        ));
+        liquidTokenManager.addToken(testToken, decimals, initialPrice, volatilityThreshold, duplicateStrategy);
+    }
+
+    function testAddTokenFailsForZeroDecimals() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        liquidTokenManager.addToken(newToken, 0, initialPrice, volatilityThreshold, newStrategy);
+    }
+
+    function testAddTokenFailsForMismatchedDecimals() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 6; // Actual decimals value is 18
+        uint256 price = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        liquidTokenManager.addToken(newToken, decimals, price, volatilityThreshold, newStrategy);
+    }
+
+    function testAddTokenSuccessForNoDecimalsFunction() public {
+        IERC20 newToken = IERC20(address(new MockERC20NoDecimals())); // Doesn't have a `decimals()` function
+        uint8 decimals = 6;
+        uint256 price = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        liquidTokenManager.addToken(newToken, decimals, price, volatilityThreshold, newStrategy);
+
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(
+            newToken
+        );
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+    }
+
+    function testAddTokenFailsForZeroInitialPrice() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.InvalidPrice.selector);
+        liquidTokenManager.addToken(newToken, decimals, 0, volatilityThreshold, newStrategy);
+    }
+
+    function testAddTokenFailsForInvalidThreshold() public {
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 price = 1e18;
+        uint256 volatilityThreshold = 50;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.InvalidThreshold.selector);
+        liquidTokenManager.addToken(newToken, decimals, price, volatilityThreshold, newStrategy);
+    }
+
+    function testRemoveTokenSuccess() public {
+        // First add a new token that we'll remove
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
+        uint8 decimals = 18;
+        uint256 initialPrice = 1e18;
+        uint256 volatilityThreshold = 0;
+        MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
+
+        vm.prank(admin);
+        liquidTokenManager.addToken(newToken, decimals, initialPrice, volatilityThreshold, newStrategy);
+
+        // Verify token was added
+        assertTrue(liquidTokenManager.tokenIsSupported(newToken));
+
+        // Remove the token
+        vm.prank(admin);
+        liquidTokenManager.removeToken(newToken);
+
+        // Verify token was removed
+        assertFalse(liquidTokenManager.tokenIsSupported(newToken));
+
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.TokenNotSupported.selector,
+            newToken
+        ));
+        liquidTokenManager.getTokenInfo(newToken);
+
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.StrategyNotFound.selector,
+            newToken
+        ));
+        liquidTokenManager.getTokenStrategy(newToken);
+
+        // Verify token is not in supported tokens array
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+        bool isTokenInArray = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == newToken) {
+                isTokenInArray = true;
+                break;
+            }
+        }
+        assertFalse(isTokenInArray, "Token should not be in the supportedTokens array");
+    }
+
+    function testRemoveTokenFailsForUnsupportedToken() public {
+        IERC20 unsupportedToken = IERC20(address(new MockERC20("Unsupported", "UNS")));
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.TokenNotSupported.selector,
+            unsupportedToken
+        ));
+        liquidTokenManager.removeToken(unsupportedToken);
+    }
+
+    function testRemoveTokenFailsForNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        liquidTokenManager.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNonZeroBalance() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNodeHasShares() public {
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(testToken);
     }
 
     function testStakeAssetsToNode() public {
@@ -242,10 +475,11 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testShareCalculation() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
+        liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0);  // Disable volatility check
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken
@@ -290,10 +524,11 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testShareCalculationWithAssetValueIncrease() public {
         vm.startPrank(admin);
-        tokenRegistry.grantRole(tokenRegistry.PRICE_UPDATER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
-        tokenRegistry.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
+        liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0);  // Disable volatility check
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
 
         // User1 deposits 10 ether of testToken
@@ -329,7 +564,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Simulate a value increase
         vm.startPrank(admin);
-        tokenRegistry.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (increase in value)
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 3e18); // 1 testToken = 3 units (increase in value)
         vm.stopPrank();
 
         // Check totalAssets and totalSupply after price change
@@ -361,6 +596,37 @@ contract LiquidTokenManagerTest is BaseTest {
             20 ether,
             "User2 shares are incorrect after price change"
         );
+    }
+
+    function testPriceUpdateUpdateFailsVolatilityCheck() public {
+        vm.prank(admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.VolatilityThresholdHit.selector,
+            testToken,
+            1e18
+        ));
+        liquidTokenManager.updatePrice(testToken, 2e18); // 100% increase but only 10% is allowed
+    }
+
+    function testSetVolatilityThresholdSuccess() public {
+        vm.prank(admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
+
+        vm.prank(admin);
+        liquidTokenManager.setVolatilityThreshold(testToken, 0);
+        liquidTokenManager.updatePrice(testToken, 10e18); // 10x increase should pass
+    }
+
+    function testSetVolatilityThresholdFailsForInvalidValue() public {
+        vm.prank(admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
+
+        vm.prank(admin);
+        vm.expectRevert(ILiquidTokenManager.InvalidThreshold.selector);
+        liquidTokenManager.setVolatilityThreshold(testToken, 20);
     }
 
     function testWithdrawalFailureDueToInsufficientBalance() public {
