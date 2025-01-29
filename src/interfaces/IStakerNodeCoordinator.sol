@@ -8,6 +8,7 @@ import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract
@@ -15,6 +16,7 @@ interface IStakerNodeCoordinator {
     /// @notice Initialization parameters for StakerNodeCoordinator
     struct Init {
         ILiquidTokenManager liquidTokenManager;
+        IWithdrawalManager withdrawalManager;
         IDelegationManager delegationManager;
         IStrategyManager strategyManager;
         uint256 maxNodes;
@@ -22,6 +24,7 @@ interface IStakerNodeCoordinator {
         address pauser;
         address stakerNodeCreator;
         address stakerNodesDelegator;
+        address stakerNodesWithdrawer;
     }
 
     /// @notice Emitted when a new staker node is created
@@ -41,9 +44,6 @@ interface IStakerNodeCoordinator {
 
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
-
-    /// @notice Error for unauthorized access
-    error Unauthorized();
 
     /// @notice Error for insufficient funds
     error InsufficientFunds();
@@ -75,9 +75,6 @@ interface IStakerNodeCoordinator {
     /// @notice Error when caller is not the owner
     error NotOwner();
 
-    /// @notice Error for mismatched array lengths
-    error LengthMismatch();
-
     /// @notice Initializes the StakerNodeCoordinator contract
     /// @param init Initialization parameters
     function initialize(Init calldata init) external;
@@ -103,6 +100,11 @@ interface IStakerNodeCoordinator {
     /// @return True if the address has the role, false otherwise
     function hasStakerNodeDelegatorRole(address _address) external view returns (bool);
 
+    /// @notice Checks if an address has the STAKER_NODES_WITHDRAWER_ROLE
+    /// @param _address Address to check
+    /// @return True if the address has the role, false otherwise
+    function hasStakerNodeWithdrawerRole(address _address) external view returns (bool);
+
     /// @notice Checks if a caller is the liquid token manager
     /// @param caller Address to check
     /// @return True if the caller is the liquid token manager, false otherwise
@@ -121,6 +123,8 @@ interface IStakerNodeCoordinator {
     /// @return The IStakerNode interface of the staker node
     function getNodeById(uint256 nodeId) external view returns (IStakerNode);
 
+    function withdrawerAddress() external view returns (address);
+
     /// @notice Gets the delegation manager contract
     /// @return The IDelegationManager interface
     function delegationManager() external view returns (IDelegationManager);
@@ -133,23 +137,11 @@ interface IStakerNodeCoordinator {
     /// @return The ILiquidTokenManager interface
     function liquidTokenManager() external view returns (ILiquidTokenManager);
 
+    /// @notice Gets the withdrawal manager contract
+    /// @return The IWithdrawalManager interface
+    function withdrawalManager() external view returns (IWithdrawalManager);
+
     /// @notice Gets the maximum number of nodes allowed
     /// @return The maximum number of nodes
     function maxNodes() external view returns (uint256);
-
-    /// @notice Delegate a set of staker nodes to a corresponding set of operators
-    /// @param nodeIds The IDs of the staker nodes
-    /// @param operators The addresses of the operators
-    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
-    /// @param approverSalts The salts used in the signatures
-    function delegateStakerNodes(
-        uint256[] calldata nodeIds,
-        address[] calldata operators,
-        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
-        bytes32[] calldata approverSalts
-    ) external;
-
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    function undelegateStakerNodes(uint256[] calldata nodeIds) external;
 }

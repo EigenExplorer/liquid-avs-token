@@ -13,6 +13,7 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
+import {WithdrawalManager} from "../../src/core/WithdrawalManager.sol";
 import {StakerNode} from "../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
@@ -22,6 +23,7 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../../src/interfaces/IWithdrawalManager.sol";
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {

@@ -11,6 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /**
  * @title LiquidToken
@@ -27,12 +28,11 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
-    uint256 public constant WITHDRAWAL_DELAY = 14 days;
+    IWithdrawalManager public withdrawalManager;
 
     mapping(address => uint256) public assetBalances;
     mapping(address => uint256) public queuedAssetBalances;
-    mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
-    mapping(address => bytes32[]) public userWithdrawalRequests;
+    mapping(address => uint256) private _withdrawalNonce;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -59,11 +59,15 @@ contract LiquidToken is
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
+        if (address(init.withdrawalManager) == address(0)) {
+            revert("WithdrawalManager cannot be the zero address");
+        }
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
+        withdrawalManager = init.withdrawalManager;
     }
 
     /// @notice Allows users to deposit multiple assets and receive shares
@@ -117,10 +121,10 @@ contract LiquidToken is
         return sharesArray;
     }
 
-    /// @notice Allows users to request a withdrawal of their shares
+    /// @notice Allows users to initiate a withdrawal request against their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
-    function requestWithdrawal(
+    function initiateWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
     ) external nonReentrant whenNotPaused {
@@ -142,6 +146,8 @@ contract LiquidToken is
                 balanceOf(msg.sender)
             );
 
+        _transfer(msg.sender, address(this), totalShares);
+        
         bytes32 requestId = keccak256(
             abi.encodePacked(
                 msg.sender,
@@ -150,99 +156,24 @@ contract LiquidToken is
                 block.timestamp
             )
         );
-        WithdrawalRequest memory request = WithdrawalRequest({
-            user: msg.sender,
-            assets: withdrawAssets,
-            shareAmounts: shareAmounts,
-            requestTime: block.timestamp,
-            fulfilled: false
-        });
-
-        withdrawalRequests[requestId] = request;
-        userWithdrawalRequests[msg.sender].push(requestId);
-
-        _transfer(msg.sender, address(this), totalShares);
-
-        emit WithdrawalRequested(
-            requestId,
-            msg.sender,
+        withdrawalManager.createWithdrawalRequest(
             withdrawAssets,
             shareAmounts,
-            block.timestamp
-        );
-    }
-
-    /// @notice Allows users to fulfill a withdrawal request after the delay period
-    /// @param requestId The unique identifier of the withdrawal request
-    function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
-        WithdrawalRequest storage request = withdrawalRequests[requestId];
-
-        if (request.user != msg.sender) revert InvalidWithdrawalRequest();
-        if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
-            revert WithdrawalDelayNotMet();
-        if (request.fulfilled) revert WithdrawalAlreadyFulfilled();
-
-        request.fulfilled = true;
-        uint256[] memory amounts = new uint256[](request.assets.length);
-        uint256 totalShares = 0;
-
-        for (uint256 i = 0; i < request.assets.length; i++) {
-            amounts[i] = calculateAmount(
-                request.assets[i],
-                request.shareAmounts[i]
-            );
-            totalShares += request.shareAmounts[i];
-        }
-
-        for (uint256 i = 0; i < amounts.length; i++) {
-            uint256 amount = amounts[i];
-            IERC20 asset = request.assets[i];
-
-            // Check the contract's actual token balance
-            if (asset.balanceOf(address(this)) < amount ) {
-                revert InsufficientBalance(
-                    asset,
-                    amount,
-                    asset.balanceOf(address(this))
-                );
-            }
-
-            // Transfer the amount back to the user
-            asset.safeTransfer(msg.sender, amount);
-
-            // Reduce the asset balances for the asset
-            // Note: Make sure that when this contract actually receives the funds, `queuedAssetBalances` is debited and `assetBalances` is credited
-            assetBalances[address(asset)] -= amount;
-
-            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
-                revert AssetBalanceOutOfSync(
-                    asset, 
-                    assetBalances[address(asset)], 
-                    asset.balanceOf(address(this))
-                );
-        }
-
-        // Burn the shares that were transferred to the contract during the withdrawal request
-        _burn(address(this), totalShares);
-
-        emit WithdrawalFulfilled(
-            requestId,
             msg.sender,
-            request.assets,
-            amounts,
-            block.timestamp
+            requestId
         );
+        _withdrawalNonce[msg.sender] += 1;
     }
 
-    /// @notice Credits queued balances for a given set of asset
+    /// @notice Credits queued balances for a given set of assets
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
-    function addQueuedAssetBalances (
+    function creditQueuedAssetBalances(
         IERC20[] calldata assets,
         uint256[] calldata amounts
     ) external whenNotPaused {
-        if (msg.sender != address(liquidTokenManager))
-            revert NotLiquidTokenManager(msg.sender);
+        if (msg.sender != address(withdrawalManager) && msg.sender != address(liquidTokenManager))
+            revert UnauthorizedAccess(msg.sender);
 
         if (assets.length != amounts.length)
             revert ArrayLengthMismatch();
@@ -250,6 +181,29 @@ contract LiquidToken is
         for (uint256 i = 0; i < assets.length; i++) {
             queuedAssetBalances[address(assets[i])] += amounts[i];
         }
+    }
+
+    /// @notice Debits queued balances for a given set of assets & burns the corresponding shares
+    /// @param assets The assets to debit
+    /// @param amounts The debit amounts expressed in native token
+    /// @param sharesToBurn Amount of shares to burn
+    function debitAndBurnQueuedAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
+        uint256 sharesToBurn
+    ) external whenNotPaused {
+        if (msg.sender != address(withdrawalManager))
+            revert UnauthorizedAccess(msg.sender);
+
+        if (assets.length != amounts.length)
+            revert ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            queuedAssetBalances[address(assets[i])] -= amounts[i];
+        }
+
+        // Burn the shares that were transferred to the contract during the withdrawal request
+        _burn(address(this), sharesToBurn);
     }
 
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
@@ -330,18 +284,6 @@ contract LiquidToken is
     // ------------------------------------------------------------------------------
     // Getter functions
     // ------------------------------------------------------------------------------
-
-    function getUserWithdrawalRequests(
-        address user
-    ) external view returns (bytes32[] memory) {
-        return userWithdrawalRequests[user];
-    }
-
-    function getWithdrawalRequest(
-        bytes32 requestId
-    ) external view returns (WithdrawalRequest memory) {
-        return withdrawalRequests[requestId];
-    }
 
     /// @notice Returns the total value of assets managed by the contract
     /// @return The total value of assets in the unit of account

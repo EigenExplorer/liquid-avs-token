@@ -17,10 +17,10 @@ interface IStakerNode {
     }
 
     /// @notice Emitted when the StakerNode is delegated to an operator
-    event NodeDelegated(address indexed operator, address indexed delegator);
+    event NodeDelegated(address indexed operator, uint256 nodeId, address indexed delegator);
 
     /// @notice Emitted when the StakerNode is undelegated from the current operator
-    event NodeUndelegated(bytes32[] withdrawalRoots, address indexed undelegator);
+    event NodeUndelegated(bytes32[] withdrawalRoots, uint256 nodeId, address indexed undelegator);
 
     /// @notice Emitted when assets are deposited into an Eigenlayer strategy
     event AssetDepositedToStrategy(
@@ -75,8 +75,10 @@ interface IStakerNode {
         bytes32 approverSalt
     ) external;
 
+    function withdraw(IStrategy[] calldata strategies, uint256[] calldata shareAmounts) external returns (bytes32); 
+
     /// @notice Undelegates the StakerNode's assets from the current operator
-    function undelegate() external;
+    function undelegate() external returns (bytes32[] memory);
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract

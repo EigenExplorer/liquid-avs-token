@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
@@ -13,17 +14,9 @@ interface ILiquidToken is IERC20 {
         string name;
         string symbol;
         ILiquidTokenManager liquidTokenManager;
+        IWithdrawalManager withdrawalManager;
         address initialOwner;
         address pauser;
-    }
-
-    /// @notice Represents a withdrawal request
-    struct WithdrawalRequest {
-        address user;
-        IERC20[] assets;
-        uint256[] shareAmounts;
-        uint256 requestTime;
-        bool fulfilled;
     }
 
     /// @notice Emitted when an asset is deposited
@@ -33,24 +26,6 @@ interface ILiquidToken is IERC20 {
         IERC20 indexed asset,
         uint256 amount,
         uint256 shares
-    );
-
-    /// @notice Emitted when a withdrawal is requested
-    event WithdrawalRequested(
-        bytes32 indexed requestId,
-        address indexed user,
-        IERC20[] assets,
-        uint256[] shareAmounts,
-        uint256 timestamp
-    );
-
-    /// @notice Emitted when a withdrawal is fulfilled
-    event WithdrawalFulfilled(
-        bytes32 indexed requestId,
-        address indexed user,
-        IERC20[] assets,
-        uint256[] amounts,
-        uint256 timestamp
     );
 
     /// @notice Emitted when an asset is transferred
@@ -73,14 +48,8 @@ interface ILiquidToken is IERC20 {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
 
-    /// @notice Error for invalid withdrawal request
-    error InvalidWithdrawalRequest();
-
-    /// @notice Error when withdrawal delay is not met
-    error WithdrawalDelayNotMet();
-
-    /// @notice Error when withdrawal is already fulfilled
-    error WithdrawalAlreadyFulfilled();
+    /// @notice Error for unauthorized access
+    error UnauthorizedAccess(address sender);
 
     /// @notice Error for unsupported asset
     error AssetNotSupported(IERC20 asset);
@@ -114,17 +83,13 @@ interface ILiquidToken is IERC20 {
     ) external returns (uint256[] memory);
 
 
-    /// @notice Allows users to request a withdrawal of their shares
+    /// @notice Allows users to initiate a withdrawal request against their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
-    function requestWithdrawal(
+    function initiateWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
     ) external;
-
-    /// @notice Allows users to fulfill a withdrawal request after the delay period
-    /// @param requestId The unique identifier of the withdrawal request
-    function fulfillWithdrawal(bytes32 requestId) external;
 
     /// @notice Transfers assets to the LiquidTokenManager
     /// @param assetsToRetrieve The assets to transfer
@@ -134,12 +99,22 @@ interface ILiquidToken is IERC20 {
         uint256[] calldata amounts
     ) external;
 
-    /// @notice Credits queued balances for a given set of asset
+    /// @notice Credits queued balances for a given set of assets
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
-    function addQueuedAssetBalances(
+    function creditQueuedAssetBalances(
         IERC20[] calldata assets,
         uint256[] calldata amounts
+    ) external;
+
+    /// @notice Debits queued balances for a given set of assets & burns the corresponding shares
+    /// @param assets The assets to debit
+    /// @param amounts The debit amounts expressed in native token
+    /// @param sharesToBurn Amount of shares to burn
+    function debitAndBurnQueuedAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
+        uint256 sharesToBurn
     ) external;
 
     /// @notice Calculates the number of shares for a given asset amount
@@ -163,16 +138,6 @@ interface ILiquidToken is IERC20 {
     /// @notice Returns the total value of assets held by the contract
     /// @return The total value of assets
     function totalAssets() external view returns (uint256);
-
-    /// @notice Returns the withdrawal requests for a user
-    /// @param user The address of the user
-    /// @return An array of withdrawal request IDs
-    function getUserWithdrawalRequests(address user) external view returns (bytes32[] memory);
-
-    /// @notice Returns the details of a withdrawal request
-    /// @param requestId The ID of the withdrawal request
-    /// @return The withdrawal request details
-    function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);
 
     /// @notice Returns the balances of multiple assets
     /// @param assetList The list of assets to get balances for

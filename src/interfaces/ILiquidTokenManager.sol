@@ -8,6 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
+import {IWithdrawalManager} from "./IWithdrawalManager.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
 
 /// @title ILiquidTokenManager Interface
@@ -19,6 +20,7 @@ interface ILiquidTokenManager {
         TokenInfo[] tokenInfo;
         IStrategy [] strategies;
         ILiquidToken liquidToken;
+        IWithdrawalManager withdrawalManager;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
@@ -174,6 +176,13 @@ interface ILiquidTokenManager {
     /// @param asset The asset to get the strategy for
     /// @return The IStrategy interface for the corresponding strategy
     function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
+
+    /// @notice Returns the set of strategies for a given set of assets
+    /// @param assets Set of assets to get the strategies for
+    /// @return IStrategy Interfaces for the corresponding set of strategies
+    function getTokensStrategies(
+        IERC20[] calldata assets
+    ) external returns (IStrategy[] memory);
 
     /// @notice Stakes assets to a specific node
     /// @param nodeId The ID of the node to stake to

@@ -13,6 +13,7 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /**
  * @title StakerNode
@@ -30,6 +31,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         keccak256("LIQUID_TOKEN_MANAGER_ROLE");
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
+    bytes32 public constant STAKER_NODES_WITHDRAWER_ROLE =
+        keccak256("STAKER_NODES_WITHDRAWER_ROLE");
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -91,14 +94,15 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         delegationManager.delegateTo(operator, signature, approverSalt);
         operatorDelegation = operator;
 
-        emit NodeDelegated(operator, msg.sender);
+        emit NodeDelegated(operator, id, msg.sender);
     }
 
     /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate()
         public
         override
-        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
+        onlyRole(STAKER_NODES_WITHDRAWER_ROLE)
+        returns (bytes32[] memory)
     {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
@@ -107,8 +111,27 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             address(this)
         );
         operatorDelegation = address(0);
+        emit NodeUndelegated(withdrawalRoots, id, msg.sender);
+        return withdrawalRoots;
+    }
 
-        emit NodeUndelegated(withdrawalRoots, msg.sender);
+    function withdraw(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
+        external
+        override
+        onlyRole(STAKER_NODES_WITHDRAWER_ROLE)
+        returns (bytes32)
+    {
+        IDelegationManager.QueuedWithdrawalParams[] memory requestParams = 
+            new IDelegationManager.QueuedWithdrawalParams[](1);
+        
+        requestParams[0] = IDelegationManager.QueuedWithdrawalParams({
+            strategies: strategies,
+            shares: shareAmounts,
+            withdrawer: coordinator.withdrawerAddress()
+        });
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        return delegationManager.queueWithdrawals(requestParams)[0];
     }
 
     /// @notice Returns the address of the current implementation contract
@@ -151,6 +174,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             }
         } else if (role == STAKER_NODES_DELEGATOR_ROLE) {
             if (!coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
+                revert UnauthorizedAccess(msg.sender, role);
+            }
+        } else if (role == STAKER_NODES_WITHDRAWER_ROLE) {
+            if (!coordinator.hasStakerNodeWithdrawerRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else {

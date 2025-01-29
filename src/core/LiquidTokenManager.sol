@@ -15,6 +15,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
@@ -46,6 +47,8 @@ contract LiquidTokenManager is
     IStakerNodeCoordinator public stakerNodeCoordinator;
     /// @notice The LiquidToken contract
     ILiquidToken public liquidToken;
+    /// @notice The WithdrawalManager contract
+    IWithdrawalManager public withdrawalManager;
 
     /// @notice Mapping of tokens to their corresponding token info
     mapping(IERC20 => TokenInfo) public tokens;
@@ -78,6 +81,7 @@ contract LiquidTokenManager is
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0) ||
             address(init.liquidToken) == address(0) ||
+            address(init.withdrawalManager) == address(0) ||
             address(init.initialOwner) == address(0) ||
             address(init.priceUpdater) == address(0)
         ) {
@@ -318,6 +322,28 @@ contract LiquidTokenManager is
         return strategy;
     }
 
+    /// @notice Returns the set of strategies for a given set of assets
+    /// @param assets Set of assets to get the strategies for
+    /// @return IStrategy Interfaces for the corresponding set of strategies
+    function getTokensStrategies(
+        IERC20[] calldata assets
+    ) external view returns (IStrategy[] memory) {
+        IStrategy[] memory strategies = new IStrategy[](assets.length);
+        for (uint256 i = 0; i < assets.length; i++) {
+            IERC20 asset = assets[i];
+            if (address(asset) == address(0)) revert ZeroAddress();
+
+            IStrategy strategy = tokenStrategies[asset];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(asset));
+            }
+
+            strategies[i] = strategy;
+        }
+        
+        return strategies;
+    }
+
     /// @notice Stakes assets to a specific node
     /// @param nodeId The ID of the node to stake to
     /// @param assets Array of asset addresses to stake
@@ -410,7 +436,16 @@ contract LiquidTokenManager is
         ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        stakerNodeCoordinator.delegateStakerNodes(nodeIds, operators, approverSignatureAndExpiries, approverSalts);
+        uint256 arrayLength = nodeIds.length;
+
+        if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
+        if (approverSignatureAndExpiries.length != arrayLength) revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
+        if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
+
+        for (uint256 i = 0; i < arrayLength; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+            node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
+        }
     }
 
     /// @notice Undelegate a set of staker nodes from their operators
@@ -420,13 +455,13 @@ contract LiquidTokenManager is
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
         // Fetch and add all asset balances from the node to queued balances
         for (uint256 i = 0; i < nodeIds.length; i++) {
-            liquidToken.addQueuedAssetBalances(
+            liquidToken.creditQueuedAssetBalances(
                 supportedTokens, 
                 _getAllStakedAssetBalancesNode(stakerNodeCoordinator.getNodeById(nodeIds[i]))
             );
         }
 
-        stakerNodeCoordinator.undelegateStakerNodes(nodeIds);
+        withdrawalManager.undelegateStakerNodes(nodeIds);
     }
 
     /// @notice Gets the staked balance of an asset for all nodes
