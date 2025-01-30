@@ -43,6 +43,9 @@ interface IStakerNode {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager();
 
+    /// @notice Error for no tokens received from withdrawal
+    error NoTokensReceived();
+
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
 
@@ -84,8 +87,7 @@ interface IStakerNode {
     function completeUndelegationWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes,
-        bool receiveAsTokens
+        uint256[] calldata middlewareTimesIndexes
     ) external returns (IERC20[] memory);
 
     /// @notice Returns the address of the current implementation contract

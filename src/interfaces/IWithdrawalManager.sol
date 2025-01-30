@@ -24,13 +24,18 @@ interface IWithdrawalManager {
         IStakerNodeCoordinator stakerNodeCoordinator;
     }
 
-    /// @notice Represents a withdrawal request
+    /// @notice Represents withdrawal request for a user
     struct WithdrawalRequest {
         address user;
         IERC20[] assets;
         uint256[] shareAmounts;
         uint256 requestTime;
-        bool completed;
+    }
+
+    /// @notice Represents withdrawal request for a staker node
+    struct ELWithdrawalRequest {
+        IDelegationManager.Withdrawal withdrawal;
+        IERC20[] assets;
     }
 
     /// @notice Emitted when a withdrawal is requested
@@ -55,7 +60,7 @@ interface IWithdrawalManager {
     event WithdrawalRequested(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
 
     /// @notice Emitted when a set of withdrawals are completed on EigenLayer
-    event ELWithdrawalsCompleted(bytes32 indexed requestId);
+    event ELWithdrawalsCompleted(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
 
     /// @notice Emitted when a set of withdrawals from node undelegation are completed on EigenLayer
     event ELWithdrawalsForUndelegationCompleted(uint256 nodeId, bytes32[] indexed withdrawalRoots);
@@ -77,6 +82,9 @@ interface IWithdrawalManager {
 
     /// @notice Error for invalid withdrawal request
     error InvalidWithdrawalRequest();
+
+    /// @notice Error for invalid withdrawal root
+    error InvalidWithdrawalRoot();
 
     /// @notice Error when withdrawal delay is not met
     error WithdrawalDelayNotMet();
@@ -101,20 +109,13 @@ interface IWithdrawalManager {
         bytes32 requestId
     ) external;
 
-    function requestWithdrawal(
+    function createEigenLayerWithdrawal(
         uint256[] calldata nodeIds,
         IERC20[][] calldata assets,
         uint256[][] calldata shareAmounts,
         bytes32 requestId
     ) external;
 
-    function completeEigenLayerWithdrawals(
-        IDelegationManager.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes,
-        bytes32 requestId
-    ) external;
-    
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(bytes32 requestId) external;
@@ -128,7 +129,6 @@ interface IWithdrawalManager {
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,
         uint256[] calldata middlewareTimesIndexes,
-        bool receiveAsTokens,
         bytes32[] calldata withdrawalRoots
     ) external;
 

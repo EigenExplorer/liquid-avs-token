@@ -122,21 +122,23 @@ contract LiquidToken is
     }
 
     /// @notice Allows users to initiate a withdrawal request against their shares
-    /// @param withdrawAssets The ERC20 assets to withdraw
-    /// @param shareAmounts The number of shares to withdraw for each asset
+    /// @param assets The ERC20 assets to withdraw
+    /// @param amounts The amount of tokens to withdraw for each asset
     function initiateWithdrawal(
-        IERC20[] memory withdrawAssets,
-        uint256[] memory shareAmounts
+        IERC20[] memory assets,
+        uint256[] memory amounts
     ) external nonReentrant whenNotPaused {
-        if (withdrawAssets.length != shareAmounts.length)
+        if (assets.length != amounts.length)
             revert ArrayLengthMismatch();
 
+        if (!_previewWithdrawal(assets, amounts)) revert InvalidWithdrawalRequest();
+
         uint256 totalShares = 0;
-        for (uint256 i = 0; i < withdrawAssets.length; i++) {
-            if (!liquidTokenManager.tokenIsSupported(withdrawAssets[i]))
-                revert UnsupportedAsset(withdrawAssets[i]);
-            if (shareAmounts[i] == 0) revert ZeroAmount();
-            totalShares += shareAmounts[i];
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (!liquidTokenManager.tokenIsSupported(assets[i]))
+                revert UnsupportedAsset(assets[i]);
+            if (amounts[i] == 0) revert ZeroAmount();
+            totalShares += amounts[i];
         }
 
         if (balanceOf(msg.sender) < totalShares)
@@ -151,18 +153,39 @@ contract LiquidToken is
         bytes32 requestId = keccak256(
             abi.encodePacked(
                 msg.sender,
-                withdrawAssets,
-                shareAmounts,
+                assets,
+                amounts,
                 block.timestamp
             )
         );
         withdrawalManager.createWithdrawalRequest(
-            withdrawAssets,
-            shareAmounts,
+            assets,
+            amounts,
             msg.sender,
             requestId
         );
         _withdrawalNonce[msg.sender] += 1;
+    }
+
+    function previewWithdrawal(
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) external view override returns (bool) {
+        return _previewWithdrawal(assets, amounts);
+    }
+
+    function _previewWithdrawal(
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) internal view returns (bool) {
+        bool isPossible = true;
+        for(uint256 i = 0; i < assets.length; i++) {
+            if (liquidTokenManager.getStakedAssetBalance(assets[i]) < amounts[i]) {
+                isPossible = false;
+                break;
+            }
+        }
+        return isPossible;
     }
 
     /// @notice Credits queued balances for a given set of assets
@@ -183,7 +206,7 @@ contract LiquidToken is
         }
     }
 
-    /// @notice Debits queued balances for a given set of assets & burns the corresponding shares
+    /// @notice Debits queued balances for a given set of assets & burns the corresponding shares if taken from user
     /// @param assets The assets to debit
     /// @param amounts The debit amounts expressed in native token
     /// @param sharesToBurn Amount of shares to burn
@@ -197,8 +220,6 @@ contract LiquidToken is
 
         if (assets.length != amounts.length)
             revert ArrayLengthMismatch();
-
-        if (sharesToBurn == 0) revert ZeroAmount();
 
         for (uint256 i = 0; i < assets.length; i++) {
             queuedAssetBalances[address(assets[i])] -= amounts[i];

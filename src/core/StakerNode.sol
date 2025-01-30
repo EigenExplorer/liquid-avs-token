@@ -137,20 +137,13 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     function completeUndelegationWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes,
-        bool receiveAsTokens
+        uint256[] calldata middlewareTimesIndexes
     )   external override onlyRole(STAKER_NODES_WITHDRAWER_ROLE) returns (IERC20[] memory) {
         uint256 arrayLength = withdrawals.length;
         bool[] memory receiveAsTokensArray = new bool[](arrayLength);
 
-        if (receiveAsTokens == true) {
-            for (uint256 i = 0; i < arrayLength; i++) {
-                receiveAsTokensArray[i] = true;
-            }
-        } else {
-            for (uint256 i = 0; i < arrayLength; i++) {
-                receiveAsTokensArray[i] = false;
-            }
+        for (uint256 i = 0; i < arrayLength; i++) {
+            receiveAsTokensArray[i] = true;
         }
 
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -162,30 +155,31 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         );
 
         IERC20[] memory receivedTokens;
-        if (receiveAsTokens) {
-            uint256 totalTokenCount = 0;
-            for (uint256 i = 0; i < tokens.length; i++) {
-                totalTokenCount += tokens[i].length;
-            }
 
-            IERC20[] memory tempTokens = new IERC20[](totalTokenCount);
-            uint256 uniqueCount = 0;
+        uint256 totalTokenCount = 0;
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalTokenCount += tokens[i].length;
+        }
 
-            for (uint256 i = 0; i < tokens.length; i++) {
-                for (uint256 j = 0; j < tokens[i].length; j++) {
-                    IERC20 token = tokens[i][j];
-                    uint256 balance = token.balanceOf(address(this));
-                    if (balance > 0) {
-                        token.safeTransfer(msg.sender, balance);
-                        tempTokens[uniqueCount++] = token;
-                    }
+        IERC20[] memory tempTokens = new IERC20[](totalTokenCount);
+        uint256 uniqueCount = 0;
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            for (uint256 j = 0; j < tokens[i].length; j++) {
+                IERC20 token = tokens[i][j];
+                uint256 balance = token.balanceOf(address(this));
+                if (balance > 0) {
+                    token.safeTransfer(msg.sender, balance);
+                    tempTokens[uniqueCount++] = token;
                 }
             }
+        }
 
-            receivedTokens = new IERC20[](uniqueCount);
-            for (uint256 k = 0; k < uniqueCount; k++) {
-                receivedTokens[k] = tempTokens[k];
-            }
+        if (uniqueCount == 0) revert NoTokensReceived();
+
+        receivedTokens = new IERC20[](uniqueCount);
+        for (uint256 k = 0; k < uniqueCount; k++) {
+            receivedTokens[k] = tempTokens[k];
         }
 
         return receivedTokens;

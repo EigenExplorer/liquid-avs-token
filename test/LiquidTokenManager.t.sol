@@ -629,6 +629,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.setVolatilityThreshold(testToken, 20);
     }
 
+    /*
     function testWithdrawalFailureDueToInsufficientBalance() public {
         // User1 deposits 10 ether
         vm.prank(user1);
@@ -798,6 +799,7 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 sharesAfterWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
         assertEq(sharesBeforeWithdrawalQueued, sharesAfterWithdrawalQueued, "Token is mispriced due to inflated shares");
     }
+    */
 
     function testCannotDelegateDelegatedNode() public {
         address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(

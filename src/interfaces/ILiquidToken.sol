@@ -57,6 +57,9 @@ interface ILiquidToken is IERC20 {
     /// @notice Error for mismatched array lengths
     error ArrayLengthMismatch();
 
+    /// @notice Error for invalid withdrawal request
+    error InvalidWithdrawalRequest();
+
     /// @notice Error for insufficient balance
     error InsufficientBalance(
         IERC20 asset,
@@ -82,13 +85,17 @@ interface ILiquidToken is IERC20 {
         address receiver
     ) external returns (uint256[] memory);
 
+    function previewWithdrawal(
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) external view returns (bool);
 
     /// @notice Allows users to initiate a withdrawal request against their shares
-    /// @param withdrawAssets The ERC20 assets to withdraw
-    /// @param shareAmounts The number of shares to withdraw for each asset
+    /// @param assets The ERC20 assets to withdraw
+    /// @param amounts The amount of tokens to withdraw for each asset
     function initiateWithdrawal(
-        IERC20[] memory withdrawAssets,
-        uint256[] memory shareAmounts
+        IERC20[] memory assets,
+        uint256[] memory amounts
     ) external;
 
     /// @notice Transfers assets to the LiquidTokenManager
