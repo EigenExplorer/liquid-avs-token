@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
@@ -79,6 +80,13 @@ interface IStakerNode {
 
     /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate() external returns (bytes32[] memory);
+
+    function completeUndelegationWithdrawals(
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        uint256[] calldata middlewareTimesIndexes,
+        bool receiveAsTokens
+    ) external returns (IERC20[] memory);
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract

@@ -87,7 +87,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         address operator,
         ISignatureUtils.SignatureWithExpiry memory signature,
         bytes32 approverSalt
-    ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
+    ) external override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
         if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
 
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -99,7 +99,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate()
-        public
+        external
         override
         onlyRole(STAKER_NODES_WITHDRAWER_ROLE)
         returns (bytes32[] memory)
@@ -132,6 +132,63 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
         IDelegationManager delegationManager = coordinator.delegationManager();
         return delegationManager.queueWithdrawals(requestParams)[0];
+    }
+
+    function completeUndelegationWithdrawals(
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        uint256[] calldata middlewareTimesIndexes,
+        bool receiveAsTokens
+    )   external override onlyRole(STAKER_NODES_WITHDRAWER_ROLE) returns (IERC20[] memory) {
+        uint256 arrayLength = withdrawals.length;
+        bool[] memory receiveAsTokensArray = new bool[](arrayLength);
+
+        if (receiveAsTokens == true) {
+            for (uint256 i = 0; i < arrayLength; i++) {
+                receiveAsTokensArray[i] = true;
+            }
+        } else {
+            for (uint256 i = 0; i < arrayLength; i++) {
+                receiveAsTokensArray[i] = false;
+            }
+        }
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        delegationManager.completeQueuedWithdrawals(
+            withdrawals,
+            tokens,
+            middlewareTimesIndexes,
+            receiveAsTokensArray
+        );
+
+        IERC20[] memory receivedTokens;
+        if (receiveAsTokens) {
+            uint256 totalTokenCount = 0;
+            for (uint256 i = 0; i < tokens.length; i++) {
+                totalTokenCount += tokens[i].length;
+            }
+
+            IERC20[] memory tempTokens = new IERC20[](totalTokenCount);
+            uint256 uniqueCount = 0;
+
+            for (uint256 i = 0; i < tokens.length; i++) {
+                for (uint256 j = 0; j < tokens[i].length; j++) {
+                    IERC20 token = tokens[i][j];
+                    uint256 balance = token.balanceOf(address(this));
+                    if (balance > 0) {
+                        token.safeTransfer(msg.sender, balance);
+                        tempTokens[uniqueCount++] = token;
+                    }
+                }
+            }
+
+            receivedTokens = new IERC20[](uniqueCount);
+            for (uint256 k = 0; k < uniqueCount; k++) {
+                receivedTokens[k] = tempTokens[k];
+            }
+        }
+
+        return receivedTokens;
     }
 
     /// @notice Returns the address of the current implementation contract

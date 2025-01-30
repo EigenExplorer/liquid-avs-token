@@ -33,14 +33,15 @@ contract WithdrawalManager is
     bytes32 public constant WITHDRAWAL_CONTROLLER_ROLE =
         keccak256("WITHDRAWAL_CONTROLLER_ROLE");
 
+    IDelegationManager public delegationManager;
     ILiquidToken public liquidToken;
     ILiquidTokenManager public liquidTokenManager;
     IStakerNodeCoordinator public stakerNodeCoordinator;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
 
-    mapping(uint256 => bytes32[]) public undelegationRequests;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
+    mapping(uint256 => bytes32[]) public undelegationRequests;
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -56,6 +57,7 @@ contract WithdrawalManager is
         if (
             address(init.initialOwner) == address(0) ||
             address(init.liquidToken) == address(0) ||
+            address(init.delegationManager) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
             address(init.withdrawalController) == address(0) ||
             address(init.stakerNodeCoordinator) == address(0)
@@ -66,6 +68,7 @@ contract WithdrawalManager is
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(WITHDRAWAL_CONTROLLER_ROLE, init.withdrawalController);
 
+        delegationManager = init.delegationManager;
         liquidToken = init.liquidToken;
         liquidTokenManager = init.liquidTokenManager;
         stakerNodeCoordinator = init.stakerNodeCoordinator;
@@ -85,7 +88,7 @@ contract WithdrawalManager is
             assets: assets,
             shareAmounts: amounts,
             requestTime: block.timestamp,
-            fulfilled: false
+            completed: false
         });
 
         withdrawalRequests[requestId] = request;
@@ -105,12 +108,13 @@ contract WithdrawalManager is
         IERC20[][] calldata assets,
         uint256[][] calldata shareAmounts,
         bytes32 requestId
-    ) external override nonReentrant {
+    ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
         uint256 arrayLength = nodeIds.length;
-        bytes32[] memory withdrawalRoots = new bytes32[](arrayLength);
 
         if (assets.length != arrayLength || shareAmounts.length != arrayLength) 
             revert LengthMismatch();
+        
+        bytes32[] memory withdrawalRoots = new bytes32[](arrayLength);
 
         for (uint256 i = 0; i < arrayLength; i++) {
             if (assets[i].length != shareAmounts[i].length)
@@ -131,26 +135,47 @@ contract WithdrawalManager is
         emit WithdrawalRequested(requestId, withdrawalRoots);
     }
 
-    function fulfillWithdrawalEigenLayer(
-        IDelegationManager.Withdrawal calldata withdrawal,
-        IERC20[] calldata tokens,
-        uint256 middlewareTimesIndex,
+    /// @notice For a given request ID, complete all corresponding withdrawals on EigenLayer and receive funds into the contract
+    function completeEigenLayerWithdrawals(
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        uint256[] calldata middlewareTimesIndexes,
         bytes32 requestId
-    ) external nonReentrant {
+    ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
+        uint256 arrayLength = withdrawals.length;
+        
+        if (tokens.length != arrayLength || middlewareTimesIndexes.length != arrayLength) 
+            revert LengthMismatch();
+        
+        bool[] memory receiveAsTokens = new bool[](arrayLength);
+        for (uint256 i = 0; i < arrayLength; i++) {
+            receiveAsTokens[i] = true;
+        }
 
+        delegationManager.completeQueuedWithdrawals(
+            withdrawals,
+            tokens,
+            middlewareTimesIndexes,
+            receiveAsTokens
+        );
+
+        withdrawalRequests[requestId].completed = true;
+
+        emit ELWithdrawalsCompleted(requestId);
     }
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
-    function fulfillWithdrawalUser(bytes32 requestId) external nonReentrant {
+    function fulfillWithdrawal(
+        bytes32 requestId
+    ) external override nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
         if (request.user != msg.sender) revert InvalidWithdrawalRequest();
         if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
             revert WithdrawalDelayNotMet();
-        if (request.fulfilled) revert WithdrawalAlreadyFulfilled();
+        if (!request.completed) revert ELWithdrawalsNotCompleted(requestId);
 
-        request.fulfilled = true;
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
 
@@ -179,8 +204,8 @@ contract WithdrawalManager is
             asset.safeTransfer(msg.sender, amount);
         }
 
-        // Reduce the corresponding queued asset balances
-        liquidToken.debitAndBurnQueuedAssetBalances(request.assets, amounts, totalShares);
+        // Debit the corresponding queued asset balances and burn shares 
+        liquidToken.debitQueuedAssetBalances(request.assets, amounts, totalShares);
 
         emit WithdrawalFulfilled(
             requestId,
@@ -189,11 +214,15 @@ contract WithdrawalManager is
             amounts,
             block.timestamp
         );
+
+        delete withdrawalRequests[requestId];
     }
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
-    function undelegateStakerNodes(uint256[] calldata nodeIds) external override {
+    function undelegateStakerNodes(
+        uint256[] calldata nodeIds
+    ) external override {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
 
         for (uint256 i = 0; i < nodeIds.length; i++) {
@@ -208,7 +237,60 @@ contract WithdrawalManager is
         }
     }
 
-    function fulfillWithdrawalsFromUndelegation(bytes32[] calldata requestId) external nonReentrant { }
+    /// @notice Complete a set withdrawals related to undelegation on EigenLayer for a specific node 
+    /// @dev Use `receieveAsTokens` to instruct whether the undelegation should trigger assets to be pulled out of EigenLayer
+    /// @dev With undelegation tokens/shares can only be received by the node. In case tokens are received, we transfer them back to `LiquidToken`
+    function completeEigenLayerWithdrawalsForUndelegation(
+        uint256 nodeId,
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        uint256[] calldata middlewareTimesIndexes,
+        bool receiveAsTokens,
+        bytes32[] calldata withdrawalRoots
+    ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
+        bytes32[] storage existingRoots = undelegationRequests[nodeId];
+        if (existingRoots.length == 0) revert InvalidWithdrawalRequest();
+
+        uint256 arrayLength = withdrawals.length;
+        if (
+            tokens.length != arrayLength || 
+            middlewareTimesIndexes.length != arrayLength ||
+            withdrawalRoots.length != arrayLength
+        ) 
+            revert LengthMismatch();
+
+        // Validate that each withdrawal root exists
+        for (uint256 i = 0; i < withdrawalRoots.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < existingRoots.length; j++) {
+                if (existingRoots[j] == withdrawalRoots[i]) {
+                    found = true;
+                    existingRoots[j] = existingRoots[existingRoots.length - 1];
+                    existingRoots.pop();
+                    break;
+                }
+            }
+            if (!found) revert WithdrawalRootNotFound(withdrawalRoots[i]);
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        IERC20[] memory receivedAssets = node.completeUndelegationWithdrawals(
+            withdrawals,
+            tokens,
+            middlewareTimesIndexes,
+            receiveAsTokens
+        );
+        uint256 receivedAssetsLength = receivedAssets.length;
+
+        if (receivedAssetsLength > 0) {
+            for (uint256 k = 0; k < receivedAssetsLength; k++) {
+                IERC20 asset = receivedAssets[k];
+                asset.safeTransfer(address(liquidToken), asset.balanceOf(address(this)));
+            }
+        }
+
+        emit ELWithdrawalsForUndelegationCompleted(nodeId, withdrawalRoots);
+    }
 
     function getUserWithdrawalRequests(
         address user

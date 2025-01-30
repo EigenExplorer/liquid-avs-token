@@ -29,7 +29,7 @@ contract StakerNodeCoordinator is
     uint256 public override maxNodes;
 
     UpgradeableBeacon public upgradeableBeacon;
-    IStakerNode[] private stakerNodes;
+    IStakerNode[] private _stakerNodes;
 
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
@@ -96,7 +96,7 @@ contract StakerNodeCoordinator is
         onlyRole(STAKER_NODE_CREATOR_ROLE)
         returns (IStakerNode)
     {
-        uint256 nodeId = stakerNodes.length;
+        uint256 nodeId = _stakerNodes.length;
 
         if (nodeId >= maxNodes) {
             revert TooManyStakerNodes(maxNodes);
@@ -107,7 +107,7 @@ contract StakerNodeCoordinator is
 
         initializeStakerNode(node, nodeId);
 
-        stakerNodes.push(node);
+        _stakerNodes.push(node);
 
         emit NodeCreated(nodeId, node, msg.sender);
 
@@ -170,10 +170,10 @@ contract StakerNodeCoordinator is
 
         upgradeableBeacon.upgradeTo(_implementationContract);
 
-        uint256 nodeCount = stakerNodes.length;
+        uint256 nodeCount = _stakerNodes.length;
 
         for (uint256 i = 0; i < nodeCount; i++) {
-            initializeStakerNode(IStakerNode(stakerNodes[i]), i);
+            initializeStakerNode(IStakerNode(_stakerNodes[i]), i);
         }
 
         emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, false);
@@ -185,7 +185,7 @@ contract StakerNodeCoordinator is
     function setMaxNodes(
         uint256 _maxNodes
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 nodeCount = stakerNodes.length;
+        uint256 nodeCount = _stakerNodes.length;
         if (_maxNodes < nodeCount) {
             revert MaxNodesLowerThanCurrent(nodeCount, _maxNodes);
         }
@@ -225,13 +225,13 @@ contract StakerNodeCoordinator is
     /// @notice Retrieves all staker nodes
     /// @return An array of all IStakerNode interfaces
     function getAllNodes() public view override returns (IStakerNode[] memory) {
-        return stakerNodes;
+        return _stakerNodes;
     }
 
     /// @notice Gets the total number of staker nodes
     /// @return uint256 The number of staker nodes
     function getStakerNodesCount() public view override returns (uint256) {
-        return stakerNodes.length;
+        return _stakerNodes.length;
     }
 
     /// @notice Retrieves a staker node by its ID
@@ -240,10 +240,10 @@ contract StakerNodeCoordinator is
     function getNodeById(
         uint256 nodeId
     ) public view override returns (IStakerNode) {
-        if (nodeId >= stakerNodes.length) {
+        if (nodeId >= _stakerNodes.length) {
             revert NodeIdOutOfRange(nodeId);
         }
-        return stakerNodes[nodeId];
+        return _stakerNodes[nodeId];
     }
 
     function withdrawerAddress() external view override returns (address) {
