@@ -24,7 +24,7 @@ interface IWithdrawalManager {
         IStakerNodeCoordinator stakerNodeCoordinator;
     }
 
-    /// @notice Represents withdrawal request for a user
+    /// @notice Represents withdrawal request from user to LAT
     struct WithdrawalRequest {
         address user;
         IERC20[] assets;
@@ -32,7 +32,7 @@ interface IWithdrawalManager {
         uint256 requestTime;
     }
 
-    /// @notice Represents withdrawal request for a staker node
+    /// @notice Represents withdrawal request from staker node to EL
     struct ELWithdrawalRequest {
         IDelegationManager.Withdrawal withdrawal;
         IERC20[] assets;
@@ -57,7 +57,7 @@ interface IWithdrawalManager {
     );
 
     /// @notice Emitted when a withdrawal is requested
-    event WithdrawalRequested(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
+    event ELWithdrawalsCreated(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
 
     /// @notice Emitted when a set of withdrawals are completed on EigenLayer
     event ELWithdrawalsCompleted(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
@@ -109,11 +109,11 @@ interface IWithdrawalManager {
         bytes32 requestId
     ) external;
 
-    function createEigenLayerWithdrawal(
+    function createELWithdrawalsforRequest(
+        bytes32 requestId,
         uint256[] calldata nodeIds,
         IERC20[][] calldata assets,
-        uint256[][] calldata shareAmounts,
-        bytes32 requestId
+        uint256[][] calldata shareAmounts
     ) external;
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
@@ -124,7 +124,7 @@ interface IWithdrawalManager {
     /// @param nodeIds The IDs of the staker nodes
     function undelegateStakerNodes(uint256[] calldata nodeIds) external;
 
-    function completeEigenLayerWithdrawalsForUndelegation(
+    function completeELWithdrawalsForUndelegation(
         uint256 nodeId,
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,

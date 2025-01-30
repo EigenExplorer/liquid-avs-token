@@ -104,11 +104,11 @@ contract WithdrawalManager is
         );
     }
 
-    function createEigenLayerWithdrawal(
+    function createELWithdrawalsforRequest(
+        bytes32 requestId,
         uint256[] calldata nodeIds,
         IERC20[][] calldata assets,
-        uint256[][] calldata shareAmounts,
-        bytes32 requestId
+        uint256[][] calldata shareAmounts
     ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
         uint256 arrayLength = nodeIds.length;
 
@@ -159,7 +159,7 @@ contract WithdrawalManager is
         }
 
         requestWithdrawalRoots[requestId] = withdrawalRoots;
-        emit WithdrawalRequested(requestId, withdrawalRoots);
+        emit ELWithdrawalsCreated(requestId, withdrawalRoots);
     }
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
@@ -190,7 +190,7 @@ contract WithdrawalManager is
             delete elWithdrawalRequests[withdrawalRoot];
         }
 
-        _completeEigenLayerWithdrawals(withdrawals, tokens);
+        _completeELWithdrawals(withdrawals, tokens);
 
         emit ELWithdrawalsCompleted(requestId, withdrawalRoots);
 
@@ -219,7 +219,7 @@ contract WithdrawalManager is
             asset.safeTransfer(msg.sender, amount);
         }
 
-        // Debit the corresponding queued asset balances and burn shares 
+        // Reduce the corresponding queued balances and burn escrow shares
         liquidToken.debitQueuedAssetBalances(request.assets, amounts, totalShares);
 
         emit WithdrawalFulfilled(
@@ -235,7 +235,7 @@ contract WithdrawalManager is
     }
 
     /// @notice For a given request ID, complete all corresponding withdrawals on EigenLayer and receive funds into the contract
-    function _completeEigenLayerWithdrawals(
+    function _completeELWithdrawals(
         IDelegationManager.Withdrawal[] memory withdrawals,
         IERC20[][] memory tokens
     ) private nonReentrant {
@@ -278,7 +278,7 @@ contract WithdrawalManager is
     /// @notice Complete a set withdrawals related to undelegation on EigenLayer for a specific node 
     /// @dev Use `receieveAsTokens` to instruct whether the undelegation should trigger assets to be pulled out of EigenLayer
     /// @dev With undelegation tokens/shares can only be received by the node. In case tokens are received, we transfer them to `LiquidToken`
-    function completeEigenLayerWithdrawalsForUndelegation(
+    function completeELWithdrawalsForUndelegation(
         uint256 nodeId,
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,

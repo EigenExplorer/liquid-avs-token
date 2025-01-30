@@ -148,6 +148,7 @@ contract LiquidToken is
                 balanceOf(msg.sender)
             );
 
+        // Receive escrow shares to burn on returning assets to user
         _transfer(msg.sender, address(this), totalShares);
         
         bytes32 requestId = keccak256(
@@ -225,7 +226,7 @@ contract LiquidToken is
             queuedAssetBalances[address(assets[i])] -= amounts[i];
         }
 
-        // Burn the shares that were transferred to the contract during the withdrawal request
+        // Burn escrow shares that were transferred to the contract during the withdrawal request
         _burn(address(this), sharesToBurn);
     }
 
