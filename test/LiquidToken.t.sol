@@ -52,11 +52,13 @@ contract LiquidTokenTest is BaseTest {
 
         // Strategy whitelist
         ISignatureUtils.SignatureWithExpiry memory signature;
-        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
-        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](2);
 
         strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
         thirdPartyTransfersForbiddenValues[0] = false;
+        thirdPartyTransfersForbiddenValues[1] = false;
 
         vm.prank(strategyManager.strategyWhitelister());
         strategyManager.addStrategiesToDepositWhitelist(
@@ -91,180 +93,7 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect token balance in LiquidToken"
         );
     }
-
-    function testWithdrawalFlow() public {
-        // Deposit assets into LiquidToken
-        vm.startPrank(user1);
-        IERC20[] memory depositAssets = new IERC20[](1);
-        depositAssets[0] = testToken;
-        uint256[] memory depositAmounts = new uint256[](1);
-        depositAmounts[0] = 10 ether;
-
-        liquidToken.deposit(depositAssets, depositAmounts, user1);
-        vm.stopPrank();
-        
-        uint256 nodeId = 0;
-        uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 5 ether;
-        IStrategy[] memory strategiesForNode = new IStrategy[](1);
-        strategiesForNode[0] = mockStrategy;
-
-        vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, strategyAmounts);
-
-        // Initiate withdrawal
-        vm.startPrank(user1);
-        IERC20[] memory withdrawAssets = new IERC20[](1);
-        withdrawAssets[0] = testToken;
-        uint256[] memory withdrawAmounts = new uint256[](1);
-
-        withdrawAmounts[0] = 5 ether;
-        liquidToken.initiateWithdrawal(withdrawAssets, withdrawAmounts);
-        
-        vm.stopPrank();
-
-        // Check shares escrowed
-        assertEq(liquidToken.balanceOf(user1), 5 ether, "Shares not escrowed");
-
-        // Retrieve withdrawal request
-        bytes32[] memory requests = withdrawalManager.getUserWithdrawalRequests(user1);
-        assertEq(requests.length, 1, "Withdrawal request not created");
-        bytes32 requestId = requests[0];
-
-        // Create EigenLayer withdrawals (WithdrawalController)
-        vm.prank(admin);
-        uint256[] memory nodeIds = new uint256[](1); // Assume nodeId 0
-        nodeIds[0] = 0;
-
-        IERC20[][] memory tokens = new IERC20[][](1);
-        tokens[0] = withdrawAssets;
-
-        uint256[][] memory shares = new uint256[][](1);
-        shares[0] = withdrawAmounts;
-
-        withdrawalManager.createELWithdrawalsforRequest(
-            requestId,
-            nodeIds,
-            tokens,
-            shares
-        );
-
-        // Simulate assets arriving in WithdrawalManager
-        uint256 expectedAssets = liquidToken.calculateAmount(testToken, 5 ether);
-        deal(address(testToken), address(withdrawalManager), expectedAssets);
-
-        // Fast-forward past withdrawal delay
-        vm.warp(block.timestamp + 15 days);
-        vm.roll(block.number + 15 * 24 * 60 * 60 * 8); 
-
-        // Fulfill withdrawal
-        vm.prank(user1);
-        withdrawalManager.fulfillWithdrawal(requestId);
-
-        // Verify final balances
-        assertEq(
-            testToken.balanceOf(user1), 
-            95 ether,
-            "Assets not returned to user"
-        );
-        assertEq(
-            liquidToken.balanceOf(user1),
-            5 ether,
-            "Shares not burned correctly"
-        );
-    }
-
-    /* 
-    function testRequestWithdrawal() public {
-        vm.startPrank(user1);
-
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
-
-        uint256[] memory amountsToDeposit = new uint256[](1);
-        amountsToDeposit[0] = 10 ether;
-
-        liquidToken.deposit(assets, amountsToDeposit, user1);
-
-        uint256[] memory amountsToWithdraw = new uint256[](1);
-        amountsToWithdraw[0] = 5 ether;
-
-        liquidToken.approve(user1, amountsToWithdraw[0]);
-        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
-        vm.stopPrank();
-
-        assertEq(
-            liquidToken.balanceOf(user1),
-            5 ether,
-            "Incorrect balance after withdrawal request"
-        );
-    }
-
-    function testFulfillWithdrawal() public {
-        vm.startPrank(user1);
-
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
-        uint256[] memory amountsToDeposit = new uint256[](1);
-        amountsToDeposit[0] = 10 ether;
-
-        liquidToken.deposit(assets, amountsToDeposit, user1);
-
-        uint256[] memory amountsToWithdraw = new uint256[](1);
-        amountsToWithdraw[0] = 5 ether;
-
-        liquidToken.approve(user1, amountsToWithdraw[0]);
-        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
-
-        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
-
-        // Record the total supply and total assets before fulfillment
-        uint256 totalSupplyBefore = liquidToken.totalSupply();
-        uint256 totalAssetsBefore = liquidToken.totalAssets();
-
-        // Fast forward time
-        vm.warp(block.timestamp + 15 days);
-
-        liquidToken.fulfillWithdrawal(requestId);
-        vm.stopPrank();
-
-        // Assert that User1's token balance is correct after withdrawal
-        assertEq(
-            testToken.balanceOf(user1),
-            95 ether,
-            "Incorrect token balance after withdrawal"
-        );
-
-        // Check if the correct amount of tokens were burned
-        assertEq(
-            liquidToken.totalSupply(),
-            totalSupplyBefore - 5 ether,
-            "Incorrect total supply after withdrawal (tokens not burned)"
-        );
-
-        // Check the user's remaining balance
-        assertEq(
-            liquidToken.balanceOf(user1),
-            5 ether,
-            "Incorrect remaining balance after withdrawal"
-        );
-
-        // Check that the contract's balance of liquid tokens has decreased
-        assertEq(
-            liquidToken.balanceOf(address(liquidToken)),
-            0,
-            "Contract should not hold any liquid tokens after fulfillment"
-        );
-
-        // Assert that the total assets reduces after the withdrawal
-        assertEq(
-            liquidToken.totalAssets(),
-            totalAssetsBefore - 5 ether,
-            "Incorrect total assets after withdrawal"
-        );
-    }
-    */
-
+    
     function testTransferAssets() public {
         vm.prank(user1);
 
@@ -322,80 +151,6 @@ contract LiquidTokenTest is BaseTest {
         );
         vm.stopPrank();
     }
-
-    /*
-    function testRequestWithdrawalMultipleAssets() public {
-        vm.startPrank(user1);
-
-        IERC20[] memory assets = new IERC20[](2);
-        assets[0] = IERC20(address(testToken));
-        assets[1] = IERC20(address(testToken2));
-        uint256[] memory amountsToDeposit = new uint256[](2);
-        amountsToDeposit[0] = 10 ether;
-        amountsToDeposit[1] = 5 ether;
-
-        testToken.approve(address(liquidToken), 10 ether);
-        testToken2.approve(address(liquidToken), 5 ether);
-
-        liquidToken.deposit(assets, amountsToDeposit, user1);
-
-        uint256[] memory amountsToWithdraw = new uint256[](2);
-        amountsToWithdraw[0] = 5 ether;
-        amountsToWithdraw[1] = 2 ether;
-
-        liquidToken.approve(user1, 7 ether);
-        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
-        vm.stopPrank();
-
-        assertEq(
-            liquidToken.balanceOf(user1),
-            8 ether,
-            "Incorrect balance after withdrawal request"
-        );
-    }
-
-    function testFulfillWithdrawalMultipleAssets() public {
-        vm.startPrank(user1);
-
-        IERC20[] memory assets = new IERC20[](2);
-        assets[0] = IERC20(address(testToken));
-        assets[1] = IERC20(address(testToken2));
-        uint256[] memory amountsToDeposit = new uint256[](2);
-        amountsToDeposit[0] = 10 ether;
-        amountsToDeposit[1] = 5 ether;
-
-        testToken.approve(address(liquidToken), 10 ether);
-        testToken2.approve(address(liquidToken), 5 ether);
-
-        liquidToken.deposit(assets, amountsToDeposit, user1);
-
-        uint256[] memory amountsToWithdraw = new uint256[](2);
-        amountsToWithdraw[0] = 5 ether;
-        amountsToWithdraw[1] = 2 ether;
-
-        liquidToken.approve(user1, 7 ether);
-        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
-
-        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
-
-        // Fast forward time
-        vm.warp(block.timestamp + 15 days);
-
-        liquidToken.fulfillWithdrawal(requestId);
-        vm.stopPrank();
-
-        assertEq(
-            testToken.balanceOf(user1),
-            95 ether,
-            "Incorrect token1 balance after withdrawal"
-        );
-        assertEq(
-            testToken2.balanceOf(user1),
-            97 ether,
-            "Incorrect token2 balance after withdrawal"
-        );
-    }
-    */
 
     function testTransferMultipleAssets() public {
         vm.startPrank(user1);
@@ -495,6 +250,184 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
+    function testInitiateWithdrawalWhenAssetsNotStaked() public {
+        
+    }
+
+    function testInitiateWithdrawalWhenAssetStaked() public {
+        
+    }
+
+    function testFulfillWithdrawal() public {
+        vm.startPrank(user1);
+        IERC20[] memory depositAssets = new IERC20[](1);
+        depositAssets[0] = testToken;
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = 10 ether;
+
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+        vm.stopPrank();
+        
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 5 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, strategyAmounts);
+
+        // Initiate withdrawal
+        vm.startPrank(user1);
+        IERC20[] memory withdrawAssets = new IERC20[](1);
+        withdrawAssets[0] = testToken;
+
+        uint256[] memory withdrawAmounts = new uint256[](1);
+        withdrawAmounts[0] = 5 ether;
+
+        liquidToken.initiateWithdrawal(withdrawAssets, withdrawAmounts);
+        
+        vm.stopPrank();
+
+        // Check shares escrowed
+        assertEq(liquidToken.balanceOf(user1), 5 ether, "Shares not escrowed");
+
+        // Retrieve withdrawal request
+        bytes32[] memory requests = withdrawalManager.getUserWithdrawalRequests(user1);
+        assertEq(requests.length, 1, "Withdrawal request not created");
+        bytes32 requestId = requests[0];
+
+        // Create EigenLayer withdrawals (WithdrawalController)
+        vm.prank(admin);
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+
+        IERC20[][] memory tokens = new IERC20[][](1);
+        tokens[0] = withdrawAssets;
+
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = withdrawAmounts;
+
+        withdrawalManager.createELWithdrawalsforRequest(
+            requestId,
+            nodeIds,
+            tokens,
+            shares
+        );
+
+        // Fast-forward past withdrawal delay
+        vm.warp(block.timestamp + 15 days);
+        vm.roll(block.number + 15 * 24 * 60 * 60 * 8); 
+
+        // Fulfill withdrawal
+        vm.prank(user1);
+        withdrawalManager.fulfillWithdrawal(requestId);
+
+        // Verify final balances
+        assertEq(
+            testToken.balanceOf(user1), 
+            95 ether,
+            "Assets not returned to user"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1),
+            5 ether,
+            "Shares not burned correctly"
+        );
+    }
+
+    function testFulfillWithdrawalMultipleAssets() public {
+        vm.startPrank(user1);
+
+        IERC20[] memory depositAssets = new IERC20[](2);
+        depositAssets[0] = IERC20(address(testToken));
+        depositAssets[1] = IERC20(address(testToken2));
+        uint256[] memory depositAmounts = new uint256[](2);
+        depositAmounts[0] = 10 ether;
+        depositAmounts[1] = 5 ether;
+
+        testToken.approve(address(liquidToken), 10 ether);
+        testToken2.approve(address(liquidToken), 5 ether);
+
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+        vm.stopPrank();
+        
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](2);
+        strategyAmounts[0] = 10 ether;
+        strategyAmounts[1] = 5 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](2);
+        strategiesForNode[0] = mockStrategy;
+        strategiesForNode[1] = mockStrategy2;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, depositAmounts);
+
+        // Initiate withdrawal
+        vm.startPrank(user1);
+        IERC20[] memory withdrawAssets = new IERC20[](2);
+        withdrawAssets[0] = testToken;
+        withdrawAssets[1] = testToken2;
+
+        uint256[] memory withdrawAmounts = new uint256[](2);
+        withdrawAmounts[0] = 10 ether;
+        withdrawAmounts[1] = 5 ether;
+        liquidToken.initiateWithdrawal(withdrawAssets, withdrawAmounts);
+        
+        vm.stopPrank();
+
+        // Check shares escrowed
+        assertEq(liquidToken.balanceOf(user1), 0 ether, "Shares not escrowed");
+
+        // Retrieve withdrawal request
+        bytes32[] memory requests = withdrawalManager.getUserWithdrawalRequests(user1);
+        assertEq(requests.length, 1, "Withdrawal request not created");
+        bytes32 requestId = requests[0];
+
+        // Create EigenLayer withdrawals (WithdrawalController)
+        vm.prank(admin);
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+
+        IERC20[][] memory tokens = new IERC20[][](1);
+        tokens[0] = withdrawAssets;
+
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = withdrawAmounts;
+
+        withdrawalManager.createELWithdrawalsforRequest(
+            requestId,
+            nodeIds,
+            tokens,
+            shares
+        );
+
+        // Fast-forward past withdrawal delay
+        vm.warp(block.timestamp + 15 days);
+        vm.roll(block.number + 15 * 24 * 60 * 60 * 8); 
+
+        // Fulfill withdrawal
+        vm.prank(user1);
+        withdrawalManager.fulfillWithdrawal(requestId);
+
+        // Verify final balances
+        assertEq(
+            testToken.balanceOf(user1), 
+            100 ether,
+            "Assets not returned to user"
+        );
+        assertEq(
+            testToken2.balanceOf(user1), 
+            100 ether,
+            "Assets not returned to user"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1),
+            0 ether,
+            "Shares not burned correctly"
+        );
+    }
+
     /*
     function testRequestWithdrawalArrayLengthMismatch() public {
         IERC20[] memory assets = new IERC20[](1);
@@ -557,25 +490,25 @@ contract LiquidTokenTest is BaseTest {
     }
 
     function testInvalidWithdrawalRequest() public {
-            IERC20[] memory assets = new IERC20[](1);
-            assets[0] = IERC20(address(testToken));
-            uint256[] memory amountsToDeposit = new uint256[](1);
-            amountsToDeposit[0] = 10 ether;
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
 
-            vm.startPrank(user1);
-            liquidToken.deposit(assets, amountsToDeposit, user1);
-            
-            uint256[] memory amountsToWithdraw = new uint256[](1);
-            amountsToWithdraw[0] = 5 ether;
-            liquidToken.requestWithdrawal(assets, amountsToWithdraw);
-            vm.stopPrank();
+        vm.startPrank(user1);
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+        
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 5 ether;
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+        vm.stopPrank();
 
-            // User2 attempts to fulfill User1's withdrawal request
-            bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+        // User2 attempts to fulfill User1's withdrawal request
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
 
-            vm.prank(user2);
-            vm.expectRevert(ILiquidToken.InvalidWithdrawalRequest.selector);
-            liquidToken.fulfillWithdrawal(requestId);
+        vm.prank(user2);
+        vm.expectRevert(ILiquidToken.InvalidWithdrawalRequest.selector);
+        liquidToken.fulfillWithdrawal(requestId);
     }
 
     function testWithdrawalAlreadyFulfilled() public {

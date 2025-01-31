@@ -48,6 +48,9 @@ interface ILiquidToken is IERC20 {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
 
+    /// @notice Error for invalid funds recepient
+    error InvalidReceiver(address receiver);
+
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address sender);
 
@@ -101,9 +104,11 @@ interface ILiquidToken is IERC20 {
     /// @notice Transfers assets to the LiquidTokenManager
     /// @param assetsToRetrieve The assets to transfer
     /// @param amounts The amounts to transfer
+    /// @param receiver
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
-        uint256[] calldata amounts
+        uint256[] calldata amounts,
+        address receiver
     ) external;
 
     /// @notice Credits queued balances for a given set of assets

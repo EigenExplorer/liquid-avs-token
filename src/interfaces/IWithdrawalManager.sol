@@ -24,18 +24,25 @@ interface IWithdrawalManager {
         IStakerNodeCoordinator stakerNodeCoordinator;
     }
 
-    /// @notice Represents withdrawal request from user to LAT
+    /// @notice Represents withdrawal request from user
     struct WithdrawalRequest {
         address user;
         IERC20[] assets;
         uint256[] shareAmounts;
         uint256 requestTime;
+        bool canFulfill;
     }
 
     /// @notice Represents withdrawal request from staker node to EL
     struct ELWithdrawalRequest {
         IDelegationManager.Withdrawal withdrawal;
         IERC20[] assets;
+    }
+
+    /// @notice Represents a set of request ids and the withdrawal roots they depend upon
+    struct Redemption {
+        bytes32[] requestIds;
+        bytes32[] withdrawalRoots;
     }
 
     /// @notice Emitted when a withdrawal is requested
@@ -55,9 +62,6 @@ interface IWithdrawalManager {
         uint256[] amounts,
         uint256 timestamp
     );
-
-    /// @notice Emitted when a withdrawal is requested
-    event ELWithdrawalsCreated(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
 
     /// @notice Emitted when a set of withdrawals are completed on EigenLayer
     event ELWithdrawalsCompleted(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
@@ -83,14 +87,20 @@ interface IWithdrawalManager {
     /// @notice Error for invalid withdrawal request
     error InvalidWithdrawalRequest();
 
-    /// @notice Error for invalid withdrawal root
-    error InvalidWithdrawalRoot();
-
     /// @notice Error when withdrawal delay is not met
     error WithdrawalDelayNotMet();
 
     /// @notice Error when withdrawal root is not found
     error WithdrawalRootNotFound(bytes32 withdrawalRoot);
+
+    /// @notice Error for withdrawal request not found
+    error WithdrawalRequestNotFound(bytes32 requestId);
+
+    /// @notice Error for EL withdrawal request not found
+    error ELWithdrawalRequestNotFound(bytes32 withdrawalRoot);
+
+    /// @notice Error for redemption not found
+    error RedemptionNotFound(bytes32 redemptionId);
 
     /// @notice Error when withdrawals on EigenLayer haven't been completed
     error ELWithdrawalsNotCompleted(bytes32 requestId);
@@ -109,11 +119,21 @@ interface IWithdrawalManager {
         bytes32 requestId
     ) external;
 
-    function createELWithdrawalsforRequest(
-        bytes32 requestId,
-        uint256[] calldata nodeIds,
-        IERC20[][] calldata assets,
-        uint256[][] calldata shareAmounts
+    function recordELWithdrawalCreated(
+        bytes32 withdrawalRoot,
+        IDelegationManager.Withdrawal calldata withdrawal,
+        IERC20[] calldata assets
+    ) external;
+
+    function recordRedemptionCreated(
+        bytes32 redemptionId,
+        bytes32[] calldata requestIds,
+        bytes32[] calldata withdrawalRoots
+    ) external;
+
+    function recordRedemptionCompleted(
+        bytes32 redemptionId,
+        bytes32[] calldata requestIds
     ) external;
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
@@ -136,8 +156,10 @@ interface IWithdrawalManager {
     /// @return An array of withdrawal request IDs
     function getUserWithdrawalRequests(address user) external view returns (bytes32[] memory);
 
-    /// @notice Returns the details of a withdrawal request
-    /// @param requestId The ID of the withdrawal request
-    /// @return The withdrawal request details
-    function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);
+
+    function getWithdrawalRequests(bytes32[] calldata requestIds) external view returns (WithdrawalRequest[] memory);
+
+    function getELWithdrawalRequests(bytes32[] calldata withdrawalRoots) external view returns (ELWithdrawalRequest[] memory);
+
+    function getRedemption(bytes32 redemptionId) external view returns (Redemption memory);
 }

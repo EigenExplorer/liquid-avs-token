@@ -72,6 +72,27 @@ interface ILiquidTokenManager {
         address indexed depositor
     );
 
+    event RedemptionCreated(
+        bytes32 redemptionId,
+        bytes32[] requestIds,
+        bytes32[] withdrawalRoots,
+        uint256[] nodeIds
+    );
+
+    event RedemptionCompleted(bytes32 redemptionId);
+
+    /// @notice Emitted when a token is removed from the registry
+    event TokenRemoved(IERC20 indexed token, address indexed remover);
+
+    /// @notice Emitted when a token's price is updated
+    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
+
+    /// @notice Emitted when the volatility threshold for an asset is updated
+    event VolatilityThresholdUpdated(IERC20 indexed asset, uint256 oldThreshold, uint256 newThreshold, address indexed updatedBy);
+
+    /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
+    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
+
     /// @notice Error for zero address
     error ZeroAddress();
 
@@ -86,18 +107,6 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when attempting to remove a token that is currently in use
     error TokenInUse(IERC20 token);
-
-    /// @notice Emitted when a token is removed from the registry
-    event TokenRemoved(IERC20 indexed token, address indexed remover);
-
-    /// @notice Emitted when a token's price is updated
-    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
-
-    /// @notice Emitted when the volatility threshold for an asset is updated
-    event VolatilityThresholdUpdated(IERC20 indexed asset, uint256 oldThreshold, uint256 newThreshold, address indexed updatedBy);
-
-    /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
-    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
 
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
@@ -116,6 +125,18 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when an invalid volatility threshold is provided
     error InvalidThreshold();
+
+    /// @notice Error for invalid withdrawal root
+    error InvalidWithdrawalRoot();
+
+    error ExpectedAmountNotReceived(
+        address token,
+        uint256 expectedAmount,
+        uint256 actualBalance
+    );
+    
+    /// @notice Error when withdrawal root is missing from redemption fulfilment
+    error WithdrawalRootMissing(bytes32 withdrawalRoot);
 
     /// @notice Error thrown when a price update fails due to change exceeding the volatility threshold
     error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
@@ -177,13 +198,6 @@ interface ILiquidTokenManager {
     /// @return The IStrategy interface for the corresponding strategy
     function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
 
-    /// @notice Returns the set of strategies for a given set of assets
-    /// @param assets Set of assets to get the strategies for
-    /// @return IStrategy Interfaces for the corresponding set of strategies
-    function getTokensStrategies(
-        IERC20[] calldata assets
-    ) external returns (IStrategy[] memory);
-
     /// @notice Stakes assets to a specific node
     /// @param nodeId The ID of the node to stake to
     /// @param assets The assets to stake
@@ -197,6 +211,22 @@ interface ILiquidTokenManager {
     /// @notice Stakes assets to multiple nodes
     /// @param allocations The allocations of assets to nodes
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
+
+    /// @notice Enables settlement of a set withdrawal requests by directing funds from `LiquidToken` and staker nodes into `WithdrawalManager`
+    function createRedemption(
+        bytes32[] calldata requestIds,
+        IERC20[] calldata ltAssets,
+        uint256[] calldata ltAmounts,
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata elAssets,
+        uint256[][] calldata elShares
+    ) external;
+
+    function completeRedemption (
+        bytes32 redemptionId,
+        uint256[] calldata nodeIds,
+        bytes32[][] calldata withdrawalRoots
+    ) external;
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for

@@ -118,7 +118,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     function withdraw(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
         external
         override
-        onlyRole(STAKER_NODES_WITHDRAWER_ROLE)
+        onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
         returns (bytes32)
     {
         IDelegationManager.QueuedWithdrawalParams[] memory requestParams = 
@@ -137,7 +137,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     function completeWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens
-    )   external override onlyRole(STAKER_NODES_WITHDRAWER_ROLE) returns (IERC20[] memory) {
+    )   external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) returns (IERC20[] memory) {
         uint256 arrayLength = withdrawals.length;
         bool[] memory receiveAsTokensArray = new bool[](arrayLength);
         uint256[] memory middlewareTimesIndexes = new uint256[](arrayLength);

@@ -237,15 +237,20 @@ contract LiquidToken is
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
     /// @param assetsToRetrieve The ERC20 assets to transfer
     /// @param amounts The amounts of each asset to transfer
+    /// @param receiver
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
-        uint256[] calldata amounts
+        uint256[] calldata amounts,
+        address receiver
     ) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager))
             revert NotLiquidTokenManager(msg.sender);
 
         if (assetsToRetrieve.length != amounts.length)
             revert ArrayLengthMismatch();
+
+        if (receiver != address(liquidTokenManager) || receiver != address(withdrawalManager))
+            revert InvalidReceiver(receiver);
 
         for (uint256 i = 0; i < assetsToRetrieve.length; i++) {
             IERC20 asset = assetsToRetrieve[i];
@@ -262,7 +267,7 @@ contract LiquidToken is
                 );
 
             assetBalances[address(asset)] -= amount;
-            asset.safeTransfer(address(liquidTokenManager), amount);
+            asset.safeTransfer(receiver, amount);
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
@@ -274,7 +279,7 @@ contract LiquidToken is
             emit AssetTransferred(
                 asset,
                 amount,
-                address(liquidTokenManager),
+                receiver,
                 msg.sender
             );
         }
