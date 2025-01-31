@@ -181,7 +181,11 @@ contract LiquidToken is
     ) internal view returns (bool) {
         bool isPossible = true;
         for(uint256 i = 0; i < assets.length; i++) {
-            if (liquidTokenManager.getStakedAssetBalance(assets[i]) < amounts[i]) {
+            IERC20 asset = assets[i];
+            if (
+                (assetBalances[address(asset)] + liquidTokenManager.getStakedAssetBalance(assets[i])) < 
+                amounts[i]
+            ) {
                 isPossible = false;
                 break;
             }

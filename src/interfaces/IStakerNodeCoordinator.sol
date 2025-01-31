@@ -123,8 +123,6 @@ interface IStakerNodeCoordinator {
     /// @return The IStakerNode interface of the staker node
     function getNodeById(uint256 nodeId) external view returns (IStakerNode);
 
-    function withdrawerAddress() external view returns (address);
-
     /// @notice Gets the delegation manager contract
     /// @return The IDelegationManager interface
     function delegationManager() external view returns (IDelegationManager);

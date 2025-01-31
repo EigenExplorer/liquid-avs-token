@@ -127,20 +127,20 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         requestParams[0] = IDelegationManager.QueuedWithdrawalParams({
             strategies: strategies,
             shares: shareAmounts,
-            withdrawer: coordinator.withdrawerAddress()
+            withdrawer: address(this)
         });
 
         IDelegationManager delegationManager = coordinator.delegationManager();
         return delegationManager.queueWithdrawals(requestParams)[0];
     }
 
-    function completeUndelegationWithdrawals(
+    function completeWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes
+        IERC20[][] calldata tokens
     )   external override onlyRole(STAKER_NODES_WITHDRAWER_ROLE) returns (IERC20[] memory) {
         uint256 arrayLength = withdrawals.length;
         bool[] memory receiveAsTokensArray = new bool[](arrayLength);
+        uint256[] memory middlewareTimesIndexes = new uint256[](arrayLength);
 
         for (uint256 i = 0; i < arrayLength; i++) {
             receiveAsTokensArray[i] = true;

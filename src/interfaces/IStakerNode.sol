@@ -84,10 +84,9 @@ interface IStakerNode {
     /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate() external returns (bytes32[] memory);
 
-    function completeUndelegationWithdrawals(
+    function completeWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes
+        IERC20[][] calldata tokens
     ) external returns (IERC20[] memory);
 
     /// @notice Returns the address of the current implementation contract

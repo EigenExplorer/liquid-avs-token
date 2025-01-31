@@ -36,6 +36,7 @@ contract BaseTest is Test {
     TokenRegistryOracle public tokenRegistryOracle;
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
+    WithdrawalManager public withdrawalManager;
 
     // Mock contracts
     MockERC20 public testToken;
@@ -54,6 +55,7 @@ contract BaseTest is Test {
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
+    WithdrawalManager private _withdrawalManagerImplementation;
     StakerNode private _stakerNodeImplementation;
 
     function setUp() public virtual {
@@ -92,6 +94,7 @@ contract BaseTest is Test {
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
+        _withdrawalManagerImplementation = new WithdrawalManager();
         _stakerNodeImplementation = new StakerNode();
     }
 
@@ -132,12 +135,22 @@ contract BaseTest is Test {
                 )
             )
         );
+        withdrawalManager = WithdrawalManager(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(_withdrawalManagerImplementation),
+                    address(admin),
+                    ""
+                )
+            )
+        );
     }
 
     function _initializeProxies() private {
         _initializeTokenRegistryOracle();
         _initializeLiquidTokenManager();
         _initializeStakerNodeCoordinator();
+        _initializeWithdrawalManager();
         _initializeLiquidToken();
     }
 
@@ -156,6 +169,7 @@ contract BaseTest is Test {
             tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
             strategies: new IStrategy[](2),
             liquidToken: liquidToken,
+            withdrawalManager: withdrawalManager,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
@@ -186,7 +200,8 @@ contract BaseTest is Test {
             symbol: "LST",
             initialOwner: admin,
             pauser: pauser,
-            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),
+            withdrawalManager: withdrawalManager
         });
         liquidToken.initialize(init);
     }
@@ -194,18 +209,32 @@ contract BaseTest is Test {
     function _initializeStakerNodeCoordinator() private {
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: withdrawalManager,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin
+            stakerNodesDelegator: admin,
+            stakerNodesWithdrawer: address(withdrawalManager)
         });
         stakerNodeCoordinator.initialize(init);
         stakerNodeCoordinator.registerStakerNodeImplementation(
             address(_stakerNodeImplementation)
         );
+    }
+
+    function _initializeWithdrawalManager() private {
+        IWithdrawalManager.Init memory init = IWithdrawalManager.Init({
+            initialOwner: admin,
+            withdrawalController: admin,
+            delegationManager: delegationManager,
+            liquidToken: liquidToken,
+            liquidTokenManager: liquidTokenManager,
+            stakerNodeCoordinator: stakerNodeCoordinator
+        });
+        withdrawalManager.initialize(init);
     }
 
     function _setupTestTokens() private {

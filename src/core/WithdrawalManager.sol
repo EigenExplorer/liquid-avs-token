@@ -38,11 +38,12 @@ contract WithdrawalManager is
     ILiquidTokenManager public liquidTokenManager;
     IStakerNodeCoordinator public stakerNodeCoordinator;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
-
+    
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
-    mapping(address => bytes32[]) public userWithdrawalRequests;
-    mapping(bytes32 => bytes32[]) public requestWithdrawalRoots;
+    mapping(bytes32 => mapping(uint256 => bytes32)) public requestNodeRoots;
+    mapping(bytes32 => uint256[]) public requestNodes;
     mapping(bytes32 => ELWithdrawalRequest) public elWithdrawalRequests;
+    mapping(address => bytes32[]) public userWithdrawalRequests;
     mapping(uint256 => bytes32[]) public undelegationRequests;
 
     /// @dev Disables initializers for the implementation contract
@@ -111,55 +112,85 @@ contract WithdrawalManager is
         uint256[][] calldata shareAmounts
     ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
         uint256 arrayLength = nodeIds.length;
-
         if (assets.length != arrayLength || shareAmounts.length != arrayLength) 
             revert LengthMismatch();
+            
+        for (uint256 i = 0; i < arrayLength; i++) {
+            if (assets[i].length != shareAmounts[i].length)
+                revert LengthMismatch();
+        }
         
+        bytes32[] memory withdrawalRoots = _createELWithdrawals(
+            requestId,
+            nodeIds,
+            assets,
+            shareAmounts
+        );
+        
+        emit ELWithdrawalsCreated(requestId, withdrawalRoots);
+    }
+
+    function _createELWithdrawals(
+        bytes32 requestId,
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata assets,
+        uint256[][] calldata shareAmounts
+    ) private returns (bytes32[] memory) {
+        uint256 arrayLength = nodeIds.length;
         bytes32[] memory withdrawalRoots = new bytes32[](arrayLength);
 
         for (uint256 i = 0; i < arrayLength; i++) {
-            uint256[] memory sharesArray = shareAmounts[i];
-            IERC20[] memory assetsArray = assets[i];
-            if (assetsArray.length != sharesArray.length)
-                revert LengthMismatch();
-
-            IStrategy[] memory strategies = liquidTokenManager.getTokensStrategies(assets[i]);
-            IStakerNode node = stakerNodeCoordinator.getNodeById(nodeIds[i]);
-            address staker = address(node);
-            uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(staker);
-            address delegatedTo = node.getOperatorDelegation();
-
-            // NOTE: This will fail on EigenLayer contracts if the node doesn't have the shares implied by the input parameters
-            bytes32 withdrawalRoot = node.withdraw(strategies, shareAmounts[i]);            
-
-            IDelegationManager.Withdrawal memory withdrawal = IDelegationManager.Withdrawal({
-                staker: staker,
-                delegatedTo: delegatedTo,
-                withdrawer: address(this),
-                nonce: nonce,
-                startBlock: uint32(block.number),
-                strategies: strategies,
-                shares: sharesArray
-            });
-
-            if (withdrawalRoot != keccak256(abi.encode(withdrawal))) revert InvalidWithdrawalRoot();
-
-            ELWithdrawalRequest memory elRequest = ELWithdrawalRequest({
-                withdrawal: withdrawal,
-                assets: assetsArray
-            });
-
-            withdrawalRoots[i] = withdrawalRoot;
-            elWithdrawalRequests[withdrawalRoot] = elRequest;
-
-            liquidToken.creditQueuedAssetBalances(
-                assetsArray,
-                sharesArray
+            withdrawalRoots[i] = _createELWithdrawal(
+                requestId,
+                nodeIds[i],
+                assets[i],
+                shareAmounts[i]
             );
         }
 
-        requestWithdrawalRoots[requestId] = withdrawalRoots;
-        emit ELWithdrawalsCreated(requestId, withdrawalRoots);
+        return withdrawalRoots;
+    }
+
+    function _createELWithdrawal(
+        bytes32 requestId,
+        uint256 nodeId,
+        IERC20[] memory assetsArray,
+        uint256[] memory sharesArray
+    ) private returns (bytes32) {
+        IStrategy[] memory strategies = liquidTokenManager.getTokensStrategies(assetsArray);
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        
+        address staker = address(node);
+        uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(staker);
+        address delegatedTo = node.getOperatorDelegation();
+        
+        bytes32 withdrawalRoot = node.withdraw(strategies, sharesArray);
+
+        IDelegationManager.Withdrawal memory withdrawal = IDelegationManager.Withdrawal({
+            staker: staker,
+            delegatedTo: delegatedTo,
+            withdrawer: staker,
+            nonce: nonce,
+            startBlock: uint32(block.number),
+            strategies: strategies,
+            shares: sharesArray
+        });
+
+        if (withdrawalRoot != keccak256(abi.encode(withdrawal))) 
+            revert InvalidWithdrawalRoot();
+
+        ELWithdrawalRequest memory elRequest = ELWithdrawalRequest({
+            withdrawal: withdrawal,
+            assets: assetsArray
+        });
+        
+        requestNodeRoots[requestId][nodeId] = withdrawalRoot;
+        requestNodes[requestId].push(nodeId);
+        elWithdrawalRequests[withdrawalRoot] = elRequest;
+
+        liquidToken.creditQueuedAssetBalances(assetsArray, sharesArray);
+        
+        return withdrawalRoot;
     }
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
@@ -176,21 +207,16 @@ contract WithdrawalManager is
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
 
-        bytes32[] memory withdrawalRoots = requestWithdrawalRoots[requestId];
-        uint256 requestsLength = withdrawalRoots.length;
+        uint256[] memory nodeIds = requestNodes[requestId];
+        bytes32[] memory withdrawalRoots = new bytes32[](nodeIds.length);
 
-        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](requestsLength);
-        IERC20[][] memory tokens = new IERC20[][](requestsLength);
-
-        for (uint256 i = 0; i < requestsLength; i++) {
-            bytes32 withdrawalRoot = withdrawalRoots[i];
-            ELWithdrawalRequest memory elRequest = elWithdrawalRequests[withdrawalRoot];
-            withdrawals[i] = elRequest.withdrawal;
-            tokens[i] = elRequest.assets;
-            delete elWithdrawalRequests[withdrawalRoot];
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            uint256 nodeId = nodeIds[i];
+            bytes32 withdrawalRoot = requestNodeRoots[requestId][nodeId];
+            withdrawalRoots[i] = withdrawalRoot;
+            _completeELWithdrawals(withdrawalRoot, nodeId);
+            delete requestNodeRoots[requestId][nodeId];
         }
-
-        _completeELWithdrawals(withdrawals, tokens);
 
         emit ELWithdrawalsCompleted(requestId, withdrawalRoots);
 
@@ -231,29 +257,26 @@ contract WithdrawalManager is
         );
 
         delete withdrawalRequests[requestId];
-        delete requestWithdrawalRoots[requestId];
+        delete requestNodes[requestId];
     }
 
     /// @notice For a given request ID, complete all corresponding withdrawals on EigenLayer and receive funds into the contract
     function _completeELWithdrawals(
-        IDelegationManager.Withdrawal[] memory withdrawals,
-        IERC20[][] memory tokens
-    ) private nonReentrant {
-        uint256 arrayLength = withdrawals.length;
-        if (tokens.length != arrayLength) revert LengthMismatch();
+        bytes32 withdrawalRoot,
+        uint256 nodeId
+    ) private {
+        IDelegationManager.Withdrawal[] memory nodeWithdrawals = 
+            new IDelegationManager.Withdrawal[](1);
+        IERC20[][] memory nodeTokens = new IERC20[][](1);
         
-        bool[] memory receiveAsTokens = new bool[](arrayLength);
-        uint256[] memory middlewareTimesIndexes = new uint256[](arrayLength);
-        for (uint256 i = 0; i < arrayLength; i++) {
-            receiveAsTokens[i] = true;
-        }
+        ELWithdrawalRequest memory elRequest = elWithdrawalRequests[withdrawalRoot];
+        nodeWithdrawals[0] = elRequest.withdrawal;
+        nodeTokens[0] = elRequest.assets;
+        
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        node.completeWithdrawals(nodeWithdrawals, nodeTokens);
 
-        delegationManager.completeQueuedWithdrawals(
-            withdrawals,
-            tokens,
-            middlewareTimesIndexes,
-            receiveAsTokens
-        );
+        delete elWithdrawalRequests[withdrawalRoot];
     }
 
     /// @notice Undelegate a set of staker nodes from their operators
@@ -282,16 +305,14 @@ contract WithdrawalManager is
         uint256 nodeId,
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes,
         bytes32[] calldata withdrawalRoots
-    ) external override nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
+    ) external nonReentrant onlyRole(WITHDRAWAL_CONTROLLER_ROLE) {
+        uint256 arrayLength = withdrawals.length;
         bytes32[] storage existingRoots = undelegationRequests[nodeId];
         if (existingRoots.length == 0) revert InvalidWithdrawalRequest();
 
-        uint256 arrayLength = withdrawals.length;
         if (
             tokens.length != arrayLength || 
-            middlewareTimesIndexes.length != arrayLength ||
             withdrawalRoots.length != arrayLength
         ) 
             revert LengthMismatch();
@@ -309,27 +330,43 @@ contract WithdrawalManager is
             }
             if (!found) revert WithdrawalRootNotFound(withdrawalRoots[i]);
         }
-
-        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-        IERC20[] memory receivedAssets = node.completeUndelegationWithdrawals(
+        
+        IERC20[] memory receivedAssets = _completeELUndelegationWithdrawals(
+            nodeId,
             withdrawals,
-            tokens,
-            middlewareTimesIndexes
+            tokens
         );
-        uint256 receivedAssetsLength = receivedAssets.length;
+        
+        _handleReceivedAssets(receivedAssets);
+        
+        emit ELWithdrawalsForUndelegationCompleted(nodeId, withdrawalRoots);
+    }
 
+    function _completeELUndelegationWithdrawals(
+        uint256 nodeId,
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens
+    ) private returns (IERC20[] memory) {
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        return node.completeWithdrawals(
+            withdrawals,
+            tokens
+        );
+    }
+
+    function _handleReceivedAssets(IERC20[] memory receivedAssets) private {
+        uint256 receivedAssetsLength = receivedAssets.length;
         uint256[] memory receivedAmounts = new uint256[](receivedAssetsLength);
-        for (uint256 k = 0; k < receivedAssetsLength; k++) {
-            IERC20 asset = receivedAssets[k];
+        
+        for (uint256 i = 0; i < receivedAssetsLength; i++) {
+            IERC20 asset = receivedAssets[i];
             uint256 balance = asset.balanceOf(address(this));
             asset.safeTransfer(address(liquidToken), balance);
-            receivedAmounts[k] = balance;
+            receivedAmounts[i] = balance;
         }
         
         // Reduce queued balances but no shares to burn since `LiquidToken` holds the assets
         liquidToken.debitQueuedAssetBalances(receivedAssets, receivedAmounts, 0);
-
-        emit ELWithdrawalsForUndelegationCompleted(nodeId, withdrawalRoots);
     }
 
     function getUserWithdrawalRequests(

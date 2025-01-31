@@ -128,7 +128,6 @@ interface IWithdrawalManager {
         uint256 nodeId,
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens,
-        uint256[] calldata middlewareTimesIndexes,
         bytes32[] calldata withdrawalRoots
     ) external;
 

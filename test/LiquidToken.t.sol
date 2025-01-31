@@ -4,6 +4,9 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
 import {LiquidToken} from "../src/core/LiquidToken.sol";
@@ -11,11 +14,58 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 
 contract LiquidTokenTest is BaseTest {
+    IStakerNode public stakerNode;
+
     function setUp() public override {
         super.setUp();
-        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable volatility check
+        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable price volatility check
+
+        // Create a staker node for testing
+        vm.prank(admin);
+        stakerNodeCoordinator.createStakerNode();
+        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+
+        // Register a mock operator to EL
+        address operatorAddress = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(block.timestamp, block.prevrandao)
+                    )
+                )
+            )
+        );
+
+        vm.prank(operatorAddress);
+        delegationManager.registerAsOperator(
+            IDelegationManager.OperatorDetails({
+                __deprecated_earningsReceiver: operatorAddress,
+                delegationApprover: address(0),
+                stakerOptOutWindowBlocks: 1
+            }),
+            "ipfs://"
+        );
+
+        // Strategy whitelist
+        ISignatureUtils.SignatureWithExpiry memory signature;
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
+
+        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        thirdPartyTransfersForbiddenValues[0] = false;
+
+        vm.prank(strategyManager.strategyWhitelister());
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbiddenValues
+        );
+
+        // Delegate the staker node to EL
+        stakerNode.delegate(operatorAddress, signature, bytes32(0));
     }
 
     function testDeposit() public {
@@ -39,6 +89,88 @@ contract LiquidTokenTest is BaseTest {
             testToken.balanceOf(address(liquidToken)),
             10 ether,
             "Incorrect token balance in LiquidToken"
+        );
+    }
+
+    function testWithdrawalFlow() public {
+        // Deposit assets into LiquidToken
+        vm.startPrank(user1);
+        IERC20[] memory depositAssets = new IERC20[](1);
+        depositAssets[0] = testToken;
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = 10 ether;
+
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+        vm.stopPrank();
+        
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 5 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, strategyAmounts);
+
+        // Initiate withdrawal
+        vm.startPrank(user1);
+        IERC20[] memory withdrawAssets = new IERC20[](1);
+        withdrawAssets[0] = testToken;
+        uint256[] memory withdrawAmounts = new uint256[](1);
+
+        withdrawAmounts[0] = 5 ether;
+        liquidToken.initiateWithdrawal(withdrawAssets, withdrawAmounts);
+        
+        vm.stopPrank();
+
+        // Check shares escrowed
+        assertEq(liquidToken.balanceOf(user1), 5 ether, "Shares not escrowed");
+
+        // Retrieve withdrawal request
+        bytes32[] memory requests = withdrawalManager.getUserWithdrawalRequests(user1);
+        assertEq(requests.length, 1, "Withdrawal request not created");
+        bytes32 requestId = requests[0];
+
+        // Create EigenLayer withdrawals (WithdrawalController)
+        vm.prank(admin);
+        uint256[] memory nodeIds = new uint256[](1); // Assume nodeId 0
+        nodeIds[0] = 0;
+
+        IERC20[][] memory tokens = new IERC20[][](1);
+        tokens[0] = withdrawAssets;
+
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = withdrawAmounts;
+
+        withdrawalManager.createELWithdrawalsforRequest(
+            requestId,
+            nodeIds,
+            tokens,
+            shares
+        );
+
+        // Simulate assets arriving in WithdrawalManager
+        uint256 expectedAssets = liquidToken.calculateAmount(testToken, 5 ether);
+        deal(address(testToken), address(withdrawalManager), expectedAssets);
+
+        // Fast-forward past withdrawal delay
+        vm.warp(block.timestamp + 15 days);
+        vm.roll(block.number + 15 * 24 * 60 * 60 * 8); 
+
+        // Fulfill withdrawal
+        vm.prank(user1);
+        withdrawalManager.fulfillWithdrawal(requestId);
+
+        // Verify final balances
+        assertEq(
+            testToken.balanceOf(user1), 
+            95 ether,
+            "Assets not returned to user"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1),
+            5 ether,
+            "Shares not burned correctly"
         );
     }
 

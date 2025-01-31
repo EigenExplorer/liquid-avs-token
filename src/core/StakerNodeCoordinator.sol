@@ -246,10 +246,6 @@ contract StakerNodeCoordinator is
         return _stakerNodes[nodeId];
     }
 
-    function withdrawerAddress() external view override returns (address) {
-        return address(withdrawalManager);
-    }
-
     modifier notZeroAddress(address _address) {
         if (_address == address(0)) {
             revert ZeroAddress();

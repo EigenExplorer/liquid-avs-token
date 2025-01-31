@@ -832,6 +832,10 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testCannotUndelegateUndelegatedNode() public {
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_WITHDRAWER_ROLE(),
+            admin
+        );
         vm.prank(admin);
         stakerNode.undelegate();
 
