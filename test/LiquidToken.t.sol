@@ -108,7 +108,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[0] = 5 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
@@ -173,7 +173,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[1] = 2 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),

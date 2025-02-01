@@ -211,6 +211,26 @@ contract LiquidToken is
         }
     }
 
+    function bulkCreditQueuedAssetBalances(
+        IERC20[][] calldata assets,
+        uint256[][] calldata amounts
+    ) external whenNotPaused {
+        if (msg.sender != address(withdrawalManager) && msg.sender != address(liquidTokenManager))
+            revert UnauthorizedAccess(msg.sender);
+
+        if (assets.length != amounts.length)
+            revert ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (assets[i].length != amounts[i].length)
+                revert ArrayLengthMismatch();
+            
+            for (uint256 j = 0; j < assets[i].length; j++) {
+                queuedAssetBalances[address(assets[i][j])] += amounts[i][j];
+            }
+        }
+    }
+
     /// @notice Debits queued balances for a given set of assets & burns the corresponding shares if taken from user
     /// @param assets The assets to debit
     /// @param amounts The debit amounts expressed in native token
@@ -237,7 +257,7 @@ contract LiquidToken is
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
     /// @param assetsToRetrieve The ERC20 assets to transfer
     /// @param amounts The amounts of each asset to transfer
-    /// @param receiver
+    /// @param receiver The receiver of the funds, either `LiquidTokenManager` or `WithdrawalManager`
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts,

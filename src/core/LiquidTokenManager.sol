@@ -56,6 +56,9 @@ contract LiquidTokenManager is
     /// @notice Mapping of tokens to their corresponding strategies
     mapping(IERC20 => IStrategy) public tokenStrategies;
 
+    /// @notice Mapping of strategies to their corresponding token
+    mapping(IStrategy => IERC20) public strategyTokens;
+
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
 
@@ -157,7 +160,7 @@ contract LiquidTokenManager is
         uint256 initialPrice,
         uint256 volatilityThreshold,
         IStrategy strategy
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(tokenStrategies[token]) != address(0)) revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
@@ -176,6 +179,7 @@ contract LiquidTokenManager is
             volatilityThreshold: volatilityThreshold 
         });
         tokenStrategies[token] = strategy;
+        strategyTokens[strategy] = token;
 
         supportedTokens.push(token);
 
@@ -184,7 +188,7 @@ contract LiquidTokenManager is
 
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
-    function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removeToken(IERC20 token) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
 
         // Check for pending withdrawals of this token
@@ -204,8 +208,10 @@ contract LiquidTokenManager is
             }
         }
 
-        delete tokens[token];
+        delete strategyTokens[tokenStrategies[token]];
         delete tokenStrategies[token];
+        delete tokens[token];
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             if (supportedTokens[i] == token) {
                 supportedTokens[i] = supportedTokens[
@@ -219,132 +225,28 @@ contract LiquidTokenManager is
         emit TokenRemoved(token, msg.sender);
     }
 
-    /// @notice Updates the price of a token
-    /// @param token Address of the token to update
-    /// @param newPrice New price for the token
-    function updatePrice(
-        IERC20 token,
-        uint256 newPrice
-    ) external onlyRole(PRICE_UPDATER_ROLE) {
-        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
-        if (newPrice == 0) revert InvalidPrice();
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
+    function delegateNodes(
+        uint256[] memory nodeIds,
+        address[] memory operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
+    ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        uint256 arrayLength = nodeIds.length;
 
-        uint256 oldPrice = tokens[token].pricePerUnit;
-        if (oldPrice == 0) revert InvalidPrice();
+        if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
+        if (approverSignatureAndExpiries.length != arrayLength) revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
+        if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
 
-        if (tokens[token].volatilityThreshold != 0) {
-            uint256 absPriceDiff = (newPrice > oldPrice)
-                ? newPrice - oldPrice
-                : oldPrice - newPrice;
-            uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
-            
-            if (changeRatio > tokens[token].volatilityThreshold) {
-                emit VolatilityCheckFailed(token, oldPrice, newPrice, changeRatio);
-                revert VolatilityThresholdHit(token, changeRatio);
-            }
+        for (uint256 i = 0; i < arrayLength; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+            node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
+            emit NodeDelegated(nodeIds[i], operators[i]);
         }
-
-        tokens[token].pricePerUnit = newPrice;
-        emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
-    }
-
-    /// @notice Checks if a token is supported
-    /// @param token Address of the token to check
-    /// @return bool indicating whether the token is supported
-    function tokenIsSupported(
-        IERC20 token
-    ) public view override returns (bool) {
-        return tokens[token].decimals != 0;
-    }
-
-    /// @notice Converts a token amount to the unit of account
-    /// @param token Address of the token to convert
-    /// @param amount Amount of tokens to convert
-    /// @return The converted amount in the unit of account
-    function convertToUnitOfAccount(
-        IERC20 token,
-        uint256 amount
-    ) public view override returns (uint256) {
-        TokenInfo memory info = tokens[token];
-        if (info.decimals == 0) revert TokenNotSupported(token);
-
-        return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
-    }
-
-    /// @notice Converts an amount in the unit of account to a token amount
-    /// @param token Address of the token to convert to
-    /// @param amount Amount in the unit of account to convert
-    /// @return The converted amount in the specified token
-    function convertFromUnitOfAccount(
-        IERC20 token,
-        uint256 amount
-    ) public view override returns (uint256) {
-        TokenInfo memory info = tokens[token];
-        if (info.decimals == 0) revert TokenNotSupported(token);
-
-        return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
-    }
-
-    /// @notice Retrieves the list of supported tokens
-    /// @return An array of addresses of supported tokens
-    function getSupportedTokens() external view returns (IERC20[] memory) {
-        return supportedTokens;
-    }
-
-    /// @notice Retrieves the information for a specific token
-    /// @param token Address of the token to get information for
-    /// @return TokenInfo struct containing the token's information
-    function getTokenInfo(
-        IERC20 token
-    ) external view returns (TokenInfo memory) {
-        if (address(token) == address(0)) revert ZeroAddress();
-
-        TokenInfo memory tokenInfo = tokens[token];
-
-        if (tokenInfo.decimals == 0) {
-            revert TokenNotSupported(token);
-        }
-
-        return tokenInfo;
-    }
-
-    /// @notice Returns the strategy for a given asset
-    /// @param asset Asset to get the strategy for
-    /// @return IStrategy Interface for the corresponding strategy
-    function getTokenStrategy(
-        IERC20 asset
-    ) external view returns (IStrategy) {
-        if (address(asset) == address(0)) revert ZeroAddress();
-
-        IStrategy strategy = tokenStrategies[asset];
-
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        return strategy;
-    }
-
-    /// @notice Returns the set of strategies for a given set of assets
-    /// @param assets Set of assets to get the strategies for
-    /// @return IStrategy Interfaces for the corresponding set of strategies
-    function _getTokensStrategies(
-        IERC20[] calldata assets
-    ) internal view returns (IStrategy[] memory) {
-        IStrategy[] memory strategies = new IStrategy[](assets.length);
-        for (uint256 i = 0; i < assets.length; i++) {
-            IERC20 asset = assets[i];
-            if (address(asset) == address(0)) revert ZeroAddress();
-
-            IStrategy strategy = tokenStrategies[asset];
-            if (address(strategy) == address(0)) {
-                revert StrategyNotFound(address(asset));
-            }
-
-            strategies[i] = strategy;
-        }
-        
-        return strategies;
     }
 
     /// @notice Stakes assets to a specific node
@@ -355,7 +257,7 @@ contract LiquidTokenManager is
         uint256 nodeId,
         IERC20[] memory assets,
         uint256[] memory amounts
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+    ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
         _stakeAssetsToNode(nodeId, assets, amounts);
     }
 
@@ -363,7 +265,7 @@ contract LiquidTokenManager is
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(
         NodeAllocation[] calldata allocations
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+    ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
         for (uint256 i = 0; i < allocations.length; i++) {
             NodeAllocation memory allocation = allocations[i];
             _stakeAssetsToNode(
@@ -428,8 +330,78 @@ contract LiquidTokenManager is
         );
     }
 
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            _createRedemptionForNodeUndelegation(nodeIds[i]);
+        }
+    }
+
+    function _createRedemptionForNodeUndelegation(uint256 nodeId) private {
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        address staker = address(node);
+        uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(staker);
+        address delegatedTo = node.getOperatorDelegation();
+        (IStrategy[] memory strategies, uint256[] memory shares) = strategyManager.getDeposits(staker);
+        bytes32[] memory withdrawalRoots = node.undelegate();
+
+        emit NodeUndelegated(nodeId, delegatedTo);
+
+        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](withdrawalRoots.length);
+        IERC20[][] memory assets = new IERC20[][](withdrawalRoots.length);
+
+        for (uint256 i = 0; i < withdrawalRoots.length; i++) {
+            IStrategy[] memory requestStrategies = new IStrategy[](1);
+            requestStrategies[0] = strategies[i];
+            
+            uint256[] memory requestShares = new uint256[](1);
+            requestShares[0] = shares[i];
+
+            IDelegationManager.Withdrawal memory withdrawal = IDelegationManager.Withdrawal({
+                staker: staker,
+                delegatedTo: delegatedTo,
+                withdrawer: staker,
+                nonce: nonce,
+                startBlock: uint32(block.number),
+                strategies: requestStrategies,
+                shares: requestShares
+            });
+
+            if (withdrawalRoots[i] != keccak256(abi.encode(withdrawal)))
+                revert InvalidWithdrawalRoot();
+
+            IERC20[] memory requestAssets = new IERC20[](1);
+            requestAssets[0] = strategyTokens[strategies[i]];
+
+            liquidToken.creditQueuedAssetBalances(requestAssets, requestShares);
+
+            withdrawals[i] = withdrawal;
+            assets[i] = requestAssets;
+        }
+
+        // Update `WithdrawalManager` with the new redemption 
+        bytes32[] memory requestIds = new bytes32[](1);
+        requestIds[0]  = keccak256(abi.encode(withdrawalRoots));
+
+        bytes32 redemptionId = keccak256(
+            abi.encodePacked(
+                requestIds,
+                withdrawalRoots,
+                _redemptionNonce++
+            )
+        );
+        
+        withdrawalManager.recordRedemptionCreated(redemptionId, requestIds, withdrawalRoots, withdrawals, assets);
+        emit RedemptionCreatedForNodeUndelegation(redemptionId, requestIds[0], withdrawalRoots, nodeId);
+    }
+
     /// @notice Enables settlement of a set of withdrawal requests by directing funds from `LiquidToken` and staker nodes into `WithdrawalManager`
-    function createRedemption(
+    /// @dev A redemption is an intent to make a certain amount of funds available to be withdrawn from `WithdrawalManager`
+    /// @dev This function accepts a redemption only if it will actually retrieve enough funds per token to settle ALL user withdrawal requests
+    function createRedemptionForUserWithdrawals(
         bytes32[] calldata requestIds,
         IERC20[] calldata ltAssets,
         uint256[] calldata ltAmounts,
@@ -444,16 +416,19 @@ contract LiquidTokenManager is
         if (elAssets.length != elActions) revert LengthMismatch(elAssets.length, elActions);
         if (elShares.length != elActions) revert LengthMismatch(elShares.length, elActions);
 
-        // TODO: check if redemption will settle all requests 
-        // Note: also check if `LiquidToken` has enough balances
+        // Check if all provided requests can be fulfilled if once the redemption is successful
+        _checkRedemptionSettlesRequests(requestIds, ltAssets, ltAmounts, nodeIds, elAssets, elShares);
 
         // Direct unstaked funds from `LiquidToken` to `WithdrawalManager`
         liquidToken.transferAssets(ltAssets, ltAmounts, address(withdrawalManager));
 
-        // Instruct EL withdrawals on staker nodes
+        // Call for EL withdrawals on staker nodes
         bytes32[] memory withdrawalRoots = new bytes32[](elActions);
+        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](elActions);
+        IERC20[][] memory assets = new IERC20[][](elActions);
+
         for (uint256 i = 0; i < elActions; i++) {
-            withdrawalRoots[i] = _createELWithdrawal(
+            (withdrawalRoots[i], withdrawals[i], assets[i]) = _createELWithdrawal(
                 nodeIds[i],
                 elAssets[i],
                 elShares[i]
@@ -469,15 +444,121 @@ contract LiquidTokenManager is
             )
         );
 
-        withdrawalManager.recordRedemptionCreated(redemptionId, requestIds, withdrawalRoots);
-        emit RedemptionCreated(redemptionId, requestIds, withdrawalRoots, nodeIds);
+        withdrawalManager.recordRedemptionCreated(redemptionId, requestIds, withdrawalRoots, withdrawals, assets);
+        emit RedemptionCreatedForUserWithdrawals(redemptionId, requestIds, withdrawalRoots, nodeIds);
+    }
+
+    function _checkRedemptionSettlesRequests(
+        bytes32[] calldata requestIds,
+        IERC20[] calldata ltAssets,
+        uint256[] calldata ltAmounts,
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata elAssets,
+        uint256[][] calldata elShares
+    ) internal {
+        // Get the cumulative amounts per token from all requests 
+        IWithdrawalManager.WithdrawalRequest[] memory withdrawalRequests =
+            withdrawalManager.getWithdrawalRequests(requestIds);
+
+        uint256 uniqueTokenCount;
+        IERC20[] memory requestTokens = new IERC20[](supportedTokens.length);
+        uint256[] memory requestAmounts = new uint256[](supportedTokens.length);
+
+        for(uint256 i = 0; i < withdrawalRequests.length; i++) {
+            IWithdrawalManager.WithdrawalRequest memory request = withdrawalRequests[i];
+            for (uint256 j = 0; j < request.assets.length; j++) {
+                IERC20 token = request.assets[j];
+                
+                bool found = false;
+                for(uint256 k = 0; k < uniqueTokenCount; k++) {
+                    if(requestTokens[k] == token) {
+                        requestAmounts[k] += request.shareAmounts[j];
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if(!found) {
+                    requestTokens[uniqueTokenCount] = token;
+                    requestAmounts[uniqueTokenCount++] = request.shareAmounts[j];
+                }
+            }
+        }
+
+        // Gather the cumulative expected amounts per token from the redemption
+        uint256[] memory expectedRedemptionAmounts = new uint256[](uniqueTokenCount);
+
+        // From `LiquidToken` unstaked funds
+        for (uint256 i = 0; i < ltAssets.length; i++) {
+            IERC20 token = ltAssets[i];
+            uint256 amount = ltAmounts[i];
+            
+            if (token.balanceOf(address(liquidToken)) < amount)
+                revert InsufficientBalance(
+                    token,
+                    amount,
+                    token.balanceOf(address(liquidToken))
+            );
+
+            for (uint256 j = 0; j < uniqueTokenCount; j++) {
+                if (requestTokens[j] == token) {
+                    expectedRedemptionAmounts[j] += amount;
+                    break;
+                }
+            }
+        }
+
+        // From staker node withdrawals
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IERC20[] memory nodeAssets = elAssets[i];
+            uint256[] memory nodeShares = elShares[i];
+            
+            if (nodeShares.length != nodeAssets.length) {
+                revert LengthMismatch(nodeShares.length, nodeAssets.length);
+            }
+            
+            for (uint256 j = 0; j < nodeAssets.length; j++) {
+                IERC20 token = nodeAssets[j];
+                uint256 amount = nodeShares[j];
+
+                uint256 assetBalanceNode = getStakedAssetBalanceNode(token, nodeIds[i]);
+                if (assetBalanceNode < amount) {
+                    revert InsufficientBalance(
+                        token,
+                        amount,
+                        assetBalanceNode
+                    );
+                }
+                
+                for (uint256 k = 0; k < uniqueTokenCount; k++) {
+                    if (requestTokens[k] == token) {
+                        expectedRedemptionAmounts[k] += amount;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Verify that the redemption will actually settle all requests
+        for (uint256 i = 0; i < uniqueTokenCount; i++) {
+            if (expectedRedemptionAmounts[i] != requestAmounts[i]) {
+                revert RedemptionDoesNotSettleRequests(
+                    address(requestTokens[i]),
+                    expectedRedemptionAmounts[i],
+                    requestAmounts[i]
+                );
+            }
+        }
+
+        // Credit queued asset balances as these amounts would be removed from liquid token & staker nodes
+        liquidToken.creditQueuedAssetBalances(requestTokens, requestAmounts);
     }
 
     function _createELWithdrawal(
         uint256 nodeId,
         IERC20[] calldata assets,
         uint256[] calldata shares
-    ) private returns (bytes32) {
+    ) private returns (bytes32, IDelegationManager.Withdrawal memory, IERC20[] memory) {
         IStrategy[] memory strategies = _getTokensStrategies(assets);
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         
@@ -498,24 +579,25 @@ contract LiquidTokenManager is
 
         if (withdrawalRoot != keccak256(abi.encode(withdrawal))) 
             revert InvalidWithdrawalRoot();
-
-        withdrawalManager.recordELWithdrawalCreated(withdrawalRoot, withdrawal, assets);
-        liquidToken.creditQueuedAssetBalances(assets, shares);
         
-        return withdrawalRoot;
+        return (withdrawalRoot, withdrawal, assets);
     }
 
     function completeRedemption(
         bytes32 redemptionId,
         uint256[] calldata nodeIds,
-        bytes32[][] calldata withdrawalRoots
+        bytes32[][] calldata withdrawalRoots,
+        address receiver
     ) external override nonReentrant onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        if (receiver != address(withdrawalManager) || receiver != address(liquidToken))
+            revert InvalidReceiver(receiver);
+
         uint256 elActions = nodeIds.length;
 
         if (withdrawalRoots.length != elActions) 
             revert LengthMismatch(withdrawalRoots.length, elActions);
 
-        IWithdrawalManager.Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
+        Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
         bytes32[] memory redemptionWithdrawalRoots = redemption.withdrawalRoots;
 
         // Check if all withdrawal roots for the redemption have been provided
@@ -533,7 +615,7 @@ contract LiquidTokenManager is
             if (!found) revert WithdrawalRootMissing(redemptionWithdrawalRoots[i]);
         }
 
-        // Create arrays to track token balances across all withdrawals
+        // Track expected tokens & balances from completing all withdrawals
         IERC20[] memory uniqueTokens = new IERC20[](supportedTokens.length);
         uint256[] memory expectedAmounts = new uint256[](supportedTokens.length);
         uint256 uniqueTokenCount = 0;
@@ -548,21 +630,26 @@ contract LiquidTokenManager is
             );
         }
 
-        // Verify balances and transfer to withdrawal manager
+        // Verify receipt of all withdrawn assets, transfer them to `WithdrawalManager` and update its state
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
             IERC20 token = uniqueTokens[i];
             uint256 expectedAmount = expectedAmounts[i];
             uint256 actualBalance = token.balanceOf(address(this));
             
             if (actualBalance < expectedAmount) {
-                revert ExpectedAmountNotReceived(
+                revert RedemptionDoesNotSettleRequests(
                     address(token),
                     expectedAmount,
                     actualBalance
                 );
             }
             
-            token.safeTransfer(address(withdrawalManager), expectedAmount);
+            token.safeTransfer(receiver, expectedAmount);
+        }
+
+        // If funds are sent to `LiquidToken` the redemption is from node undelegation; fulfillment is complete & no shares to be burnt
+        if (receiver == address(liquidToken)) {
+            liquidToken.debitQueuedAssetBalances(uniqueTokens, expectedAmounts, 0);
         }
 
         withdrawalManager.recordRedemptionCompleted(redemptionId, redemption.requestIds);
@@ -606,8 +693,7 @@ contract LiquidTokenManager is
                 
                 if (!found) {
                     uniqueTokens[uniqueTokenCount] = token;
-                    expectedAmounts[uniqueTokenCount] = amount;
-                    uniqueTokenCount++;
+                    expectedAmounts[uniqueTokenCount++] = amount;
                 }
             }
         }
@@ -616,48 +702,138 @@ contract LiquidTokenManager is
         node.completeWithdrawals(nodeWithdrawals, nodeTokens);
     }
 
-    /// @notice Delegate a set of staker nodes to a corresponding set of operators
-    /// @param nodeIds The IDs of the staker nodes
-    /// @param operators The addresses of the operators
-    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
-    /// @param approverSalts The salts used in the signatures
-    function delegateNodesToOperators(
-        uint256[] memory nodeIds,
-        address[] memory operators,
-        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
-        bytes32[] calldata approverSalts
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        uint256 arrayLength = nodeIds.length;
+    /// @notice Updates the price of a token
+    /// @param token Address of the token to update
+    /// @param newPrice New price for the token
+    function updatePrice(
+        IERC20 token,
+        uint256 newPrice
+    ) external override onlyRole(PRICE_UPDATER_ROLE) {
+        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
+        if (newPrice == 0) revert InvalidPrice();
 
-        if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
-        if (approverSignatureAndExpiries.length != arrayLength) revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
-        if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
+        uint256 oldPrice = tokens[token].pricePerUnit;
+        if (oldPrice == 0) revert InvalidPrice();
 
-        for (uint256 i = 0; i < arrayLength; i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
-            node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
+        if (tokens[token].volatilityThreshold != 0) {
+            uint256 absPriceDiff = (newPrice > oldPrice)
+                ? newPrice - oldPrice
+                : oldPrice - newPrice;
+            uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
+            
+            if (changeRatio > tokens[token].volatilityThreshold) {
+                emit VolatilityCheckFailed(token, oldPrice, newPrice, changeRatio);
+                revert VolatilityThresholdHit(token, changeRatio);
+            }
         }
+
+        tokens[token].pricePerUnit = newPrice;
+        emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
     }
 
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    function undelegateNodesFromOperators(
-        uint256[] calldata nodeIds
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        for (uint256 i = 0; i < nodeIds.length; i++) {
-            liquidToken.creditQueuedAssetBalances(
-                supportedTokens, 
-                _getAllStakedAssetBalancesNode(stakerNodeCoordinator.getNodeById(nodeIds[i]))
-            );
+    /// @notice Checks if a token is supported
+    /// @param token Address of the token to check
+    /// @return bool indicating whether the token is supported
+    function tokenIsSupported(
+        IERC20 token
+    ) public view override returns (bool) {
+        return tokens[token].decimals != 0;
+    }
+
+    /// @notice Converts a token amount to the unit of account
+    /// @param token Address of the token to convert
+    /// @param amount Amount of tokens to convert
+    /// @return The converted amount in the unit of account
+    function convertToUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) public view override returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
+
+        return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
+    }
+
+    /// @notice Converts an amount in the unit of account to a token amount
+    /// @param token Address of the token to convert to
+    /// @param amount Amount in the unit of account to convert
+    /// @return The converted amount in the specified token
+    function convertFromUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) public view override returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
+
+        return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
+    }
+
+    /// @notice Retrieves the list of supported tokens
+    /// @return An array of addresses of supported tokens
+    function getSupportedTokens() external view override returns (IERC20[] memory) {
+        return supportedTokens;
+    }
+
+    /// @notice Retrieves the information for a specific token
+    /// @param token Address of the token to get information for
+    /// @return TokenInfo struct containing the token's information
+    function getTokenInfo(
+        IERC20 token
+    ) external view override returns (TokenInfo memory) {
+        if (address(token) == address(0)) revert ZeroAddress();
+
+        TokenInfo memory tokenInfo = tokens[token];
+
+        if (tokenInfo.decimals == 0) {
+            revert TokenNotSupported(token);
         }
 
-        withdrawalManager.undelegateStakerNodes(nodeIds);
+        return tokenInfo;
+    }
+
+    /// @notice Returns the strategy for a given asset
+    /// @param asset Asset to get the strategy for
+    /// @return IStrategy Interface for the corresponding strategy
+    function getTokenStrategy(
+        IERC20 asset
+    ) external view override returns (IStrategy) {
+        if (address(asset) == address(0)) revert ZeroAddress();
+
+        IStrategy strategy = tokenStrategies[asset];
+
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        return strategy;
+    }
+
+    /// @notice Returns the set of strategies for a given set of assets
+    /// @param assets Set of assets to get the strategies for
+    /// @return IStrategy Interfaces for the corresponding set of strategies
+    function _getTokensStrategies(
+        IERC20[] calldata assets
+    ) internal view returns (IStrategy[] memory) {
+        IStrategy[] memory strategies = new IStrategy[](assets.length);
+        for (uint256 i = 0; i < assets.length; i++) {
+            IERC20 asset = assets[i];
+            if (address(asset) == address(0)) revert ZeroAddress();
+
+            IStrategy strategy = tokenStrategies[asset];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(asset));
+            }
+
+            strategies[i] = strategy;
+        }
+        
+        return strategies;
     }
 
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
-    function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
+    function getStakedAssetBalance(IERC20 asset) public view override returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -679,7 +855,7 @@ contract LiquidTokenManager is
     function getStakedAssetBalanceNode(
         IERC20 asset,
         uint256 nodeId
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -725,7 +901,7 @@ contract LiquidTokenManager is
     /// @notice Sets the volatility threshold for a given asset
     /// @param asset The asset token address
     /// @param newThreshold The new volatility threshold value to update to
-    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(asset) == address(0)) revert ZeroAddress();
         if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
         if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();

@@ -38,13 +38,7 @@ interface IWithdrawalManager {
         IDelegationManager.Withdrawal withdrawal;
         IERC20[] assets;
     }
-
-    /// @notice Represents a set of request ids and the withdrawal roots they depend upon
-    struct Redemption {
-        bytes32[] requestIds;
-        bytes32[] withdrawalRoots;
-    }
-
+    
     /// @notice Emitted when a withdrawal is requested
     event WithdrawalInitiated(
         bytes32 indexed requestId,
@@ -63,17 +57,8 @@ interface IWithdrawalManager {
         uint256 timestamp
     );
 
-    /// @notice Emitted when a set of withdrawals are completed on EigenLayer
-    event ELWithdrawalsCompleted(bytes32 indexed requestId, bytes32[] indexed withdrawalRoots);
-
-    /// @notice Emitted when a set of withdrawals from node undelegation are completed on EigenLayer
-    event ELWithdrawalsForUndelegationCompleted(uint256 nodeId, bytes32[] indexed withdrawalRoots);
-
     /// @notice Error for zero address
     error ZeroAddress();
-
-    /// @notice Error for zero asset amount
-    error ZeroAmount();
 
     /// @notice Error for unauthorized access by non-LiquidToken
     error NotLiquidToken(address sender);
@@ -90,8 +75,8 @@ interface IWithdrawalManager {
     /// @notice Error when withdrawal delay is not met
     error WithdrawalDelayNotMet();
 
-    /// @notice Error when withdrawal root is not found
-    error WithdrawalRootNotFound(bytes32 withdrawalRoot);
+    /// @notice Error when withdrawal is not ready to be fulfilled by user
+    error WithdrawalNotReadyToFulfill();
 
     /// @notice Error for withdrawal request not found
     error WithdrawalRequestNotFound(bytes32 requestId);
@@ -101,9 +86,6 @@ interface IWithdrawalManager {
 
     /// @notice Error for redemption not found
     error RedemptionNotFound(bytes32 redemptionId);
-
-    /// @notice Error when withdrawals on EigenLayer haven't been completed
-    error ELWithdrawalsNotCompleted(bytes32 requestId);
 
     /// @notice Error for insufficient balance
     error InsufficientBalance(
@@ -119,47 +101,31 @@ interface IWithdrawalManager {
         bytes32 requestId
     ) external;
 
-    function recordELWithdrawalCreated(
-        bytes32 withdrawalRoot,
-        IDelegationManager.Withdrawal calldata withdrawal,
-        IERC20[] calldata assets
-    ) external;
-
     function recordRedemptionCreated(
         bytes32 redemptionId,
         bytes32[] calldata requestIds,
-        bytes32[] calldata withdrawalRoots
+        bytes32[] calldata withdrawalRoots,
+        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata assets
     ) external;
 
     function recordRedemptionCompleted(
         bytes32 redemptionId,
-        bytes32[] calldata requestIds
+        bytes32[] calldata withdrawalRoots
     ) external;
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(bytes32 requestId) external;
 
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    function undelegateStakerNodes(uint256[] calldata nodeIds) external;
-
-    function completeELWithdrawalsForUndelegation(
-        uint256 nodeId,
-        IDelegationManager.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata tokens,
-        bytes32[] calldata withdrawalRoots
-    ) external;
-
     /// @notice Returns the withdrawal requests for a user
     /// @param user The address of the user
     /// @return An array of withdrawal request IDs
     function getUserWithdrawalRequests(address user) external view returns (bytes32[] memory);
 
-
     function getWithdrawalRequests(bytes32[] calldata requestIds) external view returns (WithdrawalRequest[] memory);
 
     function getELWithdrawalRequests(bytes32[] calldata withdrawalRoots) external view returns (ELWithdrawalRequest[] memory);
 
-    function getRedemption(bytes32 redemptionId) external view returns (Redemption memory);
+    function getRedemption(bytes32 redemptionId) external view returns (ILiquidTokenManager.Redemption memory);
 }

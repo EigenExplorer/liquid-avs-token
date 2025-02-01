@@ -17,12 +17,6 @@ interface IStakerNode {
         uint256 id;
     }
 
-    /// @notice Emitted when the StakerNode is delegated to an operator
-    event NodeDelegated(address indexed operator, uint256 nodeId, address indexed delegator);
-
-    /// @notice Emitted when the StakerNode is undelegated from the current operator
-    event NodeUndelegated(bytes32[] withdrawalRoots, uint256 nodeId, address indexed undelegator);
-
     /// @notice Emitted when assets are deposited into an Eigenlayer strategy
     event AssetDepositedToStrategy(
         IERC20 indexed asset,

@@ -104,7 +104,7 @@ interface ILiquidToken is IERC20 {
     /// @notice Transfers assets to the LiquidTokenManager
     /// @param assetsToRetrieve The assets to transfer
     /// @param amounts The amounts to transfer
-    /// @param receiver
+    /// @param receiver The receiver of the funds, either `LiquidTokenManager` or `WithdrawalManager`
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts,

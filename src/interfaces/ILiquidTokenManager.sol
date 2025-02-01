@@ -46,6 +46,12 @@ interface ILiquidTokenManager {
         uint256[] amounts;
     }
 
+    /// @notice Represents a set of request ids and the withdrawal roots they depend upon
+    struct Redemption {
+        bytes32[] requestIds;
+        bytes32[] withdrawalRoots;
+    }
+
     /// @notice Emitted when a new token is set
     event TokenSet(
         IERC20 indexed token,
@@ -72,11 +78,24 @@ interface ILiquidTokenManager {
         address indexed depositor
     );
 
-    event RedemptionCreated(
+    /// @notice Emitted when a staker node is delegated to an operator
+    event NodeDelegated(uint256 nodeId, address indexed operator);
+
+    /// @notice Emitted when a staker node is undelegated from the current operator
+    event NodeUndelegated(uint256 nodeId, address indexed operator);
+
+    event RedemptionCreatedForUserWithdrawals(
         bytes32 redemptionId,
         bytes32[] requestIds,
         bytes32[] withdrawalRoots,
         uint256[] nodeIds
+    );
+
+    event RedemptionCreatedForNodeUndelegation(
+        bytes32 redemptionId,
+        bytes32 requestId,
+        bytes32[] withdrawalRoots,
+        uint256 nodeId
     );
 
     event RedemptionCompleted(bytes32 redemptionId);
@@ -98,6 +117,13 @@ interface ILiquidTokenManager {
 
     /// @notice Error for invalid staking amount
     error InvalidStakingAmount(uint256 amount);
+
+    /// @notice Error for insufficient balance
+    error InsufficientBalance(
+        IERC20 asset,
+        uint256 required,
+        uint256 available
+    );
 
     /// @notice Error when asset already exists
     error TokenExists(address asset);
@@ -129,10 +155,13 @@ interface ILiquidTokenManager {
     /// @notice Error for invalid withdrawal root
     error InvalidWithdrawalRoot();
 
-    error ExpectedAmountNotReceived(
-        address token,
+    /// @notice Error for invalid funds recepient
+    error InvalidReceiver(address receiver);
+
+    error RedemptionDoesNotSettleRequests(
+        address asset,
         uint256 expectedAmount,
-        uint256 actualBalance
+        uint256 requestAmount
     );
     
     /// @notice Error when withdrawal root is missing from redemption fulfilment
@@ -213,7 +242,7 @@ interface ILiquidTokenManager {
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
     /// @notice Enables settlement of a set withdrawal requests by directing funds from `LiquidToken` and staker nodes into `WithdrawalManager`
-    function createRedemption(
+    function createRedemptionForUserWithdrawals(
         bytes32[] calldata requestIds,
         IERC20[] calldata ltAssets,
         uint256[] calldata ltAmounts,
@@ -225,7 +254,8 @@ interface ILiquidTokenManager {
     function completeRedemption (
         bytes32 redemptionId,
         uint256[] calldata nodeIds,
-        bytes32[][] calldata withdrawalRoots
+        bytes32[][] calldata withdrawalRoots,
+        address receiver
     ) external;
 
     /// @notice Gets the staked asset balance for all nodes
@@ -244,7 +274,7 @@ interface ILiquidTokenManager {
     /// @param operators The addresses of the operators
     /// @param approverSignatureAndExpiries The signatures authorizing the delegations
     /// @param approverSalts The salts used in the signatures
-    function delegateNodesToOperators(
+    function delegateNodes(
         uint256[] calldata nodeIds,
         address[] calldata operators,
         ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
@@ -253,7 +283,7 @@ interface ILiquidTokenManager {
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
-    function undelegateNodesFromOperators(
+    function undelegateNodes(
         uint256[] calldata nodeIds
     ) external;
 
