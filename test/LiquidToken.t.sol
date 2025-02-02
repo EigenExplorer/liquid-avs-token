@@ -254,7 +254,7 @@ contract LiquidTokenTest is BaseTest {
         
     }
 
-    function testInitiateWithdrawalWhenAssetStaked() public {
+    function testInitiateWithdrawalWhenAssetsStaked() public {
         
     }
 

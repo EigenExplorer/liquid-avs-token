@@ -29,10 +29,6 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
         keccak256("LIQUID_TOKEN_MANAGER_ROLE");
-    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
-        keccak256("STAKER_NODES_DELEGATOR_ROLE");
-    bytes32 public constant STAKER_NODES_WITHDRAWER_ROLE =
-        keccak256("STAKER_NODES_WITHDRAWER_ROLE");
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -50,10 +46,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         operatorDelegation = address(0);
     }
 
-    /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assets Array of ERC20 token addresses to deposit
-    /// @param amounts Array of amounts to deposit for each asset
-    /// @param strategies Array of Eigenlayer strategies to deposit into
+    /// @notice Deposits assets into EL strategies
+    /// @param assets The assets to deposit
+    /// @param amounts The amounts to deposit for each asset
+    /// @param strategies The EL strategies to deposit into
     function depositAssets(
         IERC20[] calldata assets,
         uint256[] calldata amounts,
@@ -79,7 +75,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         }
     }
 
-    /// @notice Delegates the StakerNode's assets to an operator
+    /// @notice Delegates the node's assets to an operator
     /// @param operator Address of the operator to delegate to
     /// @param signature Signature authorizing the delegation
     /// @param approverSalt Salt used in the signature
@@ -87,7 +83,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         address operator,
         ISignatureUtils.SignatureWithExpiry memory signature,
         bytes32 approverSalt
-    ) external override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
+    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
 
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -95,11 +91,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         operatorDelegation = operator;
     }
 
-    /// @notice Undelegates the StakerNode's assets from the current operator
+    /// @notice Undelegates the node from the current operator and withdraws all shares from all strategies
+    /// @dev EL creates one withdrawal request per strategy in the case of undelegation
     function undelegate()
         external
         override
-        onlyRole(STAKER_NODES_WITHDRAWER_ROLE)
+        onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
         returns (bytes32[] memory)
     {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
@@ -112,6 +109,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         return withdrawalRoots;
     }
 
+    /// @notice Creates a withdrawal request of EL for a set of strategies
+    /// @dev EL creates one withdrawal request regardless of the number of strategies
+    /// @param strategies The set of strategies to withdraw from
+    /// @param shareAmounts The amount of shares to withdraw per strategy
     function withdraw(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
         external
         override
@@ -131,6 +132,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         return delegationManager.queueWithdrawals(requestParams)[0];
     }
 
+    /// @notice Completes a set of withdrawal requests on EL and retrieves funds
+    /// @dev The funds are always withdrawn in tokens and sent to `LiquidTokenManager`, ie the node never keeps unstaked assets
+    /// @param withdrawals The set of EL withdrawals to complete and associated data
+    /// @param tokens The set of tokens to receive funds in
     function completeWithdrawals(
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens
@@ -211,14 +216,6 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     modifier onlyRole(bytes32 role) {
         if (role == LIQUID_TOKEN_MANAGER_ROLE) {
             if (!coordinator.hasLiquidTokenManagerRole(msg.sender)) {
-                revert UnauthorizedAccess(msg.sender, role);
-            }
-        } else if (role == STAKER_NODES_DELEGATOR_ROLE) {
-            if (!coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
-                revert UnauthorizedAccess(msg.sender, role);
-            }
-        } else if (role == STAKER_NODES_WITHDRAWER_ROLE) {
-            if (!coordinator.hasStakerNodeWithdrawerRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else {

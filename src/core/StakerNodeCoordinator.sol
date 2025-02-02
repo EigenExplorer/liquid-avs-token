@@ -33,8 +33,6 @@ contract StakerNodeCoordinator is
 
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
-    bytes32 public constant STAKER_NODES_WITHDRAWER_ROLE =
-        keccak256("STAKER_NODES_WITHDRAWER_ROLE");
     bytes32 public constant STAKER_NODE_CREATOR_ROLE =
         keccak256("STAKER_NODE_CREATOR_ROLE");
 
@@ -58,9 +56,6 @@ contract StakerNodeCoordinator is
         if (init.stakerNodesDelegator == address(0)) {
             revert("Staker nodes delegator cannot be the zero address");
         }
-        if (init.stakerNodesWithdrawer == address(0)) {
-            revert("Staker nodes withdrawer cannot be the zero address");
-        }
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
@@ -77,7 +72,6 @@ contract StakerNodeCoordinator is
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
-        _grantRole(STAKER_NODES_WITHDRAWER_ROLE, init.stakerNodesWithdrawer);
 
         liquidTokenManager = init.liquidTokenManager;
         withdrawalManager = init.withdrawalManager;
@@ -202,15 +196,6 @@ contract StakerNodeCoordinator is
         address _address
     ) public view override returns (bool) {
         return hasRole(STAKER_NODES_DELEGATOR_ROLE, _address);
-    }
-
-    /// @notice Checks if an address has the STAKER_NODES_WITHDRAWER_ROLE
-    /// @param _address Address to check
-    /// @return bool True if the address has the role, false otherwise
-    function hasStakerNodeWithdrawerRole(
-        address _address
-    ) public view override returns (bool) {
-        return hasRole(STAKER_NODES_WITHDRAWER_ROLE, _address);
     }
 
     /// @notice Checks if a caller is the liquid token manager

@@ -156,7 +156,8 @@ contract LiquidToken is
                 msg.sender,
                 assets,
                 amounts,
-                block.timestamp
+                block.timestamp,
+                _withdrawalNonce[msg.sender]
             )
         );
         withdrawalManager.createWithdrawalRequest(

@@ -39,18 +39,14 @@ contract WithdrawalManager is
     IStakerNodeCoordinator public stakerNodeCoordinator;
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
     
-    /// @notice Users
+    /// @notice User Withdrawals
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
     /// @notice Redemptions
-    mapping(bytes32 => bytes32[]) public redemptionRequests;
-    mapping(bytes32 => bytes32[]) public redemptionRoots;
-
-    /// @notice Undelgations
-    mapping(bytes32 => bytes32[]) public undelegationRoots;
+    mapping(bytes32 => ILiquidTokenManager.Redemption) public redemptions;
     
-    /// @notice EigenLayer
+    /// @notice EigenLayer Withdrawals
     mapping(bytes32 => ELWithdrawalRequest) public elWithdrawalRequests;
 
     /// @dev Disables initializers for the implementation contract
@@ -69,14 +65,12 @@ contract WithdrawalManager is
             address(init.liquidToken) == address(0) ||
             address(init.delegationManager) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
-            address(init.withdrawalController) == address(0) ||
             address(init.stakerNodeCoordinator) == address(0)
         ) {
             revert ZeroAddress();
         }
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
-        _grantRole(WITHDRAWAL_CONTROLLER_ROLE, init.withdrawalController);
 
         delegationManager = init.delegationManager;
         liquidToken = init.liquidToken;
@@ -84,13 +78,18 @@ contract WithdrawalManager is
         stakerNodeCoordinator = init.stakerNodeCoordinator;
     }
 
+    /// @notice Creates a withdrawal request for a user when they initate one via `LiquidToken`
+    /// @param assets The final assets the the user wants to end up with
+    /// @param amounts The withdrawal amounts per asset
+    /// @param user The requsting user's address
+    /// @param requestId The unique identifier of the withdrawal request
     function createWithdrawalRequest(
         IERC20[] memory assets,
         uint256[] memory amounts,
         address user,
         bytes32 requestId
     ) external override nonReentrant {
-        if(msg.sender != address(liquidToken))
+        if (msg.sender != address(liquidToken))
             revert NotLiquidToken(msg.sender);
 
         WithdrawalRequest memory request = WithdrawalRequest({
@@ -113,7 +112,7 @@ contract WithdrawalManager is
         );
     }
 
-    /// @notice Allows users to fulfill a withdrawal request after the delay period
+    /// @notice Allows users to fulfill a withdrawal request after the delay period and receive all corresponding funds
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(
         bytes32 requestId
@@ -128,6 +127,7 @@ contract WithdrawalManager is
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
 
+        // Calculate amounts for each asset and transfer them to the user
         for (uint256 i = 0; i < request.assets.length; i++) {
             amounts[i] = liquidToken.calculateAmount(
                 request.assets[i],
@@ -140,7 +140,6 @@ contract WithdrawalManager is
             uint256 amount = amounts[i];
             IERC20 asset = request.assets[i];
 
-            // Check the contract's actual token balance
             if (asset.balanceOf(address(this)) < amount ) {
                 revert InsufficientBalance(
                     asset,
@@ -149,11 +148,10 @@ contract WithdrawalManager is
                 );
             }
 
-            // Transfer the amount to the user
             asset.safeTransfer(msg.sender, amount);
         }
 
-        // Reduce the corresponding queued balances and burn escrow shares
+        // Fulfillment is complete and escrow shares to be burnt
         liquidToken.debitQueuedAssetBalances(request.assets, amounts, totalShares);
 
         emit WithdrawalFulfilled(
@@ -168,66 +166,67 @@ contract WithdrawalManager is
         delete userWithdrawalRequests[msg.sender];
     }
 
+    /// @notice Called by `LiquidTokenManger` when a new redemption is created
+    /// @param redemptionId The unique identifier of the redemption
+    /// @param redemption The details of the redemption
+    /// @param withdrawals The withdrawal structs associated with the redemption, needed to complete withdrawal on EL
+    /// @param assets The array assets associated with each withdrawal, needed to complete withdrawal on EL
     function recordRedemptionCreated(
         bytes32 redemptionId,
-        bytes32[] calldata requestIds,
-        bytes32[] calldata withdrawalRoots,
+        ILiquidTokenManager.Redemption calldata redemption,
         IDelegationManager.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata assets
     ) external override {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
-        uint256 arrayLength = requestIds.length;
+        uint256 arrayLength = redemption.withdrawalRoots.length;
 
-        if (withdrawalRoots.length != arrayLength ||
+        if (
             withdrawals.length != arrayLength ||
             assets.length != arrayLength
         )
             revert LengthMismatch();
 
+        // Record all EL withdrawals for the redemption
         for (uint256 i = 0; i < arrayLength; i++) {
-            _recordELWithdrawalCreated(withdrawalRoots[i], withdrawals[i], assets[i]);
+            ELWithdrawalRequest memory elRequest = ELWithdrawalRequest({
+                withdrawal: withdrawals[i],
+                assets: assets[i]
+            });
+            elWithdrawalRequests[redemption.withdrawalRoots[i]] = elRequest;  
         }
 
-        redemptionRequests[redemptionId] = requestIds;
-        redemptionRoots[redemptionId] =  withdrawalRoots;
+        // Record the redemption
+        redemptions[redemptionId] = redemption;
     }
 
-    function _recordELWithdrawalCreated(
-        bytes32 withdrawalRoot,
-        IDelegationManager.Withdrawal calldata withdrawal,
-        IERC20[] calldata assets
-    ) internal {
-        ELWithdrawalRequest memory elRequest = ELWithdrawalRequest({
-            withdrawal: withdrawal,
-            assets: assets
-        });
-
-        elWithdrawalRequests[withdrawalRoot] = elRequest;
-    }
-
+    /// @notice Called by `LiquidTokenManger` when a redemption is completed
+    /// @param redemptionId The ID of the redemption
     function recordRedemptionCompleted(
-        bytes32 redemptionId,
-        bytes32[] calldata withdrawalRoots
+        bytes32 redemptionId
     ) external override {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
+        ILiquidTokenManager.Redemption memory redemption = redemptions[redemptionId];
 
-        for (uint256 i = 0; i < withdrawalRoots.length; i++) {
-            bytes32 withdrawalRoot = withdrawalRoots[i];
-            withdrawalRequests[withdrawalRoot].canFulfill = true;
-
-            delete elWithdrawalRequests[withdrawalRoot];
+        // Delete all EL withdrawals for the redemption
+        for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+            withdrawalRequests[redemption.requestIds[i]].canFulfill = true;
+            delete elWithdrawalRequests[redemption.withdrawalRoots[i]];
         }
 
-        delete redemptionRequests[redemptionId];
-        delete redemptionRoots[redemptionId];
+        // Delete the redemption
+        delete redemptions[redemptionId];
     }
 
+    /// @notice Returns all withdrawal request IDs for a given user
+    /// @param user The address of the user
     function getUserWithdrawalRequests(
         address user
     ) external view override returns (bytes32[] memory) {
         return userWithdrawalRequests[user];
     }
 
+    /// @notice Returns all withdrawal request details for a set of request IDs
+    /// @param requestIds The IDs of the withdrawal requests
     function getWithdrawalRequests(
         bytes32[] calldata requestIds
     ) external view override returns (WithdrawalRequest[] memory) {
@@ -243,6 +242,8 @@ contract WithdrawalManager is
         return requests;
     }
 
+    /// @notice Returns all EL withdrawal request details for a set of withdrawal roots
+    /// @param withdrawalRoots The EL withdrawal roots
     function getELWithdrawalRequests(
         bytes32[] calldata withdrawalRoots
     ) external view override returns (ELWithdrawalRequest[] memory) {
@@ -258,17 +259,14 @@ contract WithdrawalManager is
         return elRequests;
     }
 
+    /// @notice Returns all redemption details for a given redemption ID
+    /// @param redemptionId The ID of the redemption
     function getRedemption(
         bytes32 redemptionId
     ) external view override returns (ILiquidTokenManager.Redemption memory) {
-        bytes32[] memory requestIds = redemptionRequests[redemptionId];
-        bytes32[] memory withdrawalRoots = redemptionRoots[redemptionId];
+        ILiquidTokenManager.Redemption memory redemption = redemptions[redemptionId];
+        if (redemption.requestIds.length == 0) revert RedemptionNotFound(redemptionId);
 
-        if (requestIds.length == 0) revert RedemptionNotFound(redemptionId);
-
-        return ILiquidTokenManager.Redemption({
-            requestIds: requestIds,
-            withdrawalRoots: withdrawalRoots
-        });
+        return redemption;
     }
 }

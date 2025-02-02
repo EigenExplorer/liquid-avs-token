@@ -24,7 +24,6 @@ interface IStakerNodeCoordinator {
         address pauser;
         address stakerNodeCreator;
         address stakerNodesDelegator;
-        address stakerNodesWithdrawer;
     }
 
     /// @notice Emitted when a new staker node is created
@@ -99,11 +98,6 @@ interface IStakerNodeCoordinator {
     /// @param _address Address to check
     /// @return True if the address has the role, false otherwise
     function hasStakerNodeDelegatorRole(address _address) external view returns (bool);
-
-    /// @notice Checks if an address has the STAKER_NODES_WITHDRAWER_ROLE
-    /// @param _address Address to check
-    /// @return True if the address has the role, false otherwise
-    function hasStakerNodeWithdrawerRole(address _address) external view returns (bool);
 
     /// @notice Checks if a caller is the liquid token manager
     /// @param caller Address to check
