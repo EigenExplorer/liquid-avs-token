@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import {BaseTest} from "./common/BaseTest.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
 
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../src/interfaces/IWithdrawalManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
@@ -19,53 +19,46 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
-    IStakerNode public stakerNode;
+    event RedemptionCreatedForNodeUndelegation(
+        bytes32 redemptionId,
+        bytes32 requestId,
+        bytes32[] withdrawalRoots,
+        uint256 nodeId
+    );
 
+    event RedemptionCreatedForRebalancing(
+        bytes32 redemptionId,
+        bytes32[] requestIds,
+        bytes32[] withdrawalRoots,
+        uint256[] nodeIds
+    );
+
+    event RedemptionCreatedForUserWithdrawals(
+        bytes32 redemptionId,
+        bytes32[] requestIds,
+        bytes32[] withdrawalRoots,
+        uint256[] nodeIds
+    );
+    
     function setUp() public override {
         super.setUp();
 
-        // Create a staker node for testing
+        // Delegate staker node
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+        address[] memory operators = new address[](1);
+        operators[0] = operatorAddress;
+        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        bytes32[] memory salts = new bytes32[](1);
+        
         vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
-        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+        liquidTokenManager.delegateNodes(nodeIds, operators, sigs, salts);
 
-        // Register a mock operator to EL
-        address operatorAddress = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(block.timestamp, block.prevrandao)
-                    )
-                )
-            )
+        assertEq(
+            stakerNode.getOperatorDelegation(),
+            operatorAddress,
+            "Node not delegated to correct operator"
         );
-
-        vm.prank(operatorAddress);
-        delegationManager.registerAsOperator(
-            IDelegationManager.OperatorDetails({
-                __deprecated_earningsReceiver: operatorAddress,
-                delegationApprover: address(0),
-                stakerOptOutWindowBlocks: 1
-            }),
-            "ipfs://"
-        );
-
-        // Strategy whitelist
-        ISignatureUtils.SignatureWithExpiry memory signature;
-        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
-        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
-
-        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
-        thirdPartyTransfersForbiddenValues[0] = false;
-
-        vm.prank(strategyManager.strategyWhitelister());
-        strategyManager.addStrategiesToDepositWhitelist(
-            strategiesToWhitelist,
-            thirdPartyTransfersForbiddenValues
-        );
-
-        // Delegate the staker node to EL
-        stakerNode.delegate(operatorAddress, signature, bytes32(0));
     }
 
     function testInitialize() public {
@@ -423,7 +416,7 @@ contract LiquidTokenManagerTest is BaseTest {
     
         uint256 nodeId = 0;
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.InvalidStakingAmount.selector, 0)); // Expect InvalidStakingAmount with 0 value
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.InvalidStakingAmount.selector, 0));
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
     }
 
@@ -446,7 +439,7 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
-        uint256 invalidNodeId = 1;
+        uint256 invalidNodeId = 2;
         vm.expectRevert(
             abi.encodeWithSelector(
                 IStakerNodeCoordinator.NodeIdOutOfRange.selector,
@@ -629,11 +622,43 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.setVolatilityThreshold(testToken, 20);
     }
 
-    /*
-    function testWithdrawalFailureDueToInsufficientBalance() public {
-        // User1 deposits 10 ether
-        vm.prank(user1);
+    function testCannotDelegateDelegatedNode() public {
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+        address[] memory operators = new address[](1);
+        address newOperator = address(0x123);
+        operators[0] = newOperator;
+        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        bytes32[] memory salts = new bytes32[](1);
+        
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNode.NodeIsDelegated.selector,
+                operatorAddress
+            )
+        );
+        liquidTokenManager.delegateNodes(nodeIds, operators, sigs, salts);
+    }
 
+    function testUndelegateNodesWithoutRedemption() public {    
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+        
+        // Verify node is undelegated
+        assertEq(
+            stakerNode.getOperatorDelegation(),
+            address(0),
+            "Node still shows delegation after undelegation"
+        );
+    }
+
+    function testUndelegateNodesWithRedemption() public {
+        // Stake assets to node
+        vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amountsToDeposit = new uint256[](1);
@@ -642,208 +667,537 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256 nodeId = 0;
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        // Get node's deposits before undelegation
+        (IStrategy[] memory strategies, uint256[] memory depositAmounts) = strategyManager.getDeposits(address(stakerNode));
+        
+        // Convert strategies to tokens for verification
+        IERC20[] memory expectedAssets = new IERC20[](strategies.length);
+        for (uint256 i = 0; i < strategies.length; i++) {
+            expectedAssets[i] = liquidTokenManager.strategyTokens(strategies[i]);
+        }
+        
+        // Set up event capture
+        vm.recordLogs();
+        
+        // Perform undelegation
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+        
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+        
+        // Verify node is undelegated
+        assertEq(
+            stakerNode.getOperatorDelegation(),
+            address(0),
+            "Node still shows delegation after undelegation"
+        );
+
+        // Get the recorded logs
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        // Find our RedemptionCreatedForNodeUndelegation event
+        // The event we want should be one of the last events emitted
+        bytes32 redemptionId;
+        bytes32 requestId;
+        bytes32[] memory withdrawalRoots;
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForNodeUndelegation(bytes32,bytes32,bytes32[],uint256)")) {
+                (redemptionId, requestId, withdrawalRoots, nodeId) = abi.decode(
+                    entries[i].data, 
+                    (bytes32, bytes32, bytes32[], uint256)
+                );
+                break;
+            }
+        }
+        
+        // Get and verify the redemption details
+        ILiquidTokenManager.Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemption.requestIds.length, 1, "Incorrect requestIds length");
+        assertEq(redemption.requestIds[0], requestId, "Incorrect requestId");
+        assertEq(redemption.withdrawalRoots.length, withdrawalRoots.length, "Incorrect withdrawalRoots length");
+        assertEq(redemption.withdrawalRoots[0], withdrawalRoots[0], "Incorrect withdrawalRoot");
+        assertEq(redemption.receiver, address(liquidToken), "Incorrect receiver");
+        
+        // Get the withdrawal requests using the captured withdrawal roots
+        IWithdrawalManager.ELWithdrawalRequest[] memory elRequests = withdrawalManager.getELWithdrawalRequests(withdrawalRoots);
+        
+        // Verify withdrawal request details
+        assertEq(elRequests[0].withdrawal.staker, address(stakerNode), "Incorrect staker address");
+        assertEq(elRequests[0].withdrawal.delegatedTo, operatorAddress, "Incorrect operator address");
+        assertEq(elRequests[0].withdrawal.shares[0], depositAmounts[0], "Incorrect withdrawal amount");
+        assertEq(address(elRequests[0].assets[0]), address(expectedAssets[0]), "Incorrect withdrawal asset");
+    }
+
+    function testNodeUndelegationsDoNotInflateShares() public {
+        // Stake assets to node
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        // Get initial share calculation
+        uint256 sharesBeforeWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
+
+        // Perform undelegation
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+        
+        // Check share calculation after undelegation
+        uint256 sharesAfterWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
+        
+        // Verify shares haven't been inflated
+        assertEq(
+            sharesBeforeWithdrawalQueued,
+            sharesAfterWithdrawalQueued,
+            "Token is mispriced due to inflated shares"
+        );
+    }
+
+    function testCannotUndelegateUndelegatedNode() public {
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 1;
+        
+        vm.expectRevert(IStakerNode.NodeIsNotDelegated.selector);
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+    }
+
+    function testWithdrawNodeAssets() public {
+        // Helper function to set up test state
+        (uint256 nodeId, uint256 initialNodeBalance) = _setupWithdrawNodeAssetsTest();
+        
+        // Helper function to perform withdrawal and get event data
+        (
+            bytes32 redemptionId,
+            bytes32[] memory requestIds,
+            bytes32[] memory withdrawalRoots,
+            uint256[] memory eventNodeIds
+        ) = _performWithdrawNodeAssets(nodeId);
+        
+        // Verify redemption details
+        _verifyWithdrawNodeAssetsRedemption(
+            redemptionId,
+            requestIds,
+            withdrawalRoots,
+            eventNodeIds,
+            nodeId,
+            initialNodeBalance
+        );
+    }
+
+    // Helper functions to break down the test
+    function _setupWithdrawNodeAssetsTest() internal returns (uint256 nodeId, uint256 initialNodeBalance) {
+        // Setup: Deposit and stake assets to node
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        nodeId = 0;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 5 ether;
 
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
-        // User1 tries to request a withdrawal for 9 ether (should eventually fail in fulfillment)
-        vm.startPrank(user1);
-        uint256[] memory withdrawalAmounts = new uint256[](1);
-        withdrawalAmounts[0] = 9 ether; // More than available
-
-        liquidToken.requestWithdrawal(assets, withdrawalAmounts);
-        vm.warp(block.timestamp + 15 days);
-
-        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
-        vm.expectRevert(); // TODO: Check if this is the correct revert message
-
-        liquidToken.fulfillWithdrawal(requestId);
-        vm.stopPrank();
+        initialNodeBalance = liquidTokenManager.getStakedAssetBalanceNode(testToken, nodeId);
+        return (nodeId, initialNodeBalance);
     }
 
-    function testSuccessfulWithdrawal() public {
-        // User1 deposits 10 ether
-        vm.startPrank(user1);
+    function _performWithdrawNodeAssets(uint256 nodeId) internal returns (
+        bytes32 redemptionId,
+        bytes32[] memory requestIds,
+        bytes32[] memory withdrawalRoots,
+        uint256[] memory eventNodeIds
+    ) {
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        IERC20[][] memory withdrawalAssets = new IERC20[][](1);
+        withdrawalAssets[0] = new IERC20[](1);
+        withdrawalAssets[0][0] = testToken;
+        
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = new uint256[](1);
+        shares[0][0] = 2 ether;
 
+        vm.recordLogs();
+        vm.prank(admin);
+        liquidTokenManager.withdrawNodeAssets(nodeIds, withdrawalAssets, shares);
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForRebalancing(bytes32,bytes32[],bytes32[],uint256[])")) {
+                (redemptionId, requestIds, withdrawalRoots, eventNodeIds) = abi.decode(
+                    entries[i].data, 
+                    (bytes32, bytes32[], bytes32[], uint256[])
+                );
+                break;
+            }
+        }
+        return (redemptionId, requestIds, withdrawalRoots, eventNodeIds);
+    }
+
+    function _verifyWithdrawNodeAssetsRedemption(
+        bytes32 redemptionId,
+        bytes32[] memory requestIds,
+        bytes32[] memory withdrawalRoots,
+        uint256[] memory eventNodeIds,
+        uint256 nodeId,
+        uint256 initialNodeBalance
+    ) internal {
+        ILiquidTokenManager.Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemption.requestIds.length, requestIds.length, "Incorrect requestIds length");
+        assertEq(redemption.withdrawalRoots.length, withdrawalRoots.length, "Incorrect withdrawalRoots length");
+        assertEq(redemption.receiver, address(liquidToken), "Incorrect receiver");
+
+        IWithdrawalManager.ELWithdrawalRequest[] memory elRequests = 
+            withdrawalManager.getELWithdrawalRequests(withdrawalRoots);
+        assertEq(elRequests[0].withdrawal.staker, address(stakerNode), "Incorrect staker address");
+        assertEq(elRequests[0].withdrawal.delegatedTo, operatorAddress, "Incorrect operator address");
+        assertEq(elRequests[0].withdrawal.shares[0], 2 ether, "Incorrect withdrawal amount");
+        assertEq(address(elRequests[0].assets[0]), address(testToken), "Incorrect withdrawal asset");
+
+        uint256 expectedRemainingBalance = initialNodeBalance - 2 ether;
+        uint256 actualRemainingBalance = liquidTokenManager.getStakedAssetBalanceNode(testToken, nodeId);
+        assertEq(actualRemainingBalance, expectedRemainingBalance, "Incorrect remaining balance");
+    }
+
+    function testWithdrawNodeAssetsDoesNotInflateShares() public {
+        // Setup phase
+        (uint256 nodeId, uint256 sharesBeforeWithdrawal) = _setupInflateSharesTest();
+        
+        // Perform withdrawal
+        _performWithdrawalForInflateTest(nodeId);
+        
+        // Verify shares
+        uint256 sharesAfterWithdrawal = liquidToken.calculateShares(testToken, 1 ether);
+        assertEq(
+            sharesBeforeWithdrawal,
+            sharesAfterWithdrawal,
+            "Token is mispriced due to inflated shares"
+        );
+    }
+
+    function _setupInflateSharesTest() internal returns (uint256 nodeId, uint256 sharesBeforeWithdrawal) {
+        vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
-
+        
         liquidToken.deposit(assets, amountsToDeposit, user1);
-        vm.stopPrank();
 
-        uint256 nodeId = 0;
-        uint256[] memory amountsToStake = new uint256[](1);
-        amountsToStake[0] = 5 ether;
+        nodeId = 0;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5 ether;
+
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amountsToStake);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
-        uint256 availableBalance = liquidToken.balanceOf(user1);
-        assertEq(
-            availableBalance,
-            10 ether,
-            "User1 liquid balance should be 10 ether after staking."
-        );
-
-        // User1 requests a withdrawal for the available amount (should pass)
-        vm.startPrank(user1);
-        uint256[] memory withdrawalAmounts = new uint256[](1);
-        withdrawalAmounts[0] = 5 ether; // Exactly the available amount
-
-        liquidToken.requestWithdrawal(assets, withdrawalAmounts);
-
-        vm.warp(block.timestamp + 15 days); // Simulate withdrawal delay
-
-        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
-        liquidToken.fulfillWithdrawal(requestId);
-
-        assertEq(
-            liquidToken.balanceOf(user1),
-            5 ether,
-            "User1 remaining balance after withdrawal is incorrect"
-        );
-        assertEq(
-            IERC20(address(testToken)).balanceOf(user1),
-            95 ether,
-            "User1 token balance after withdrawal is incorrect"
-        );
-
-        vm.stopPrank();
+        sharesBeforeWithdrawal = liquidToken.calculateShares(testToken, 1 ether);
+        return (nodeId, sharesBeforeWithdrawal);
     }
 
-    function testQueuedAssetBalancesUpdateAfterWithdrawalRequest() public {
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(liquidTokenManager)
-        );
-
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(stakerNodeCoordinator)
-        );
-
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 50 ether;        
-        
-        vm.prank(user1);
-        liquidToken.deposit(assets, amounts, user1);
-
-        uint256 initialQueuedBalance = liquidToken.queuedAssetBalances(address(testToken));
-        assertEq(initialQueuedBalance, 0, "Initial queued balance should be 0");
-
-        uint256 nodeId = 0;
-        uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 50 ether;
-
-        vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
-
+    function _performWithdrawalForInflateTest(uint256 nodeId) internal {
         uint256[] memory nodeIds = new uint256[](1);
         nodeIds[0] = nodeId;
-        liquidTokenManager.undelegateNodesFromOperators(nodeIds);
+        
+        IERC20[][] memory withdrawalAssets = new IERC20[][](1);
+        withdrawalAssets[0] = new IERC20[](1);
+        withdrawalAssets[0][0] = testToken;
+        
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = new uint256[](1);
+        shares[0][0] = 2 ether;
 
-        uint256 finalQueuedBalance = liquidToken.queuedAssetBalances(address(testToken));
-        assertEq(
-            finalQueuedBalance, 
-            50 ether, 
-            "Queued assets balance should match original staked amount"
-        );
+        vm.prank(admin);
+        liquidTokenManager.withdrawNodeAssets(nodeIds, withdrawalAssets, shares);
     }
 
-    function testQueuedWithdrawalsDoNotInflateShares() public {
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(liquidTokenManager)
-        );
-
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(stakerNodeCoordinator)
-        );
-
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(testToken));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 50 ether;        
+    function testSettleUserWithdrawals() public {
+        // Setup phase: Create deposits and withdrawal requests
+        (bytes32 requestId, uint256 nodeId, uint256 initialBalance) = _setupSettleUserWithdrawalsTest();
         
-        vm.prank(user1);
-        liquidToken.deposit(assets, amounts, user1);
+        // Execute settlement and capture events
+        bytes32 redemptionId = _performSettlement(requestId, nodeId);
+        
+        // Verify the results
+        _verifySettlementResults(redemptionId, requestId, initialBalance);
+    }
 
-        uint256 nodeId = 0;
-        uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 50 ether;
-        IStrategy[] memory strategiesForNode = new IStrategy[](1);
-        strategiesForNode[0] = mockStrategy;
+    // Helper function to set up the test state
+    function _setupSettleUserWithdrawalsTest() internal returns (
+        bytes32 requestId, 
+        uint256 nodeId,
+        uint256 initialBalance
+    ) {
+        // Set up initial deposit
+        vm.prank(user1);
+        IERC20[] memory depositAssets = new IERC20[](1);
+        depositAssets[0] = IERC20(address(testToken));
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = 10 ether;
+        
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+
+        // Create withdrawal request
+        vm.prank(user1);
+        requestId = liquidToken.initiateWithdrawal(depositAssets, depositAmounts);
+        
+        // Stake assets to node
+        nodeId = 0;
+        uint256[] memory stakeAmounts = new uint256[](1);
+        stakeAmounts[0] = 5 ether;
 
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, stakeAmounts);
 
-        uint256 sharesBeforeWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
+        initialBalance = testToken.balanceOf(address(withdrawalManager));
+        
+        return (requestId, nodeId, initialBalance);
+    }
 
+    // Helper function to perform the settlement
+    function _performSettlement(bytes32 requestId, uint256 nodeId) internal returns (bytes32 redemptionId) {
+        bytes32[] memory requestIds = new bytes32[](1);
+        requestIds[0] = requestId;
+
+        // Set up unstaked portion parameters
+        IERC20[] memory ltAssets = new IERC20[](1);
+        ltAssets[0] = testToken;
+        uint256[] memory ltAmounts = new uint256[](1);
+        ltAmounts[0] = 5 ether;
+
+        // Set up staked portion parameters
         uint256[] memory nodeIds = new uint256[](1);
         nodeIds[0] = nodeId;
-        liquidTokenManager.undelegateNodesFromOperators(nodeIds);
+        
+        IERC20[][] memory elAssets = new IERC20[][](1);
+        elAssets[0] = new IERC20[](1);
+        elAssets[0][0] = testToken;
+        
+        uint256[][] memory elShares = new uint256[][](1);
+        elShares[0] = new uint256[](1);
+        elShares[0][0] = 5 ether;
 
-        uint256 expectedTotal = 50 ether;
-        assertEq(liquidToken.totalAssets(), expectedTotal, "Total assets should include queued withdrawals");
-
-        uint256 sharesAfterWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
-        assertEq(sharesBeforeWithdrawalQueued, sharesAfterWithdrawalQueued, "Token is mispriced due to inflated shares");
-    }
-    */
-
-    function testCannotDelegateDelegatedNode() public {
-        address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
-            block.timestamp + 1,  // Different from setUp() operator
-            block.prevrandao
-        )))));
-
-        vm.prank(testOperator);
-        delegationManager.registerAsOperator(
-            IDelegationManager.OperatorDetails({
-                __deprecated_earningsReceiver: testOperator,
-                delegationApprover: address(0),
-                stakerOptOutWindowBlocks: 1
-            }),
-            "ipfs://"
-        );
-
-        address currentOperator = stakerNode.getOperatorDelegation();
-        assertTrue(currentOperator != address(0), "Node should be delegated in setUp");
-
+        vm.recordLogs();
+        
         vm.prank(admin);
-        ISignatureUtils.SignatureWithExpiry memory signature;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakerNode.NodeIsDelegated.selector,
-                currentOperator
-            )
+        liquidTokenManager.settleUserWithdrawals(
+            requestIds,
+            ltAssets,
+            ltAmounts,
+            nodeIds,
+            elAssets,
+            elShares
         );
-        stakerNode.delegate(testOperator, signature, bytes32(0));
+
+        // Extract redemption ID from logs
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForUserWithdrawals(bytes32,bytes32[],bytes32[],uint256[])")) {
+                (redemptionId,,, ) = abi.decode(
+                    entries[i].data, 
+                    (bytes32, bytes32[], bytes32[], uint256[])
+                );
+                break;
+            }
+        }
+        
+        return redemptionId;
     }
 
-    function testCannotUndelegateUndelegatedNode() public {
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_WITHDRAWER_ROLE(),
-            admin
+    // Helper function to verify settlement results
+    function _verifySettlementResults(
+        bytes32 redemptionId, 
+        bytes32 requestId,
+        uint256 initialBalance
+    ) internal {
+        // Verify transfer amounts
+        uint256 expectedUnstakedTransfer = 5 ether;
+        uint256 actualUnstakedTransfer = testToken.balanceOf(address(withdrawalManager)) - initialBalance;
+        assertEq(actualUnstakedTransfer, expectedUnstakedTransfer, "Incorrect unstaked transfer amount");
+
+        // Verify redemption details
+        ILiquidTokenManager.Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemption.requestIds[0], requestId, "Incorrect requestId");
+        assertEq(redemption.receiver, address(withdrawalManager), "Incorrect receiver");
+    }
+
+    function testSettleUserWithdrawalsDoesNotInflateShares() public {
+        // Setup phase
+        (bytes32 requestId, uint256 nodeId, uint256 sharesBeforeSettlement) = _setupSharesInflationTest();
+        
+        // Perform settlement
+        _performSettlementForSharesTest(requestId, nodeId);
+        
+        // Verify shares weren't inflated
+        uint256 sharesAfterSettlement = liquidToken.calculateShares(testToken, 1 ether);
+        assertEq(
+            sharesBeforeSettlement,
+            sharesAfterSettlement,
+            "Token is mispriced due to inflated shares"
         );
-        vm.prank(admin);
-        stakerNode.undelegate();
+    }
 
-        address operator = stakerNode.getOperatorDelegation();
-        assertEq(operator, address(0), "Node should be undelegated");
+    // Helper function for shares inflation test setup
+    function _setupSharesInflationTest() internal returns (
+        bytes32 requestId,
+        uint256 nodeId,
+        uint256 sharesBeforeSettlement
+    ) {
+        vm.prank(user1);
+        IERC20[] memory depositAssets = new IERC20[](1);
+        depositAssets[0] = IERC20(address(testToken));
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = 10 ether;
+        
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+
+        nodeId = 0;
+        uint256[] memory stakeAmounts = new uint256[](1);
+        stakeAmounts[0] = 5 ether;
 
         vm.prank(admin);
-        vm.expectRevert(IStakerNode.NodeIsNotDelegated.selector);
-        stakerNode.undelegate();
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, stakeAmounts);
+
+        sharesBeforeSettlement = liquidToken.calculateShares(testToken, 1 ether);
+
+        vm.prank(user1);
+        requestId = liquidToken.initiateWithdrawal(depositAssets, depositAmounts);
+
+        return (requestId, nodeId, sharesBeforeSettlement);
+    }
+
+    function _performSettlementForSharesTest(bytes32 requestId, uint256 nodeId) internal {
+        bytes32[] memory requestIds = new bytes32[](1);
+        requestIds[0] = requestId;
+
+        // Set up unstaked portion parameters
+        IERC20[] memory ltAssets = new IERC20[](1);
+        ltAssets[0] = testToken;
+        uint256[] memory ltAmounts = new uint256[](1);
+        ltAmounts[0] = 5 ether;
+
+        // Set up staked portion parameters
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        IERC20[][] memory elAssets = new IERC20[][](1);
+        elAssets[0] = new IERC20[](1);
+        elAssets[0][0] = testToken;
+        
+        uint256[][] memory elShares = new uint256[][](1);
+        elShares[0] = new uint256[](1);
+        elShares[0][0] = 5 ether;
+
+        vm.prank(admin);
+        liquidTokenManager.settleUserWithdrawals(
+            requestIds,
+            ltAssets,
+            ltAmounts,
+            nodeIds,
+            elAssets,
+            elShares
+        );
+    }
+
+    function testSettleUserWithdrawalsFailsIfAllRequestsDontSettle() public {
+        // Setup test state
+        bytes32 requestId = _setupFailureTest(10 ether);
+        
+        // Attempt settlement with insufficient amounts
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.RedemptionDoesNotSettleRequests.selector,
+            address(testToken),
+            9 ether,  // Total amount provided
+            10 ether  // Amount requested
+        ));
+        _attemptInsufficientSettlement(requestId);
+    }
+
+    // Helper function for failure test setup
+    function _setupFailureTest(uint256 amount) internal returns (bytes32) {
+        vm.prank(user1);
+        IERC20[] memory depositAssets = new IERC20[](1);
+        depositAssets[0] = IERC20(address(testToken));
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = amount;
+        
+        liquidToken.deposit(depositAssets, depositAmounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory stakeAmounts = new uint256[](1);
+        stakeAmounts[0] = 5 ether;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, depositAssets, stakeAmounts);
+
+        vm.prank(user1);
+        return liquidToken.initiateWithdrawal(depositAssets, depositAmounts);
+    }
+
+    // Helper function to attempt settlement with insufficient amounts
+    function _attemptInsufficientSettlement(bytes32 requestId) internal {
+        bytes32[] memory requestIds = new bytes32[](1);
+        requestIds[0] = requestId;
+
+        IERC20[] memory ltAssets = new IERC20[](1);
+        ltAssets[0] = testToken;
+        uint256[] memory ltAmounts = new uint256[](1);
+        ltAmounts[0] = 4 ether;
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = 0;
+        
+        IERC20[][] memory elAssets = new IERC20[][](1);
+        elAssets[0] = new IERC20[](1);
+        elAssets[0][0] = testToken;
+        
+        uint256[][] memory elShares = new uint256[][](1);
+        elShares[0] = new uint256[](1);
+        elShares[0][0] = 5 ether;
+
+        vm.prank(admin);
+        liquidTokenManager.settleUserWithdrawals(
+            requestIds,
+            ltAssets,
+            ltAmounts,
+            nodeIds,
+            elAssets,
+            elShares
+        );
     }
 }

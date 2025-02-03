@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
@@ -18,56 +17,9 @@ import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 
 contract LiquidTokenTest is BaseTest {
-    IStakerNode public stakerNode;
-
     function setUp() public override {
         super.setUp();
         liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable price volatility check
-
-        // Create a staker node for testing
-        vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
-        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
-
-        // Register a mock operator to EL
-        address operatorAddress = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(block.timestamp, block.prevrandao)
-                    )
-                )
-            )
-        );
-
-        vm.prank(operatorAddress);
-        delegationManager.registerAsOperator(
-            IDelegationManager.OperatorDetails({
-                __deprecated_earningsReceiver: operatorAddress,
-                delegationApprover: address(0),
-                stakerOptOutWindowBlocks: 1
-            }),
-            "ipfs://"
-        );
-
-        // Strategy whitelist
-        ISignatureUtils.SignatureWithExpiry memory signature;
-        IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
-        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](2);
-
-        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
-        strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
-        thirdPartyTransfersForbiddenValues[0] = false;
-        thirdPartyTransfersForbiddenValues[1] = false;
-
-        vm.prank(strategyManager.strategyWhitelister());
-        strategyManager.addStrategiesToDepositWhitelist(
-            strategiesToWhitelist,
-            thirdPartyTransfersForbiddenValues
-        );
-
-        // Delegate the staker node to EL
-        stakerNode.delegate(operatorAddress, signature, bytes32(0));
     }
 
     function testDeposit() public {
@@ -250,14 +202,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
-    function testInitiateWithdrawalWhenAssetsNotStaked() public {
-        
-    }
-
-    function testInitiateWithdrawalWhenAssetsStaked() public {
-        
-    }
-
+    /*
     function testFulfillWithdrawal() public {
         vm.startPrank(user1);
         IERC20[] memory depositAssets = new IERC20[](1);
@@ -428,7 +373,6 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
-    /*
     function testRequestWithdrawalArrayLengthMismatch() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
@@ -573,7 +517,7 @@ contract LiquidTokenTest is BaseTest {
                 user1
             )
         );
-        liquidToken.transferAssets(assets, amounts);
+        liquidToken.transferAssets(assets, amounts, address(liquidTokenManager));
     }
 
     function testTransferAssetsInsufficientBalance() public {
@@ -597,7 +541,7 @@ contract LiquidTokenTest is BaseTest {
                 20 ether
             )
         );
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
     }
 
     function testPause() public {

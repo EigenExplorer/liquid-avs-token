@@ -99,7 +99,7 @@ interface ILiquidToken is IERC20 {
     function initiateWithdrawal(
         IERC20[] memory assets,
         uint256[] memory amounts
-    ) external;
+    ) external returns (bytes32);
 
     /// @notice Transfers assets to the LiquidTokenManager
     /// @param assetsToRetrieve The assets to transfer

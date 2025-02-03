@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "forge-std/console.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
@@ -29,10 +30,6 @@ contract WithdrawalManager is
     using SafeERC20 for IERC20;
     using Math for uint256;
 	
-    /// @notice Role identifier for price update operations
-    bytes32 public constant WITHDRAWAL_CONTROLLER_ROLE =
-        keccak256("WITHDRAWAL_CONTROLLER_ROLE");
-
     IDelegationManager public delegationManager;
     ILiquidToken public liquidToken;
     ILiquidTokenManager public liquidTokenManager;
@@ -42,12 +39,12 @@ contract WithdrawalManager is
     /// @notice User Withdrawals
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
-
-    /// @notice Redemptions
-    mapping(bytes32 => ILiquidTokenManager.Redemption) public redemptions;
     
     /// @notice EigenLayer Withdrawals
     mapping(bytes32 => ELWithdrawalRequest) public elWithdrawalRequests;
+
+    /// @notice Redemptions
+    mapping(bytes32 => ILiquidTokenManager.Redemption) public redemptions;
 
     /// @dev Disables initializers for the implementation contract
     constructor() {

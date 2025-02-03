@@ -103,6 +103,7 @@ contract LiquidTokenManager is
         }
 
         liquidToken = init.liquidToken;
+        withdrawalManager = init.withdrawalManager;
         stakerNodeCoordinator = init.stakerNodeCoordinator;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
@@ -136,6 +137,7 @@ contract LiquidTokenManager is
 
             tokens[init.assets[i]] = init.tokenInfo[i];
             tokenStrategies[init.assets[i]] = init.strategies[i];
+            strategyTokens[init.strategies[i]] = init.assets[i];
             supportedTokens.push(init.assets[i]);
 
             emit TokenSet(
@@ -274,64 +276,55 @@ contract LiquidTokenManager is
 
         emit NodeUndelegated(nodeId, delegatedTo);
 
-        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](withdrawalRoots.length);
-        IERC20[][] memory assets = new IERC20[][](withdrawalRoots.length);
+        if (strategies.length > 0 ) {
+            IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](withdrawalRoots.length);
+            IERC20[][] memory assets = new IERC20[][](withdrawalRoots.length);
 
-        for (uint256 i = 0; i < withdrawalRoots.length; i++) {
-            IStrategy[] memory requestStrategies = new IStrategy[](1);
-            requestStrategies[0] = strategies[i];
-            
-            uint256[] memory requestShares = new uint256[](1);
-            requestShares[0] = shares[i];
+            for (uint256 i = 0; i < withdrawalRoots.length; i++) {
+                IStrategy[] memory requestStrategies = new IStrategy[](1);
+                requestStrategies[0] = strategies[i];
+                
+                uint256[] memory requestShares = new uint256[](1);
+                requestShares[0] = shares[i];
 
-            IDelegationManager.Withdrawal memory withdrawal = IDelegationManager.Withdrawal({
-                staker: staker,
-                delegatedTo: delegatedTo,
-                withdrawer: staker,
-                nonce: nonce,
-                startBlock: uint32(block.number),
-                strategies: requestStrategies,
-                shares: requestShares
-            });
+                IDelegationManager.Withdrawal memory withdrawal = IDelegationManager.Withdrawal({
+                    staker: staker,
+                    delegatedTo: delegatedTo,
+                    withdrawer: staker,
+                    nonce: nonce,
+                    startBlock: uint32(block.number),
+                    strategies: requestStrategies,
+                    shares: requestShares
+                });
 
-            if (withdrawalRoots[i] != keccak256(abi.encode(withdrawal)))
-                revert InvalidWithdrawalRoot();
+                if (withdrawalRoots[i] != keccak256(abi.encode(withdrawal)))
+                    revert InvalidWithdrawalRoot();
 
-            IERC20[] memory requestAssets = new IERC20[](1);
-            requestAssets[0] = strategyTokens[strategies[i]];
+                IERC20[] memory requestAssets = new IERC20[](1);
+                requestAssets[0] = strategyTokens[strategies[i]];
 
-            // Credit queued asset balances as these amounts would be removed from staker node shares
-            liquidToken.creditQueuedAssetBalances(requestAssets, requestShares);
+                // Credit queued asset balances as these amounts would be removed from staker node shares
+                liquidToken.creditQueuedAssetBalances(requestAssets, requestShares);
 
-            withdrawals[i] = withdrawal;
-            assets[i] = requestAssets;
-        }
+                withdrawals[i] = withdrawal;
+                assets[i] = requestAssets;
+            }
 
-        // Update `WithdrawalManager` with the new redemption 
-        bytes32[] memory requestIds = new bytes32[](1);
-        requestIds[0]  = keccak256(abi.encode(
-            assets,
-            shares,
-            block.timestamp,
-            _redemptionNonce
-        ));
+            bytes32[] memory requestIds = new bytes32[](1);
+            requestIds[0]  = keccak256(abi.encode(
+                assets,
+                shares,
+                block.timestamp,
+                _redemptionNonce
+            ));
 
-        bytes32 redemptionId = keccak256(
-            abi.encodePacked(
-                requestIds,
+            emit RedemptionCreatedForNodeUndelegation(
+                _createRedemption(requestIds, withdrawalRoots, withdrawals, assets, address(liquidToken)),
+                requestIds[0],
                 withdrawalRoots,
-                _redemptionNonce++
-            )
-        );
-
-        Redemption memory redemption = Redemption({
-            requestIds: requestIds,
-            withdrawalRoots: withdrawalRoots,
-            receiver: address(liquidToken)
-        });
-        
-        withdrawalManager.recordRedemptionCreated(redemptionId, redemption, withdrawals, assets);
-        emit RedemptionCreatedForNodeUndelegation(redemptionId, requestIds[0], withdrawalRoots, nodeId);
+                nodeId
+            );
+        }
     }
 
     /// @notice Stakes assets to multiple nodes
@@ -477,23 +470,12 @@ contract LiquidTokenManager is
             liquidToken.creditQueuedAssetBalances(requestAssets, requestShares);
         }
 
-        // Update `WithdrawalManager` with the new redemption 
-        bytes32 redemptionId = keccak256(
-            abi.encodePacked(
-                requestIds,
-                withdrawalRoots,
-                _redemptionNonce++
-            )
+        emit RedemptionCreatedForRebalancing(
+            _createRedemption(requestIds, withdrawalRoots, withdrawals, assets, address(liquidToken)),
+            requestIds,
+            withdrawalRoots,
+            nodeIds
         );
-
-        Redemption memory redemption = Redemption({
-            requestIds: requestIds,
-            withdrawalRoots: withdrawalRoots,
-            receiver: address(liquidToken)
-        });
-
-        withdrawalManager.recordRedemptionCreated(redemptionId, redemption, withdrawals, assets);
-        emit RedemptionCreatedForRebalancing(redemptionId, requestIds, withdrawalRoots, nodeIds);
     }
 
     /// @notice Enables a set of user withdrawal requests to be fulfillable after 14 days by the respective users
@@ -528,7 +510,7 @@ contract LiquidTokenManager is
         // Direct unstaked funds from `LiquidToken` to `WithdrawalManager`
         liquidToken.transferAssets(ltAssets, ltAmounts, address(withdrawalManager));
 
-        // Create a redemption for the rest of the settlement by wihtdrawing from staker nodes
+        // Create a redemption for the rest of the settlement by withdrawing from staker nodes
         _createRedemptionUserWithdrawals(requestIds, nodeIds, elAssets, elShares);
     }
 
@@ -555,80 +537,15 @@ contract LiquidTokenManager is
         IERC20[] memory requestTokens = new IERC20[](supportedTokens.length);
         uint256[] memory requestAmounts = new uint256[](supportedTokens.length);
 
-        for(uint256 i = 0; i < withdrawalRequests.length; i++) {
-            IWithdrawalManager.WithdrawalRequest memory request = withdrawalRequests[i];
-            for (uint256 j = 0; j < request.assets.length; j++) {
-                IERC20 token = request.assets[j];
-                
-                bool found = false;
-                for(uint256 k = 0; k < uniqueTokenCount; k++) {
-                    if (requestTokens[k] == token) {
-                        requestAmounts[k] += request.shareAmounts[j];
-                        found = true;
-                        break;
-                    }
-                }
-                
-                if (!found) {
-                    requestTokens[uniqueTokenCount] = token;
-                    requestAmounts[uniqueTokenCount++] = request.shareAmounts[j];
-                }
-            }
-        }
+        // Process withdrawal requests to aggregate token amounts
+        (uniqueTokenCount, requestTokens, requestAmounts) = _processWithdrawalRequests(withdrawalRequests);
 
         // Gather the cumulative expected amounts per token from the redemption
         uint256[] memory expectedRedemptionAmounts = new uint256[](uniqueTokenCount);
 
-        // Amounts from `LiquidToken` unstaked funds
-        for (uint256 i = 0; i < ltAssets.length; i++) {
-            IERC20 token = ltAssets[i];
-            uint256 amount = ltAmounts[i];
-            
-            if (token.balanceOf(address(liquidToken)) < amount)
-                revert InsufficientBalance(
-                    token,
-                    amount,
-                    token.balanceOf(address(liquidToken))
-            );
-
-            for (uint256 j = 0; j < uniqueTokenCount; j++) {
-                if (requestTokens[j] == token) {
-                    expectedRedemptionAmounts[j] += amount;
-                    break;
-                }
-            }
-        }
-
-        // Amounts from staker node withdrawals
-        for (uint256 i = 0; i < nodeIds.length; i++) {
-            IERC20[] memory nodeAssets = elAssets[i];
-            uint256[] memory nodeShares = elShares[i];
-            
-            if (nodeShares.length != nodeAssets.length) {
-                revert LengthMismatch(nodeShares.length, nodeAssets.length);
-            }
-            
-            for (uint256 j = 0; j < nodeAssets.length; j++) {
-                IERC20 token = nodeAssets[j];
-                uint256 amount = nodeShares[j];
-
-                uint256 assetBalanceNode = getStakedAssetBalanceNode(token, nodeIds[i]);
-                if (assetBalanceNode < amount) {
-                    revert InsufficientBalance(
-                        token,
-                        amount,
-                        assetBalanceNode
-                    );
-                }
-                
-                for (uint256 k = 0; k < uniqueTokenCount; k++) {
-                    if (requestTokens[k] == token) {
-                        expectedRedemptionAmounts[k] += amount;
-                        break;
-                    }
-                }
-            }
-        }
+        // Process amounts from LiquidToken and Staker Nodes
+        _processLtAmounts(ltAssets, ltAmounts, requestTokens, expectedRedemptionAmounts, uniqueTokenCount);
+        _processElAmounts(nodeIds, elAssets, elShares, requestTokens, expectedRedemptionAmounts, uniqueTokenCount);
 
         // Verify that the cumulative amounts will actually settle all requests
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
@@ -645,6 +562,89 @@ contract LiquidTokenManager is
         liquidToken.creditQueuedAssetBalances(requestTokens, requestAmounts);
     }
 
+    function _processWithdrawalRequests(
+        IWithdrawalManager.WithdrawalRequest[] memory withdrawalRequests
+    ) internal view returns (uint256 uniqueTokenCount, IERC20[] memory requestTokens, uint256[] memory requestAmounts) {
+        requestTokens = new IERC20[](supportedTokens.length);
+        requestAmounts = new uint256[](supportedTokens.length);
+        uniqueTokenCount = 0;
+
+        for (uint256 i = 0; i < withdrawalRequests.length; i++) {
+            IWithdrawalManager.WithdrawalRequest memory request = withdrawalRequests[i];
+            for (uint256 j = 0; j < request.assets.length; j++) {
+                IERC20 token = request.assets[j];
+                bool found = false;
+                for (uint256 k = 0; k < uniqueTokenCount; k++) {
+                    if (requestTokens[k] == token) {
+                        requestAmounts[k] += request.shareAmounts[j];
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    requestTokens[uniqueTokenCount] = token;
+                    requestAmounts[uniqueTokenCount] = request.shareAmounts[j];
+                    uniqueTokenCount++;
+                }
+            }
+        }
+    }
+
+    function _processLtAmounts(
+        IERC20[] calldata ltAssets,
+        uint256[] calldata ltAmounts,
+        IERC20[] memory requestTokens,
+        uint256[] memory expectedRedemptionAmounts,
+        uint256 uniqueTokenCount
+    ) internal view {
+        for (uint256 i = 0; i < ltAssets.length; i++) {
+            IERC20 asset = ltAssets[i];
+            uint256 amount = ltAmounts[i];
+            if (asset.balanceOf(address(liquidToken)) < amount) {
+                revert InsufficientBalance(
+                    asset,
+                    amount,
+                    asset.balanceOf(address(liquidToken))
+                );
+            }
+            for (uint256 j = 0; j < uniqueTokenCount; j++) {
+                if (requestTokens[j] == asset) {
+                    expectedRedemptionAmounts[j] += amount;
+                    break;
+                }
+            }
+        }
+    }
+
+    function _processElAmounts(
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata elAssets,
+        uint256[][] calldata elShares,
+        IERC20[] memory requestTokens,
+        uint256[] memory expectedRedemptionAmounts,
+        uint256 uniqueTokenCount
+    ) internal view {
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            if (elShares[i].length != elAssets[i].length) {
+                revert LengthMismatch(elShares[i].length, elAssets[i].length);
+            }
+            for (uint256 j = 0; j < elAssets[i].length; j++) {
+                IERC20 token = elAssets[i][j];
+                uint256 amount = elShares[i][j];
+                uint256 assetBalanceNode = getStakedAssetBalanceNode(token, nodeIds[i]);
+                if (assetBalanceNode < amount) {
+                    revert InsufficientBalance(token, amount, assetBalanceNode);
+                }
+                for (uint256 k = 0; k < uniqueTokenCount; k++) {
+                    if (requestTokens[k] == token) {
+                        expectedRedemptionAmounts[k] += amount;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     /// @notice Creates a redemption for the unstaked funds portion of a user withdrawals settlement
     /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
     /// @param nodeIds The node IDs from which funds will be withdrawn
@@ -656,13 +656,12 @@ contract LiquidTokenManager is
         IERC20[][] calldata elAssets,
         uint256[][] calldata elShares
     ) internal {
-        uint256 elActions = nodeIds.length;
-        bytes32[] memory withdrawalRoots = new bytes32[](elActions);
-        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](elActions);
-        IERC20[][] memory assets = new IERC20[][](elActions);
+        bytes32[] memory withdrawalRoots = new bytes32[](nodeIds.length);
+        IDelegationManager.Withdrawal[] memory withdrawals = new IDelegationManager.Withdrawal[](nodeIds.length);
+        IERC20[][] memory assets = new IERC20[][](nodeIds.length);
 
         // Call for EL withdrawals on staker nodes
-        for (uint256 i = 0; i < elActions; i++) {
+        for (uint256 i = 0; i < nodeIds.length; i++) {
             (withdrawalRoots[i], withdrawals[i], assets[i]) = _createELWithdrawal(
                 nodeIds[i],
                 elAssets[i],
@@ -670,23 +669,12 @@ contract LiquidTokenManager is
             );
         }
 
-        // Update `WithdrawalManager` with the new redemption 
-        bytes32 redemptionId = keccak256(
-            abi.encodePacked(
-                requestIds,
-                withdrawalRoots,
-                _redemptionNonce++
-            )
+        emit RedemptionCreatedForUserWithdrawals(
+            _createRedemption(requestIds, withdrawalRoots, withdrawals, assets, address(withdrawalManager)),
+            requestIds,
+            withdrawalRoots,
+            nodeIds
         );
-
-        Redemption memory redemption = Redemption({
-            requestIds: requestIds,
-            withdrawalRoots: withdrawalRoots,
-            receiver: address(withdrawalManager)
-        });
-        
-        withdrawalManager.recordRedemptionCreated(redemptionId, redemption, withdrawals, assets);
-        emit RedemptionCreatedForUserWithdrawals(redemptionId, requestIds, withdrawalRoots, nodeIds);
     }
 
     /// @notice For a given node, creates a withdrawal request on EL
@@ -725,6 +713,34 @@ contract LiquidTokenManager is
         return (withdrawalRoot, withdrawal, assets);
     }
 
+    function _createRedemption(
+        bytes32[] memory requestIds,
+        bytes32[] memory withdrawalRoots,
+        IDelegationManager.Withdrawal[] memory withdrawals,
+        IERC20[][] memory assets,
+        address receiver
+    ) private returns (bytes32) {
+        bytes32 redemptionId = keccak256(
+            abi.encode(
+                requestIds,
+                withdrawalRoots,
+                block.timestamp,
+                _redemptionNonce++
+            )
+        );
+
+        Redemption memory redemption = Redemption({
+            requestIds: requestIds,
+            withdrawalRoots: withdrawalRoots,
+            receiver: receiver
+        });
+
+        // Update `WithdrawalManager` with the new redemption 
+        withdrawalManager.recordRedemptionCreated(redemptionId, redemption, withdrawals, assets);
+        
+        return redemptionId;
+    }
+
     /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
     /// @dev The caller must make sure every i-th element of `withdrawalRoots[][]` aligns with the corresponding `nodeIds[i]`
     /// @dev The burden is on the caller to keep track of (node, withdrawal roots) pairs via corresponding events emitted during redemption creation
@@ -747,7 +763,7 @@ contract LiquidTokenManager is
         address receiver = redemption.receiver;
 
         if (
-            receiver != address(withdrawalManager) || 
+            receiver != address(withdrawalManager) && 
             receiver != address(liquidToken)
         )
             revert InvalidReceiver(receiver);

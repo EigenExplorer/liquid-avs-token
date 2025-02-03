@@ -9,6 +9,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
@@ -43,12 +44,23 @@ contract BaseTest is Test {
     MockERC20 public testToken2;
     MockStrategy public mockStrategy;
     MockStrategy public mockStrategy2;
+    IStakerNode public stakerNode;
+    IStakerNode public stakerNode2;
 
     // Addresses
     address public admin = address(this);
     address public pauser = address(2);
     address public user1 = address(3);
     address public user2 = address(4);
+    address public operatorAddress = address(
+        uint160(
+            uint256(
+                keccak256(
+                    abi.encodePacked(block.timestamp, block.prevrandao)
+                )
+            )
+        )
+    );
 
     // Private variables (with leading underscore)
     LiquidToken private _liquidTokenImplementation;
@@ -65,6 +77,8 @@ contract BaseTest is Test {
         _deployProxies();
         _initializeProxies();
         _setupTestTokens();
+        _setupStakerNodes();
+        _setupOperator();
     }
 
     function _setupELContracts() private {
@@ -216,8 +230,7 @@ contract BaseTest is Test {
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin,
-            stakerNodesWithdrawer: address(withdrawalManager)
+            stakerNodesDelegator: admin
         });
         stakerNodeCoordinator.initialize(init);
         stakerNodeCoordinator.registerStakerNodeImplementation(
@@ -228,7 +241,6 @@ contract BaseTest is Test {
     function _initializeWithdrawalManager() private {
         IWithdrawalManager.Init memory init = IWithdrawalManager.Init({
             initialOwner: admin,
-            withdrawalController: admin,
             delegationManager: delegationManager,
             liquidToken: liquidToken,
             liquidTokenManager: liquidTokenManager,
@@ -251,5 +263,43 @@ contract BaseTest is Test {
         testToken.approve(address(liquidToken), type(uint256).max);
         vm.prank(user2);
         testToken2.approve(address(liquidToken), type(uint256).max);
+    }
+
+    function _setupStakerNodes() private {
+        vm.prank(admin);
+        stakerNodeCoordinator.createStakerNode();
+        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+
+        vm.prank(admin);
+        stakerNodeCoordinator.createStakerNode();
+        stakerNode2 = stakerNodeCoordinator.getAllNodes()[1];
+    }
+
+    function _setupOperator() private {
+        // Register a mock operator to EL
+        vm.prank(operatorAddress);
+        delegationManager.registerAsOperator(
+            IDelegationManager.OperatorDetails({
+                __deprecated_earningsReceiver: operatorAddress,
+                delegationApprover: address(0),
+                stakerOptOutWindowBlocks: 1
+            }),
+            "ipfs://"
+        );
+
+        // Strategy whitelist
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](2);
+
+        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
+        thirdPartyTransfersForbiddenValues[0] = false;
+        thirdPartyTransfersForbiddenValues[1] = false;
+
+        vm.prank(strategyManager.strategyWhitelister());
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbiddenValues
+        );
     }
 }

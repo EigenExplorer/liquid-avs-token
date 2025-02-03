@@ -18,9 +18,9 @@ contract StakerNodeCoordinatorTest is BaseTest {
         vm.prank(admin);
         IStakerNode node = stakerNodeCoordinator.createStakerNode();
 
-        assertEq(address(node) != address(0), true);
-        assertEq(stakerNodeCoordinator.getStakerNodesCount(), 1);
-        assertEq(address(node), address(stakerNodeCoordinator.getNodeById(0)));
+        assertEq(address(node) != address(2), true);
+        assertEq(stakerNodeCoordinator.getStakerNodesCount(), 3);
+        assertEq(address(node), address(stakerNodeCoordinator.getNodeById(2)));
     }
 
     function testUpgradeStakerNodeImplementationSuccess() public {
@@ -54,62 +54,53 @@ contract StakerNodeCoordinatorTest is BaseTest {
         vm.prank(admin);
         IStakerNode node = stakerNodeCoordinator.createStakerNode();
 
-        IStakerNode retrievedNode = stakerNodeCoordinator.getNodeById(0);
+        IStakerNode retrievedNode = stakerNodeCoordinator.getNodeById(2);
         assertEq(address(retrievedNode), address(node));
     }
 
     function testGetAllNodesSuccess() public {
         vm.prank(admin);
         stakerNodeCoordinator.createStakerNode();
-        vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
 
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
-        assertEq(nodes.length, 2);
+        assertEq(nodes.length, 3);
     }
 
     function testGetStakerNodesCountSuccess() public {
         vm.prank(admin);
         stakerNodeCoordinator.createStakerNode();
-        vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
 
         uint256 count = stakerNodeCoordinator.getStakerNodesCount();
-        assertEq(count, 2);
+        assertEq(count, 3);
     }
 
     function testSetMaxNodesRevertsWhenLowerThanCurrentNodes() public {
         // Set max nodes and create a node
         vm.prank(admin);
-        stakerNodeCoordinator.setMaxNodes(1);
-        vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
+        stakerNodeCoordinator.setMaxNodes(2);
 
         // Try to set maxNodes lower than the current number of nodes
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector, 1, 0));
-        stakerNodeCoordinator.setMaxNodes(0);
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector, 2, 1));
+        stakerNodeCoordinator.setMaxNodes(1);
     }
 
     function testGetNodeByIdRevertsWithOutOfRangeId() public {
-        vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
-
         // Accessing node ID that is out of range
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.NodeIdOutOfRange.selector, 1));
-        stakerNodeCoordinator.getNodeById(1);
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.NodeIdOutOfRange.selector, 10));
+        stakerNodeCoordinator.getNodeById(10);
     }
 
     function testCreateStakerNodeRevertsWhenMaxNodesReached() public {
         // Set max nodes to 1 and create a node
         vm.prank(admin);
-        stakerNodeCoordinator.setMaxNodes(1);
+        stakerNodeCoordinator.setMaxNodes(3);
         vm.prank(admin);
         stakerNodeCoordinator.createStakerNode();
 
         // Try to create another node, which exceeds the max node limit
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 3));
         stakerNodeCoordinator.createStakerNode();
     }
 

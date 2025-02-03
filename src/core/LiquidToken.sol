@@ -127,7 +127,7 @@ contract LiquidToken is
     function initiateWithdrawal(
         IERC20[] memory assets,
         uint256[] memory amounts
-    ) external nonReentrant whenNotPaused {
+    ) external nonReentrant whenNotPaused returns (bytes32) {
         if (assets.length != amounts.length)
             revert ArrayLengthMismatch();
 
@@ -167,6 +167,8 @@ contract LiquidToken is
             requestId
         );
         _withdrawalNonce[msg.sender] += 1;
+
+        return requestId;
     }
 
     function previewWithdrawal(
@@ -270,7 +272,7 @@ contract LiquidToken is
         if (assetsToRetrieve.length != amounts.length)
             revert ArrayLengthMismatch();
 
-        if (receiver != address(liquidTokenManager) || receiver != address(withdrawalManager))
+        if (receiver != address(liquidTokenManager) && receiver != address(withdrawalManager))
             revert InvalidReceiver(receiver);
 
         for (uint256 i = 0; i < assetsToRetrieve.length; i++) {
