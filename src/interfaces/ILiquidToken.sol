@@ -129,6 +129,14 @@ interface ILiquidToken is IERC20 {
         uint256 sharesToBurn
     ) external;
 
+    /// @notice Credits asset balances for a given set of assets
+    /// @param assets The assets to debit
+    /// @param amounts The credit amounts expressed in native token
+    function creditAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts
+    ) external;
+
     /// @notice Calculates the number of shares for a given asset amount
     /// @param asset The asset to calculate shares for
     /// @param amount The amount of the asset

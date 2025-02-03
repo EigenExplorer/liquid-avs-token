@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "forge-std/Test.sol";
+import "forge-std/console.sol";
 import {BaseTest} from "./common/BaseTest.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
@@ -18,28 +20,7 @@ import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
-contract LiquidTokenManagerTest is BaseTest {
-    event RedemptionCreatedForNodeUndelegation(
-        bytes32 redemptionId,
-        bytes32 requestId,
-        bytes32[] withdrawalRoots,
-        uint256 nodeId
-    );
-
-    event RedemptionCreatedForRebalancing(
-        bytes32 redemptionId,
-        bytes32[] requestIds,
-        bytes32[] withdrawalRoots,
-        uint256[] nodeIds
-    );
-
-    event RedemptionCreatedForUserWithdrawals(
-        bytes32 redemptionId,
-        bytes32[] requestIds,
-        bytes32[] withdrawalRoots,
-        uint256[] nodeIds
-    );
-    
+contract LiquidTokenManagerTest is BaseTest {    
     function setUp() public override {
         super.setUp();
 
@@ -1199,5 +1180,366 @@ contract LiquidTokenManagerTest is BaseTest {
             elAssets,
             elShares
         );
+    }
+
+    function testFulfillRedemptionNodeUndelegation() public {
+        // First, set up the test state with node delegation and assets
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        // Get initial balances
+        uint256 initialLiquidTokenBalance = testToken.balanceOf(address(liquidToken));
+
+        uint256 nodeId = 0;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5 ether;
+        
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        // Record events for undelegation
+        vm.recordLogs();
+        
+        // Perform undelegation
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        // Get redemption details from emitted event
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        bytes32 redemptionId;
+        bytes32[] memory withdrawalRoots;
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForNodeUndelegation(bytes32,bytes32,bytes32[],uint256)")) {
+                (redemptionId,, withdrawalRoots,) = abi.decode(
+                    entries[i].data,
+                    (bytes32, bytes32, bytes32[], uint256)
+                );
+                break;
+            }
+        }
+
+        console.log("REACHED1");
+
+        // Verify redemption exists before completion
+        ILiquidTokenManager.Redemption memory redemptionBefore = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionBefore.withdrawalRoots.length, withdrawalRoots.length, "Redemption not properly recorded");
+
+        console.log("REACHED2");
+
+        // Advance time and blocks to meet EigenLayer's withdrawal delay requirements
+        vm.warp(block.timestamp + 7 days);
+        vm.roll(block.number + 50400); // Approximately 7 days worth of blocks
+
+        console.log("REACHED3");
+
+        // Prepare completion parameters
+        uint256[] memory completionNodeIds = new uint256[](1);
+        completionNodeIds[0] = nodeId;
+
+        console.log("REACHED4");
+        
+        bytes32[][] memory completionWithdrawalRoots = new bytes32[][](1);
+        completionWithdrawalRoots[0] = withdrawalRoots;
+
+        console.log("REACHED5");
+        console.log("!REACHED0");
+
+        // Complete the redemption
+        vm.prank(admin);
+        liquidTokenManager.completeRedemption(
+            redemptionId,
+            completionNodeIds,
+            completionWithdrawalRoots
+        );
+
+        console.log("REACHED6");
+
+        // Verify results
+        uint256 finalLiquidTokenBalance = testToken.balanceOf(address(liquidToken));
+        assertEq(
+            finalLiquidTokenBalance,
+            initialLiquidTokenBalance,
+            "Incorrect final balance"
+        );
+
+        // Verify redemption is completed (deleted)
+        vm.expectRevert(abi.encodeWithSelector(
+            IWithdrawalManager.RedemptionNotFound.selector,
+            redemptionId
+        ));
+        withdrawalManager.getRedemption(redemptionId);
+    }
+
+    function testFulfillRedemptionNodeUndelegationFailsForPartialCompletion() public {
+        // First, set up the test state with node delegation and assets
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amountsToDeposit = new uint256[](2);
+        amountsToDeposit[0] = 10 ether;
+        amountsToDeposit[1] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5 ether;
+        amounts[1] = 5 ether;
+        
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
+
+        // Record events for undelegation
+        vm.recordLogs();
+        
+        // Perform undelegation
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        // Get redemption details from emitted event
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        bytes32 redemptionId;
+        bytes32[] memory withdrawalRoots;
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForNodeUndelegation(bytes32,bytes32,bytes32[],uint256)")) {
+                (redemptionId,, withdrawalRoots,) = abi.decode(
+                    entries[i].data,
+                    (bytes32, bytes32, bytes32[], uint256)
+                );
+                break;
+            }
+        }
+
+        // Verify redemption exists before attempt
+        ILiquidTokenManager.Redemption memory redemptionBefore = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionBefore.withdrawalRoots.length, withdrawalRoots.length, "Redemption not properly recorded");
+
+        // Advance time and blocks to meet EigenLayer's withdrawal delay requirements
+        vm.warp(block.timestamp + 7 days);
+        vm.roll(block.number + 50400); // Approximately 7 days worth of blocks
+
+        // Prepare completion parameters with missing withdrawal root
+        uint256[] memory completionNodeIds = new uint256[](1);
+        completionNodeIds[0] = nodeId;
+        
+        bytes32[][] memory completionWithdrawalRoots = new bytes32[][](1);
+        completionWithdrawalRoots[0] = new bytes32[](1);
+        completionWithdrawalRoots[0][0] = withdrawalRoots[0];  // Only include first root
+
+        // Attempt to complete the redemption with missing withdrawal root
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.WithdrawalRootMissing.selector,
+            withdrawalRoots[1]  // The missing root
+        ));
+        vm.prank(admin);
+        liquidTokenManager.completeRedemption(
+            redemptionId,
+            completionNodeIds,
+            completionWithdrawalRoots
+        );
+
+        // Verify redemption still exists after failed attempt
+        ILiquidTokenManager.Redemption memory redemptionAfter = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionAfter.withdrawalRoots.length, withdrawalRoots.length, "Redemption should still exist");
+    }
+
+    function testFulfillRedemptionNodeWithdrawal() public {
+        // First, set up the test state with node delegation and assets
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory stakeAmounts = new uint256[](1);
+        stakeAmounts[0] = 5 ether;
+        
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, stakeAmounts);
+
+        // Get initial balances
+        uint256 initialLiquidTokenBalance = testToken.balanceOf(address(liquidToken));
+
+        // Prepare withdrawal parameters
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        IERC20[][] memory withdrawalAssets = new IERC20[][](1);
+        withdrawalAssets[0] = new IERC20[](1);
+        withdrawalAssets[0][0] = testToken;
+        
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = new uint256[](1);
+        shares[0][0] = 2 ether;
+
+        // Record events for withdrawal
+        vm.recordLogs();
+        
+        vm.prank(admin);
+        liquidTokenManager.withdrawNodeAssets(nodeIds, withdrawalAssets, shares);
+
+        // Get redemption details from emitted event
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        bytes32 redemptionId;
+        bytes32[] memory withdrawalRoots;
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForRebalancing(bytes32,bytes32[],bytes32[],uint256[])")) {
+                (redemptionId,, withdrawalRoots,) = abi.decode(
+                    entries[i].data,
+                    (bytes32, bytes32[], bytes32[], uint256[])
+                );
+                break;
+            }
+        }
+
+        // Verify redemption exists before completion
+        ILiquidTokenManager.Redemption memory redemptionBefore = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionBefore.withdrawalRoots.length, withdrawalRoots.length, "Redemption not properly recorded");
+
+        // Advance time and blocks to meet EigenLayer's withdrawal delay requirements
+        vm.warp(block.timestamp + 7 days);
+        vm.roll(block.number + 50400); // Approximately 7 days worth of blocks
+
+        // Prepare completion parameters
+        uint256[] memory completionNodeIds = new uint256[](1);
+        completionNodeIds[0] = nodeId;
+        
+        bytes32[][] memory completionWithdrawalRoots = new bytes32[][](1);
+        completionWithdrawalRoots[0] = withdrawalRoots;
+
+        // Complete the redemption
+        vm.prank(admin);
+        liquidTokenManager.completeRedemption(
+            redemptionId,
+            completionNodeIds,
+            completionWithdrawalRoots
+        );
+
+        // Verify results
+        uint256 finalLiquidTokenBalance = testToken.balanceOf(address(liquidToken));
+        assertEq(
+            finalLiquidTokenBalance,
+            initialLiquidTokenBalance + 2 ether,
+            "Incorrect final balance"
+        );
+
+        // Verify redemption is completed (deleted)
+        vm.expectRevert(abi.encodeWithSelector(
+            IWithdrawalManager.RedemptionNotFound.selector,
+            redemptionId
+        ));
+        withdrawalManager.getRedemption(redemptionId);
+    }
+
+    function testFulfillRedemptionNodeWithdrawalFailsForPartialCompletion() public {
+        // First, set up the test state with node delegation and assets
+        vm.prank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amountsToDeposit = new uint256[](2);
+        amountsToDeposit[0] = 10 ether;
+        amountsToDeposit[1] = 10 ether;
+        
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory stakeAmounts = new uint256[](2);
+        stakeAmounts[0] = 5 ether;
+        stakeAmounts[1] = 5 ether;
+        
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, stakeAmounts);
+
+        // Prepare withdrawal parameters
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        IERC20[][] memory withdrawalAssets = new IERC20[][](1);
+        withdrawalAssets[0] = new IERC20[](2);
+        withdrawalAssets[0][0] = testToken;
+        withdrawalAssets[0][1] = testToken2;
+        
+        uint256[][] memory shares = new uint256[][](1);
+        shares[0] = new uint256[](2);
+        shares[0][0] = 2 ether;
+        shares[0][1] = 2 ether;
+
+        // Record events for withdrawal
+        vm.recordLogs();
+        
+        vm.prank(admin);
+        liquidTokenManager.withdrawNodeAssets(nodeIds, withdrawalAssets, shares);
+
+        // Get redemption details from emitted event
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        
+        bytes32 redemptionId;
+        bytes32[] memory withdrawalRoots;
+        
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("RedemptionCreatedForRebalancing(bytes32,bytes32[],bytes32[],uint256[])")) {
+                (redemptionId,, withdrawalRoots,) = abi.decode(
+                    entries[i].data,
+                    (bytes32, bytes32[], bytes32[], uint256[])
+                );
+                break;
+            }
+        }
+
+        // Verify redemption exists before attempt
+        ILiquidTokenManager.Redemption memory redemptionBefore = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionBefore.withdrawalRoots.length, withdrawalRoots.length, "Redemption not properly recorded");
+
+        // Advance time and blocks to meet EigenLayer's withdrawal delay requirements
+        vm.warp(block.timestamp + 7 days);
+        vm.roll(block.number + 50400); // Approximately 7 days worth of blocks
+
+        // Prepare completion parameters with missing withdrawal root
+        uint256[] memory completionNodeIds = new uint256[](1);
+        completionNodeIds[0] = nodeId;
+        
+        bytes32[][] memory completionWithdrawalRoots = new bytes32[][](1);
+        completionWithdrawalRoots[0] = new bytes32[](1);
+        completionWithdrawalRoots[0][0] = withdrawalRoots[0];  // Only include first root
+
+        // Attempt to complete the redemption with missing withdrawal root
+        vm.expectRevert(abi.encodeWithSelector(
+            ILiquidTokenManager.WithdrawalRootMissing.selector,
+            withdrawalRoots[1]  // The missing root
+        ));
+        vm.prank(admin);
+        liquidTokenManager.completeRedemption(
+            redemptionId,
+            completionNodeIds,
+            completionWithdrawalRoots
+        );
+
+        // Verify redemption still exists after failed attempt
+        ILiquidTokenManager.Redemption memory redemptionAfter = withdrawalManager.getRedemption(redemptionId);
+        assertEq(redemptionAfter.withdrawalRoots.length, withdrawalRoots.length, "Redemption should still exist");
+        assertEq(redemptionAfter.withdrawalRoots[0], withdrawalRoots[0], "First withdrawal root should match");
+        assertEq(redemptionAfter.withdrawalRoots[1], withdrawalRoots[1], "Second withdrawal root should match");
     }
 }

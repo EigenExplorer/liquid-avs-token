@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "forge-std/console.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
@@ -291,7 +292,7 @@ contract LiquidTokenManager is
                     staker: staker,
                     delegatedTo: delegatedTo,
                     withdrawer: staker,
-                    nonce: nonce,
+                    nonce: nonce++,
                     startBlock: uint32(block.number),
                     strategies: requestStrategies,
                     shares: requestShares
@@ -757,7 +758,7 @@ contract LiquidTokenManager is
 
         if (withdrawalRoots.length != elActions) 
             revert LengthMismatch(withdrawalRoots.length, elActions);
-
+        
         Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
         bytes32[] memory redemptionWithdrawalRoots = redemption.withdrawalRoots;
         address receiver = redemption.receiver;
@@ -768,6 +769,8 @@ contract LiquidTokenManager is
         )
             revert InvalidReceiver(receiver);
 
+        console.log("!REACHED");
+
         // Check if all withdrawal roots for the redemption have been provided
         for (uint256 i = 0; i < redemptionWithdrawalRoots.length; i++) {
             bool found = false;
@@ -777,11 +780,16 @@ contract LiquidTokenManager is
                         found = true;
                         break;
                     }
+                    console.log("!REACHED10");
                 }
+                console.log("!REACHED11");
                 if (found) break;
             }
+            console.log("!REACHED12");
             if (!found) revert WithdrawalRootMissing(redemptionWithdrawalRoots[i]);
         }
+
+        console.log("!REACHED12");
 
         // Track cumulative expected token balances from completion of all withdrawals across all nodes
         IERC20[] memory uniqueTokens = new IERC20[](supportedTokens.length);
@@ -789,7 +797,7 @@ contract LiquidTokenManager is
         uint256 uniqueTokenCount = 0;
 
         for (uint256 k = 0; k < elActions; k++) {
-            _completeELWithdrawals(
+            uniqueTokenCount = _completeELWithdrawals(
                 nodeIds[k], 
                 withdrawalRoots[k],
                 uniqueTokens,
@@ -821,6 +829,7 @@ contract LiquidTokenManager is
         // If receiver is `LiquidToken`, fulfillment is complete & no shares to be burnt
         if (receiver == address(liquidToken)) {
             liquidToken.debitQueuedAssetBalances(uniqueTokens, expectedAmounts, 0);
+            liquidToken.creditAssetBalances(uniqueTokens, expectedAmounts);
         }
     }
 
@@ -836,7 +845,7 @@ contract LiquidTokenManager is
         IERC20[] memory uniqueTokens,
         uint256[] memory expectedAmounts,
         uint256 uniqueTokenCount
-    ) private {
+    ) private returns (uint256) {
         uint256 arrayLength = withdrawalRoots.length;
 
         IDelegationManager.Withdrawal[] memory nodeWithdrawals = 
@@ -875,6 +884,8 @@ contract LiquidTokenManager is
         // Complete withdrawals on EL
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         node.completeWithdrawals(nodeWithdrawals, nodeTokens);
+
+        return uniqueTokenCount;
     }
 
     /// @notice Updates the price of a token
