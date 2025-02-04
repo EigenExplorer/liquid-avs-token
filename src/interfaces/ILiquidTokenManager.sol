@@ -259,6 +259,9 @@ interface ILiquidTokenManager {
     /// @param receiver The invalid receiver address
     error InvalidReceiver(address receiver);
 
+    /// @notice Error thrown when attempting to stake assets to a node that is not delegated
+    error NodeIsNotDelegated();
+
     /// @notice Error thrown when a redemption's amounts don't match the withdrawal requests
     /// @param asset The token address
     /// @param expectedAmount The amount expected

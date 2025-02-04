@@ -119,6 +119,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
         returns (bytes32)
     {
+        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        
         IDelegationManager.QueuedWithdrawalParams[] memory requestParams = 
             new IDelegationManager.QueuedWithdrawalParams[](1);
         

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/console.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
@@ -119,7 +118,7 @@ contract WithdrawalManager is
         if (request.user != msg.sender) revert InvalidWithdrawalRequest();
         if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
             revert WithdrawalDelayNotMet();
-        if (request.canFulfill != false) revert WithdrawalNotReadyToFulfill();
+        if (request.canFulfill == false) revert WithdrawalNotReadyToFulfill();
 
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;

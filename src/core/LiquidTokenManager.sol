@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/console.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
@@ -374,6 +373,7 @@ contract LiquidTokenManager is
         }
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        if (node.getOperatorDelegation() == address(0)) revert NodeIsNotDelegated();
 
         // Each asset is deposited into its corresponding strategy ie, we never convert assets
         IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
@@ -769,8 +769,6 @@ contract LiquidTokenManager is
         )
             revert InvalidReceiver(receiver);
 
-        console.log("!REACHED");
-
         // Check if all withdrawal roots for the redemption have been provided
         for (uint256 i = 0; i < redemptionWithdrawalRoots.length; i++) {
             bool found = false;
@@ -780,16 +778,11 @@ contract LiquidTokenManager is
                         found = true;
                         break;
                     }
-                    console.log("!REACHED10");
                 }
-                console.log("!REACHED11");
                 if (found) break;
             }
-            console.log("!REACHED12");
             if (!found) revert WithdrawalRootMissing(redemptionWithdrawalRoots[i]);
         }
-
-        console.log("!REACHED12");
 
         // Track cumulative expected token balances from completion of all withdrawals across all nodes
         IERC20[] memory uniqueTokens = new IERC20[](supportedTokens.length);
