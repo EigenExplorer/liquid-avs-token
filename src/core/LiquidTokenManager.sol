@@ -193,12 +193,16 @@ contract LiquidTokenManager is
     function removeToken(IERC20 token) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
 
-        // Check for pending withdrawals of this token
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
+
+        // Check for unstaked balances
         if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
-        // Additional check for any nodes with outstanding shares of this token
+        // Check for pending withdrawal balances
+        if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
+
+        // Check for staked node balances
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         for (uint256 i = 0; i < nodes.length; i++) {
             uint256 stakedBalance = getStakedAssetBalanceNode(
@@ -464,6 +468,7 @@ contract LiquidTokenManager is
                 requestAssets,
                 requestShares,
                 block.timestamp,
+                i,
                 _redemptionNonce
             ));
 
@@ -538,20 +543,18 @@ contract LiquidTokenManager is
         IERC20[] memory requestTokens = new IERC20[](supportedTokens.length);
         uint256[] memory requestAmounts = new uint256[](supportedTokens.length);
 
-        // Process withdrawal requests to aggregate token amounts
-        (uniqueTokenCount, requestTokens, requestAmounts) = _processWithdrawalRequests(withdrawalRequests);
-
         // Gather the cumulative expected amounts per token from the redemption
+        (uniqueTokenCount, requestTokens, requestAmounts) = _processWithdrawalRequests(withdrawalRequests);
         uint256[] memory expectedRedemptionAmounts = new uint256[](uniqueTokenCount);
 
         // Process amounts from LiquidToken and Staker Nodes
         _processLtAmounts(ltAssets, ltAmounts, requestTokens, expectedRedemptionAmounts, uniqueTokenCount);
         _processElAmounts(nodeIds, elAssets, elShares, requestTokens, expectedRedemptionAmounts, uniqueTokenCount);
 
-        // Verify that the cumulative amounts will actually settle all requests
+        // Verify that the cumulative amounts are exactly equal to the amount to settle all requests
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
             if (expectedRedemptionAmounts[i] != requestAmounts[i]) {
-                revert RedemptionDoesNotSettleRequests(
+                revert RequestsDoNotSettle(
                     address(requestTokens[i]),
                     expectedRedemptionAmounts[i],
                     requestAmounts[i]
@@ -706,7 +709,7 @@ contract LiquidTokenManager is
         });
         
         // Request withdrawal on EL
-        bytes32 withdrawalRoot = node.withdraw(strategies, shares);
+        bytes32 withdrawalRoot = node.withdrawAssets(strategies, shares);
 
         if (withdrawalRoot != keccak256(abi.encode(withdrawal))) 
             revert InvalidWithdrawalRoot();
@@ -806,7 +809,7 @@ contract LiquidTokenManager is
             uint256 actualBalance = token.balanceOf(address(this));
             
             if (actualBalance < expectedAmount) {
-                revert RedemptionDoesNotSettleRequests(
+                revert RequestsDoNotSettle(
                     address(token),
                     expectedAmount,
                     actualBalance

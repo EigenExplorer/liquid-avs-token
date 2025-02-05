@@ -234,7 +234,7 @@ contract LiquidToken is
         }
 
         // Burn escrow shares that were transferred to the contract during the withdrawal request
-        _burn(address(this), sharesToBurn);
+        if (sharesToBurn > 0) _burn(address(this), sharesToBurn);
     }
 
     /// @notice Credits asset balances for a given set of assets
@@ -365,12 +365,28 @@ contract LiquidToken is
         return total;
     }
 
+    /// @notice Returns the balances of multiple assets
+    /// @param assetList The list of assets to get balances for
+    /// @return An array of asset balances
     function balanceAssets(
         IERC20[] calldata assetList
     ) public view returns (uint256[] memory) {
         uint256[] memory balances = new uint256[](assetList.length);
         for (uint256 i = 0; i < assetList.length; i++) {
             balances[i] = _balanceAsset(assetList[i]);
+        }
+        return balances;
+    }
+
+    /// @notice Returns the queued balances of multiple assets
+    /// @param assetList The list of assets to get queued balances for
+    /// @return An array of queued asset balances
+    function balanceQueuedAssets(
+        IERC20[] calldata assetList
+    ) public view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](assetList.length);
+        for (uint256 i = 0; i < assetList.length; i++) {
+            balances[i] = _balanceQueuedAsset(assetList[i]);
         }
         return balances;
     }

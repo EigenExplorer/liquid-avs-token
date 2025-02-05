@@ -266,7 +266,7 @@ interface ILiquidTokenManager {
     /// @param asset The token address
     /// @param expectedAmount The amount expected
     /// @param requestAmount The amount requested
-    error RedemptionDoesNotSettleRequests(
+    error RequestsDoNotSettle(
         address asset,
         uint256 expectedAmount,
         uint256 requestAmount

@@ -155,14 +155,19 @@ interface ILiquidToken is IERC20 {
         uint256 shares
     ) external view returns (uint256);
 
-    /// @notice Returns the total value of assets held by the contract
-    /// @return The total value of assets
+    /// @notice Returns the total value of assets managed by the contract
+    /// @return The total value of assets in the unit of account
     function totalAssets() external view returns (uint256);
 
     /// @notice Returns the balances of multiple assets
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
     function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+
+    /// @notice Returns the queued balances of multiple assets
+    /// @param assetList The list of assets to get queued balances for
+    /// @return An array of queued asset balances
+    function balanceQueuedAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
 
     /// @notice Pauses the contract
     function pause() external;

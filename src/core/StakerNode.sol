@@ -55,6 +55,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
+        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+
         IStrategyManager strategyManager = coordinator.strategyManager();
 
         uint256 assetsLength = assets.length;
@@ -89,6 +91,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
         operatorDelegation = operator;
+
+        emit DelegatedToOperator(operator);
     }
 
     /// @notice Undelegates the node from the current operator and withdraws all shares from all strategies
@@ -105,6 +109,9 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         bytes32[] memory withdrawalRoots = delegationManager.undelegate(
             address(this)
         );
+
+        emit UndelegatedFromOperator(operatorDelegation);
+        
         operatorDelegation = address(0);
         return withdrawalRoots;
     }
@@ -113,7 +120,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @dev EL creates one withdrawal request regardless of the number of strategies
     /// @param strategies The set of strategies to withdraw from
     /// @param shareAmounts The amount of shares to withdraw per strategy
-    function withdraw(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
+    function withdrawAssets(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
         external
         override
         onlyRole(LIQUID_TOKEN_MANAGER_ROLE)

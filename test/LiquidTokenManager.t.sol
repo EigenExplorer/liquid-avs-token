@@ -1306,7 +1306,7 @@ contract LiquidTokenManagerTest is BaseTest {
         
         // Attempt settlement with insufficient amounts
         vm.expectRevert(abi.encodeWithSelector(
-            ILiquidTokenManager.RedemptionDoesNotSettleRequests.selector,
+            ILiquidTokenManager.RequestsDoNotSettle.selector,
             address(testToken),
             9 ether,  // Total amount provided
             10 ether  // Amount requested

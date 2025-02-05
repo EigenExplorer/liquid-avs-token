@@ -20,6 +20,14 @@ interface IStakerNode {
         uint256 id;
     }
 
+    /// @notice Emitted node is delegated to an operator
+    /// @param operator Address of the operator delegation
+    event DelegatedToOperator(address operator);
+
+    /// @notice Emitted node is undelegated from an operator
+    /// @param operator Address of the operator undelegation
+    event UndelegatedFromOperator(address operator);
+
     /// @notice Emitted when assets are successfully deposited into an Eigenlayer strategy
     /// @param asset Address of the token being deposited
     /// @param strategy Address of the Eigenlayer strategy receiving the deposit
@@ -93,7 +101,7 @@ interface IStakerNode {
     /// @param strategies The set of strategies to withdraw from
     /// @param shareAmounts The amount of shares to withdraw per strategy
     /// @return The withdrawal root hash from Eigenlayer
-    function withdraw(
+    function withdrawAssets(
         IStrategy[] calldata strategies,
         uint256[] calldata shareAmounts
     ) external returns (bytes32);
