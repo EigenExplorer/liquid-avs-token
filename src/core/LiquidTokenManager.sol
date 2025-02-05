@@ -691,6 +691,9 @@ contract LiquidTokenManager is
         IERC20[] memory assets,
         uint256[] memory shares
     ) private returns (bytes32, IDelegationManager.Withdrawal memory, IERC20[] memory) {
+        if (assets.length != shares.length)
+            revert LengthMismatch(assets.length, shares.length);
+
         IStrategy[] memory strategies = _getTokensStrategies(assets);
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         

@@ -127,6 +127,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         returns (bytes32)
     {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        if (strategies.length != shareAmounts.length) revert LengthMismatch(strategies.length, shareAmounts.length);
         
         IDelegationManager.QueuedWithdrawalParams[] memory requestParams = 
             new IDelegationManager.QueuedWithdrawalParams[](1);

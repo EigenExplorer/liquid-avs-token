@@ -43,6 +43,11 @@ interface IStakerNode {
     /// @notice Error thrown when a zero address is provided where a non-zero address is required
     error ZeroAddress();
 
+    /// @notice Error thrown when array lengths don't match in function parameters
+    /// @param length1 Length of the first array
+    /// @param length2 Length of the second array
+    error LengthMismatch(uint256 length1, uint256 length2);
+
     /// @notice Error thrown when a function restricted to StakerNode operator is called by another address
     error NotStakerNodeOperator();
 
