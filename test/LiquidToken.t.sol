@@ -67,6 +67,41 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
+    function testWithdrawalRequestIdsAreAlwaysUnique() public {
+        vm.startPrank(user1);
+
+        // Setup initial deposit
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        // Make 3 withdrawal requests
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 1 ether;
+
+        // First request
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+
+        // Second request - same block.timestamp
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+
+        // Third request - different block
+        vm.roll(block.number + 1);
+        vm.warp(block.timestamp + 15);
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+
+        // Verify each request ID is unique
+        bytes32[] memory requestIds = liquidToken.getUserWithdrawalRequests(user1);
+        assertEq(requestIds.length, 3, "Should have 3 withdrawal requests");
+        assertTrue(requestIds[0] != requestIds[1], "First and second request IDs should be different");
+        assertTrue(requestIds[1] != requestIds[2], "Second and third request IDs should be different");
+        assertTrue(requestIds[0] != requestIds[2], "First and third request IDs should be different");
+
+        vm.stopPrank();
+    }
+
     function testFulfillWithdrawal() public {
         vm.startPrank(user1);
 

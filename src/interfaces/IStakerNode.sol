@@ -16,11 +16,11 @@ interface IStakerNode {
         uint256 id;
     }
 
-    /// @notice Emitted when the StakerNode is delegated to an operator
-    event NodeDelegated(address indexed operator, address indexed delegator);
+    /// @notice Emitted node is delegated to an operator
+    event DelegatedToOperator(address operator);
 
-    /// @notice Emitted when the StakerNode is undelegated from the current operator
-    event NodeUndelegated(bytes32[] withdrawalRoots, address indexed undelegator);
+    /// @notice Emitted node is undelegated from an operator
+    event UndelegatedFromOperator(address operator);
 
     /// @notice Emitted when assets are deposited into an Eigenlayer strategy
     event AssetDepositedToStrategy(
@@ -44,6 +44,13 @@ interface IStakerNode {
 
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
+
+
+    /// @notice Error for delegating node when already delegated
+    error NodeIsDelegated(address operatorDelegation);
+
+    /// @notice Error for undelegating node when not delegated
+     error NodeIsNotDelegated();
 
     /// @notice Initializes the StakerNode contract
     /// @param init Initialization parameters including coordinator address and node ID
@@ -83,4 +90,8 @@ interface IStakerNode {
     /// @notice Returns the id of the StakerNode
     /// @return The StakerNode's id as uint256
     function getId() external view returns (uint256);
+
+    /// Returns the address of the operator the node is delegate to
+    /// @return The address of the delegated operator or zero address if not delegated
+    function getOperatorDelegation() external view returns (address);
 }

@@ -82,6 +82,9 @@ interface ILiquidToken is IERC20 {
     /// @notice Error when withdrawal is already fulfilled
     error WithdrawalAlreadyFulfilled();
 
+    /// @notice Error when a new withdrawal is attempted with an existing request ID
+    error DuplicateRequestId(bytes32 requestId);
+
     /// @notice Error for unsupported asset
     error AssetNotSupported(IERC20 asset);
 
@@ -93,6 +96,13 @@ interface ILiquidToken is IERC20 {
         IERC20 asset,
         uint256 required,
         uint256 available
+    );
+
+    /// @notice Error when contract token balance is not in sync with accounting balance
+    error AssetBalanceOutOfSync(
+        IERC20 asset,
+        uint256 accountingBalance,
+        uint256 actualBalance
     );
 
     /// @notice Deposits multiple assets and mints shares
@@ -124,6 +134,14 @@ interface ILiquidToken is IERC20 {
     /// @param amounts The amounts to transfer
     function transferAssets(
         IERC20[] calldata assetsToRetrieve,
+        uint256[] calldata amounts
+    ) external;
+
+    /// @notice Credits queued balances for a given set of asset
+    /// @param assets The assets to credit
+    /// @param amounts The credit amounts expressed in native token
+    function creditQueuedAssetBalances(
+        IERC20[] calldata assets,
         uint256[] calldata amounts
     ) external;
 
@@ -163,6 +181,11 @@ interface ILiquidToken is IERC20 {
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
     function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+
+    /// @notice Returns the queued balances of multiple assets
+    /// @param assetList The list of assets to get queued balances for
+    /// @return An array of queued asset balances
+    function balanceQueuedAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
 
     /// @notice Pauses the contract
     function pause() external;
