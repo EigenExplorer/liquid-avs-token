@@ -70,10 +70,6 @@ contract LiquidTokenManager is
         __AccessControl_init();
         __ReentrancyGuard_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
-        _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
-        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
-
         if (
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0) ||
@@ -91,6 +87,10 @@ contract LiquidTokenManager is
         if (init.assets.length != init.strategies.length) {
             revert LengthMismatch(init.assets.length, init.strategies.length);
         }
+
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
+        _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
+        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
 
         liquidToken = init.liquidToken;
         stakerNodeCoordinator = init.stakerNodeCoordinator;

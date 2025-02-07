@@ -47,6 +47,9 @@ contract StakerNodeCoordinator is
         if (init.initialOwner == address(0)) {
             revert("Initial owner cannot be the zero address");
         }
+        if (init.pauser == address(0)) {
+            revert("Pauser cannot be the zero address");
+        }
         if (init.stakerNodeCreator == address(0)) {
             revert("Staker node creator cannot be the zero address");
         }

@@ -63,6 +63,191 @@ contract BaseTest is Test {
         _setupTestTokens();
     }
 
+    function testZeroAddressInitialization() public {
+        LiquidTokenManager newLiquidTokenManager = new LiquidTokenManager();
+        StakerNodeCoordinator newStakerNodeCoordinator = new StakerNodeCoordinator();
+        LiquidToken newLiquidToken = new LiquidToken();
+
+        // LiquidTokenManager Initialization Tests
+        {
+            ILiquidTokenManager.Init memory validInit = ILiquidTokenManager.Init({
+                assets: new IERC20[](2),
+                tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
+                strategies: new IStrategy[](2),
+                liquidToken: liquidToken,
+                strategyManager: strategyManager,
+                delegationManager: delegationManager,
+                stakerNodeCoordinator: stakerNodeCoordinator,
+                initialOwner: admin,
+                strategyController: admin,
+                priceUpdater: address(tokenRegistryOracle)
+            });
+
+            validInit.assets[0] = IERC20(address(testToken));
+            validInit.assets[1] = IERC20(address(testToken2));
+            validInit.strategies[0] = IStrategy(address(mockStrategy));
+            validInit.strategies[1] = IStrategy(address(mockStrategy2));
+            validInit.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
+                decimals: 18,
+                pricePerUnit: 1e18,
+                volatilityThreshold: 0.1 * 1e18
+            });
+            validInit.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
+                decimals: 18,
+                pricePerUnit: 1e18,
+                volatilityThreshold: 0
+            });
+
+            // Test each parameter individually
+            ILiquidTokenManager.Init memory testInit;
+
+            // Zero address for owner
+            testInit = validInit;
+            testInit.initialOwner = address(0);
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for liquidToken
+            testInit = validInit;
+            testInit.liquidToken = ILiquidToken(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for strategyManager
+            testInit = validInit;
+            testInit.strategyManager = IStrategyManager(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for delegationManager
+            testInit = validInit;
+            testInit.delegationManager = IDelegationManager(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for stakerNodeCoordinator
+            testInit = validInit;
+            testInit.stakerNodeCoordinator = IStakerNodeCoordinator(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for strategyController
+            testInit = validInit;
+            testInit.strategyController = address(0);
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address for priceUpdater
+            testInit = validInit;
+            testInit.priceUpdater = address(0);
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address in assets array
+            testInit = validInit;
+            testInit.assets[0] = IERC20(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+
+            // Zero address in strategies array
+            testInit = validInit;
+            testInit.strategies[0] = IStrategy(address(0));
+            vm.expectRevert();
+            newLiquidTokenManager.initialize(testInit);
+        }
+
+        // LiquidToken Initialization Tests
+        {
+            ILiquidToken.Init memory validInit = ILiquidToken.Init({
+                name: "Liquid Staking Token",
+                symbol: "LST",
+                initialOwner: admin,
+                pauser: pauser,
+                liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+            });
+
+            // Test each parameter individually
+            ILiquidToken.Init memory testInit;
+
+            // Zero address for owner
+            testInit = validInit;
+            testInit.initialOwner = address(0);
+            vm.expectRevert();
+            newLiquidToken.initialize(testInit);
+
+            // Zero address for pauser
+            testInit = validInit;
+            testInit.pauser = address(0);
+            vm.expectRevert();
+            newLiquidToken.initialize(testInit);
+
+            // Zero address for liquidTokenManager
+            testInit = validInit;
+            testInit.liquidTokenManager = ILiquidTokenManager(address(0));
+            vm.expectRevert();
+            newLiquidToken.initialize(testInit);
+        }
+
+        // StakerNodeCoordinator Initialization Tests
+        {
+            IStakerNodeCoordinator.Init memory validInit = IStakerNodeCoordinator.Init({
+                liquidTokenManager: liquidTokenManager,
+                strategyManager: strategyManager,
+                delegationManager: delegationManager,
+                maxNodes: 10,
+                initialOwner: admin,
+                pauser: pauser,
+                stakerNodeCreator: admin,
+                stakerNodesDelegator: admin
+            });
+
+            // Test each parameter individually
+            IStakerNodeCoordinator.Init memory testInit;
+
+            // Zero address for owner
+            testInit = validInit;
+            testInit.initialOwner = address(0);
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for pauser
+            testInit = validInit;
+            testInit.pauser = address(0);
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for stakerNodeCreator
+            testInit = validInit;
+            testInit.stakerNodeCreator = address(0);
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for stakerNodesDelegator
+            testInit = validInit;
+            testInit.stakerNodesDelegator = address(0);
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for liquidTokenManager
+            testInit = validInit;
+            testInit.liquidTokenManager = ILiquidTokenManager(address(0));
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for strategyManager
+            testInit = validInit;
+            testInit.strategyManager = IStrategyManager(address(0));
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for delegationManager
+            testInit = validInit;
+            testInit.delegationManager = IDelegationManager(address(0));
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+        }
+    }
+
     function _setupELContracts() private {
         uint256 chainId = block.chainid;
         NetworkAddresses.Addresses memory addresses = NetworkAddresses

@@ -105,9 +105,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
         IDelegationManager delegationManager = coordinator.delegationManager();
-        bytes32[] memory withdrawalRoots = delegationManager.undelegate(
-            address(this)
-        );
+        delegationManager.undelegate(address(this));
 
         emit UndelegatedFromOperator(operatorDelegation);
 

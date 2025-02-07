@@ -45,7 +45,6 @@ interface IStakerNode {
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address caller, bytes32 requiredRole);
 
-
     /// @notice Error for delegating node when already delegated
     error NodeIsDelegated(address operatorDelegation);
 

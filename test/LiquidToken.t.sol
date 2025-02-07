@@ -166,6 +166,43 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
+    function testFulfillWithdrawalFailsForInsufficientBalance() public {
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amountsToDeposit = new uint256[](1);
+        amountsToDeposit[0] = 10 ether;
+
+        liquidToken.deposit(assets, amountsToDeposit, user1);
+
+        uint256[] memory amountsToWithdraw = new uint256[](1);
+        amountsToWithdraw[0] = 10 ether;
+
+        liquidToken.approve(user1, amountsToWithdraw[0]);
+        liquidToken.requestWithdrawal(assets, amountsToWithdraw);
+        vm.stopPrank();
+
+        bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
+
+        // Fast forward time
+        vm.warp(block.timestamp + 15 days);
+
+        // Remove funds from contract
+        vm.prank(address(liquidTokenManager));
+        liquidToken.transferAssets(assets, amountsToWithdraw);
+
+        vm.prank(user1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidToken.InsufficientBalance.selector,
+                address(testToken),
+                0,
+                10 ether
+            )
+        );
+        liquidToken.fulfillWithdrawal(requestId);
+    }
+
     function testTransferAssets() public {
         vm.prank(user1);
 

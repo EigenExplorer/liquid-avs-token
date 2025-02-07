@@ -33,6 +33,7 @@ contract LiquidToken is
     mapping(address => uint256) public queuedAssetBalances;
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
+    mapping(address => uint256) private _withdrawalNonce;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -147,9 +148,15 @@ contract LiquidToken is
                 msg.sender,
                 withdrawAssets,
                 shareAmounts,
-                block.timestamp
+                block.timestamp,
+                _withdrawalNonce[msg.sender]++
             )
         );
+
+        if (withdrawalRequests[requestId].user != address(0)) {
+            revert DuplicateRequestId(requestId);
+        }
+
         WithdrawalRequest memory request = WithdrawalRequest({
             user: msg.sender,
             assets: withdrawAssets,
@@ -182,8 +189,6 @@ contract LiquidToken is
             revert WithdrawalDelayNotMet();
         if (request.fulfilled) revert WithdrawalAlreadyFulfilled();
 
-        // TODO: Withdrawal completed on EL and funds are transferred to this contract
-
         request.fulfilled = true;
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
@@ -204,13 +209,17 @@ contract LiquidToken is
             if (asset.balanceOf(address(this)) < amount ) {
                 revert InsufficientBalance(
                     asset,
-                    amount,
-                    asset.balanceOf(address(this))
+                    asset.balanceOf(address(this)),
+                    amount
                 );
             }
 
             // Transfer the amount back to the user
             asset.safeTransfer(msg.sender, amount);
+
+            // Reduce the asset balances for the asset
+            // Note: Make sure that when this contract receives funds from EL withdrawal, `queuedAssetBalances` is debited and `assetBalances` is credited
+            assetBalances[address(asset)] -= amount;
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
@@ -218,9 +227,6 @@ contract LiquidToken is
                     assetBalances[address(asset)], 
                     asset.balanceOf(address(this))
                 );
-
-            // Reduce queued asset balances for the asset
-            queuedAssetBalances[address(asset)] -= amount;
         }
 
         // Burn the shares that were transferred to the contract during the withdrawal request

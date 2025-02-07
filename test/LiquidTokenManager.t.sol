@@ -256,6 +256,33 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(newToken, decimals, price, volatilityThreshold, newStrategy);
     }
 
+    function testGetTokenInfoFailsForUnsupportedToken() public {
+        MockERC20 unsupportedToken = new MockERC20("Unsupported Token", "UNSUP");
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(unsupportedToken))),
+            "Token should not be reported as supported"
+        );
+
+        // Token should not be in supported tokens array
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+        bool isInArray = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (address(supportedTokens[i]) == address(unsupportedToken)) {
+                isInArray = true;
+                break;
+            }
+        }
+        assertFalse(isInArray, "Unsupported token should not be in supported tokens array");
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenNotSupported.selector,
+                address(unsupportedToken)
+            )
+        );
+        liquidTokenManager.getTokenInfo(IERC20(address(unsupportedToken)));
+    }
+
     function testRemoveTokenSuccess() public {
         // First add a new token that we'll remove
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
@@ -318,7 +345,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.removeToken(testToken);
     }
 
-    function testRemoveTokenFailsIfNonZeroBalance() public {
+    function testRemoveTokenFailsIfNonZeroAssetBalance() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -353,6 +380,43 @@ contract LiquidTokenManagerTest is BaseTest {
 
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNonZeroQueuedAssetBalance() public {
+        vm.prank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        liquidTokenManager.undelegateNodes(nodeIds);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -598,7 +662,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
-    function testPriceUpdateUpdateFailsVolatilityCheck() public {
+    function testPriceUpdateFailsIfVolatilityThresholdHit() public {
         vm.prank(admin);
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
@@ -720,12 +784,6 @@ contract LiquidTokenManagerTest is BaseTest {
             address(liquidTokenManager)
         );
 
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(stakerNodeCoordinator)
-        );
-
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -763,12 +821,6 @@ contract LiquidTokenManagerTest is BaseTest {
             address(liquidTokenManager)
         );
 
-        vm.prank(admin);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(stakerNodeCoordinator)
-        );
-
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -779,7 +831,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         uint256 nodeId = 0;
         uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 50 ether;
+        strategyAmounts[0] = 10 ether;
         IStrategy[] memory strategiesForNode = new IStrategy[](1);
         strategiesForNode[0] = mockStrategy;
 
@@ -788,6 +840,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         uint256 sharesBeforeWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
 
+        // Create EL withdrawal via node undelegation
         uint256[] memory nodeIds = new uint256[](1);
         nodeIds[0] = nodeId;
         liquidTokenManager.undelegateNodes(nodeIds);
