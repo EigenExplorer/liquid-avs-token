@@ -28,15 +28,15 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
 
       - name: Run Forge build
         run: |
           forge --version
-          forge build --sizes --via-ir
+          forge build --sizes --optimizer-runs 200 --via-ir
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test --fork-url ${{ secrets.RPC_URL }} -vvv
+          forge test --fork-url ${{ secrets.RPC_URL }} -vvv --optimizer-runs 200 --via-ir
         id: test
