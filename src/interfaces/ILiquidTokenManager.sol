@@ -5,6 +5,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
@@ -44,7 +45,7 @@ interface ILiquidTokenManager {
     }
 
     /// @notice Emitted when a new token is set
-    event TokenSet(
+    event TokenAdded(
         IERC20 indexed token,
         uint256 decimals,
         uint256 initialPrice,
@@ -68,6 +69,12 @@ interface ILiquidTokenManager {
         IStrategy[] strategies,
         address indexed depositor
     );
+
+    /// @notice Emitted when a staker node is delegated to an operator
+    event NodeDelegated(uint256 nodeId, address indexed operator);
+
+    /// @notice Emitted when a staker node is undelegated from its current operator
+    event NodeUndelegated(uint256 nodeId, address indexed operator);
 
     /// @notice Error for zero address
     error ZeroAddress();
@@ -187,6 +194,24 @@ interface ILiquidTokenManager {
     /// @notice Stakes assets to multiple nodes
     /// @param allocations The allocations of assets to nodes
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
+
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
+    function delegateNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators,
+        ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
+    ) external;
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external;
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for

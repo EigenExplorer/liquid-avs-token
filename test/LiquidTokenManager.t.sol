@@ -256,6 +256,33 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(newToken, decimals, price, volatilityThreshold, newStrategy);
     }
 
+    function testGetTokenInfoFailsForUnsupportedToken() public {
+        MockERC20 unsupportedToken = new MockERC20("Unsupported Token", "UNSUP");
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(unsupportedToken))),
+            "Token should not be reported as supported"
+        );
+
+        // Token should not be in supported tokens array
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+        bool isInArray = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (address(supportedTokens[i]) == address(unsupportedToken)) {
+                isInArray = true;
+                break;
+            }
+        }
+        assertFalse(isInArray, "Unsupported token should not be in supported tokens array");
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenNotSupported.selector,
+                address(unsupportedToken)
+            )
+        );
+        liquidTokenManager.getTokenInfo(IERC20(address(unsupportedToken)));
+    }
+
     function testRemoveTokenSuccess() public {
         // First add a new token that we'll remove
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
@@ -318,7 +345,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.removeToken(testToken);
     }
 
-    function testRemoveTokenFailsIfNonZeroBalance() public {
+    function testRemoveTokenFailsIfNonZeroAssetBalance() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -353,6 +380,43 @@ contract LiquidTokenManagerTest is BaseTest {
 
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(testToken);
+    }
+
+    function testRemoveTokenFailsIfNonZeroQueuedAssetBalance() public {
+        vm.prank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10 ether;
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 1 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        liquidTokenManager.undelegateNodes(nodeIds);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -598,7 +662,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
 
-    function testPriceUpdateUpdateFailsVolatilityCheck() public {
+    function testPriceUpdateFailsIfVolatilityThresholdHit() public {
         vm.prank(admin);
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
@@ -712,4 +776,121 @@ contract LiquidTokenManagerTest is BaseTest {
 
         vm.stopPrank();
     }
+
+    function testQueuedAssetBalancesUpdateAfterWithdrawalRequest() public {
+        vm.prank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 50 ether;        
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 initialQueuedBalance = liquidToken.queuedAssetBalances(address(testToken));
+        assertEq(initialQueuedBalance, 0, "Initial queued balance should be 0");
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 50 ether;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        uint256 finalQueuedBalance = liquidToken.queuedAssetBalances(address(testToken));
+        assertEq(
+            finalQueuedBalance, 
+            50 ether, 
+            "Queued assets balance should match original staked amount"
+        );
+    }
+
+    function testQueuedWithdrawalsDoNotInflateShares() public {
+        vm.prank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 50 ether;        
+
+        vm.prank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+
+        uint256 nodeId = 0;
+        uint256[] memory strategyAmounts = new uint256[](1);
+        strategyAmounts[0] = 10 ether;
+        IStrategy[] memory strategiesForNode = new IStrategy[](1);
+        strategiesForNode[0] = mockStrategy;
+
+        vm.prank(admin);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+
+        uint256 sharesBeforeWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
+
+        // Create EL withdrawal via node undelegation
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        uint256 expectedTotal = 50 ether;
+        assertEq(liquidToken.totalAssets(), expectedTotal, "Total assets should include queued withdrawals");
+
+        uint256 sharesAfterWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
+        assertEq(sharesBeforeWithdrawalQueued, sharesAfterWithdrawalQueued, "Token is mispriced due to inflated shares");
+    }
+
+    function testCannotDelegateDelegatedNode() public {
+        address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
+            block.timestamp + 1,  // Different from setUp() operator
+            block.prevrandao
+        )))));
+
+        vm.prank(testOperator);
+        delegationManager.registerAsOperator(
+            IDelegationManager.OperatorDetails({
+                __deprecated_earningsReceiver: testOperator,
+                delegationApprover: address(0),
+                stakerOptOutWindowBlocks: 1
+            }),
+            "ipfs://"
+        );
+
+        address currentOperator = stakerNode.getOperatorDelegation();
+        assertTrue(currentOperator != address(0), "Node should be delegated in setUp");
+
+        vm.prank(admin);
+        ISignatureUtils.SignatureWithExpiry memory signature;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNode.NodeIsDelegated.selector,
+                currentOperator
+            )
+        );
+        stakerNode.delegate(testOperator, signature, bytes32(0));
+    }
+
+    function testCannotUndelegateUndelegatedNode() public {
+        vm.prank(admin);
+        stakerNode.undelegate();
+
+        address operator = stakerNode.getOperatorDelegation();
+        assertEq(operator, address(0), "Node should be undelegated");
+
+        vm.prank(admin);
+        vm.expectRevert(IStakerNode.NodeIsNotDelegated.selector);
+        stakerNode.undelegate();
+     }
 }

@@ -10,6 +10,7 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
@@ -69,10 +70,6 @@ contract LiquidTokenManager is
         __AccessControl_init();
         __ReentrancyGuard_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
-        _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
-        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
-
         if (
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0) ||
@@ -90,6 +87,10 @@ contract LiquidTokenManager is
         if (init.assets.length != init.strategies.length) {
             revert LengthMismatch(init.assets.length, init.strategies.length);
         }
+
+        _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
+        _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
+        _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
 
         liquidToken = init.liquidToken;
         stakerNodeCoordinator = init.stakerNodeCoordinator;
@@ -127,7 +128,7 @@ contract LiquidTokenManager is
             tokenStrategies[init.assets[i]] = init.strategies[i];
             supportedTokens.push(init.assets[i]);
 
-            emit TokenSet(
+            emit TokenAdded(
                 init.assets[i],
                 init.tokenInfo[i].decimals,
                 init.tokenInfo[i].pricePerUnit,
@@ -171,7 +172,7 @@ contract LiquidTokenManager is
 
         supportedTokens.push(token);
 
-        emit TokenSet(token, decimals, initialPrice, volatilityThreshold, address(strategy), msg.sender);
+        emit TokenAdded(token, decimals, initialPrice, volatilityThreshold, address(strategy), msg.sender);
     }
 
     /// @notice Removes a token from the registry
@@ -179,12 +180,16 @@ contract LiquidTokenManager is
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
 
-        // Check for pending withdrawals of this token
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
+
+        // Check for unstaked balances
         if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
-        // Additional check for any nodes with outstanding shares of this token
+        // Check for pending withdrawal balances
+        if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
+
+        // Check for staked node balances
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         for (uint256 i = 0; i < nodes.length; i++) {
             uint256 stakedBalance = getStakedAssetBalanceNode(
@@ -398,6 +403,47 @@ contract LiquidTokenManager is
         );
     }
 
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+     /// @param nodeIds The IDs of the staker nodes
+     /// @param operators The addresses of the operators
+     /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+     /// @param approverSalts The salts used in the signatures
+     function delegateNodes(
+         uint256[] memory nodeIds,
+         address[] memory operators,
+         ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+         bytes32[] calldata approverSalts
+     ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
+         uint256 arrayLength = nodeIds.length;
+
+         if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
+         if (approverSignatureAndExpiries.length != arrayLength) revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
+         if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
+
+         for (uint256 i = 0; i < arrayLength; i++) {
+             IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+             node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
+             emit NodeDelegated(nodeIds[i], operators[i]);
+         }
+     }
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        // Fetch and add all asset balances from the node to queued balances
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+            liquidToken.creditQueuedAssetBalances(
+                supportedTokens, 
+                _getAllStakedAssetBalancesNode(node)
+            );
+
+            node.undelegate();
+        }
+    }
+
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
@@ -447,6 +493,23 @@ contract LiquidTokenManager is
             revert StrategyNotFound(address(asset));
         }
         return strategy.userUnderlyingView(address(node));
+    }
+
+    /// @notice Gets the staked balance of all assets for a specific node
+    /// @param node The node to get the staked balance for
+    /// @return The staked balances of all assets for the node
+    function _getAllStakedAssetBalancesNode(
+        IStakerNode node
+    ) internal view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](supportedTokens.length);
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            IStrategy strategy = tokenStrategies[supportedTokens[i]];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(supportedTokens[i]));
+            }
+            balances[i] = strategy.userUnderlyingView(address(node));
+        }
+        return balances;
     }
 
     /// @notice Sets the volatility threshold for a given asset
