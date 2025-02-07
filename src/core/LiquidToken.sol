@@ -218,7 +218,7 @@ contract LiquidToken is
             asset.safeTransfer(msg.sender, amount);
 
             // Reduce the asset balances for the asset
-            // Note: Make sure that when this contract receives funds from EL withdrawal, `queuedAssetBalances` is debited and `assetBalances` is credited
+            // Note: Make sure that whenever this contract receives funds from EL withdrawal, `queuedAssetBalances` is debited and `assetBalances` is credited
             assetBalances[address(asset)] -= amount;
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
