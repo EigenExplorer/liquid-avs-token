@@ -17,6 +17,8 @@ import {StakerNode} from "../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockStrategy} from "../mocks/MockStrategy.sol";
+import {MockStrategyManager} from "../mocks/MockStrategyManager.sol";
+import {MockDelegationManager} from "../mocks/MockDelegationManager.sol";
 import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
@@ -196,7 +198,7 @@ contract BaseTest is Test {
                 delegationManager: delegationManager,
                 maxNodes: 10,
                 initialOwner: admin,
-                pauser: pauser,
+                pauser: admin,
                 stakerNodeCreator: admin,
                 stakerNodesDelegator: admin
             });
@@ -249,12 +251,12 @@ contract BaseTest is Test {
     }
 
     function _setupELContracts() private {
-        uint256 chainId = block.chainid;
-        NetworkAddresses.Addresses memory addresses = NetworkAddresses
-            .getAddresses(chainId);
-
-        strategyManager = IStrategyManager(addresses.strategyManager);
-        delegationManager = IDelegationManager(addresses.delegationManager);
+        // Deploy mock EigenLayer contracts instead of using network addresses
+        MockStrategyManager mockStrategyManager = new MockStrategyManager();
+        MockDelegationManager mockDelegationManager = new MockDelegationManager();
+        
+        strategyManager = IStrategyManager(address(mockStrategyManager));
+        delegationManager = IDelegationManager(address(mockDelegationManager));
     }
 
     function _deployMockContracts() private {
@@ -318,77 +320,139 @@ contract BaseTest is Test {
     }
 
     function _initializeProxies() private {
-        _initializeTokenRegistryOracle();
-        _initializeLiquidTokenManager();
-        _initializeStakerNodeCoordinator();
+        // First initialize LiquidToken
         _initializeLiquidToken();
+
+        // Then initialize LiquidTokenManager with the correct dependencies
+        _initializeLiquidTokenManager();
+
+        // Then initialize StakerNodeCoordinator
+        _initializeStakerNodeCoordinator();
+
+        // Then initialize TokenRegistryOracle
+        _initializeTokenRegistryOracle();
+
+        // Update addresses
+        vm.startPrank(admin);
+        tokenRegistryOracle.updateLiquidTokenManager(liquidTokenManager);
+        stakerNodeCoordinator.updateLiquidTokenManager(liquidTokenManager);
+        vm.stopPrank();
+
+        // Grant roles
+        vm.startPrank(admin);
+        // TokenRegistryOracle roles
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), admin);
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), user2);
+
+        // StakerNodeCoordinator roles
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), admin);
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), admin);
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(), admin);
+
+        // LiquidTokenManager roles
+        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(tokenRegistryOracle));
+        vm.stopPrank();
+
+        // Whitelist strategies
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
+        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](2);
+
+        strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
+        strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
+        thirdPartyTransfersForbiddenValues[0] = false;
+        thirdPartyTransfersForbiddenValues[1] = false;
+
+        vm.prank(strategyManager.strategyWhitelister());
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbiddenValues
+        );
     }
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
             initialOwner: admin,
             priceUpdater: user2,
-            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+            liquidTokenManager: liquidTokenManager
         });
+
+        vm.startPrank(admin);
         tokenRegistryOracle.initialize(init);
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), user2);
+        vm.stopPrank();
+    }
+
+    function _initializeLiquidToken() private {
+        ILiquidToken.Init memory init = ILiquidToken.Init({
+            name: "Liquid Token",
+            symbol: "LT",
+            initialOwner: admin,
+            pauser: pauser,
+            liquidTokenManager: liquidTokenManager
+        });
+
+        liquidToken.initialize(init);
     }
 
     function _initializeLiquidTokenManager() private {
+        IERC20[] memory assets = new IERC20[](2);
+        ILiquidTokenManager.TokenInfo[] memory tokenInfo = new ILiquidTokenManager.TokenInfo[](2);
+        IStrategy[] memory strategies = new IStrategy[](2);
+
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        strategies[0] = IStrategy(address(mockStrategy));
+        strategies[1] = IStrategy(address(mockStrategy2));
+        tokenInfo[0] = ILiquidTokenManager.TokenInfo({
+            decimals: 18,
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0.1 * 1e18
+        });
+        tokenInfo[1] = ILiquidTokenManager.TokenInfo({
+            decimals: 18,
+            pricePerUnit: 1e18,
+            volatilityThreshold: 0
+        });
+
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
-            assets: new IERC20[](2),
-            tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
-            strategies: new IStrategy[](2),
+            assets: assets,
+            tokenInfo: tokenInfo,
+            strategies: strategies,
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             initialOwner: admin,
             strategyController: admin,
-            priceUpdater: address(tokenRegistryOracle)
+            priceUpdater: admin
         });
-        init.assets[0] = IERC20(address(testToken));
-        init.assets[1] = IERC20(address(testToken2));
-        init.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
-            decimals: 18,
-            pricePerUnit: 1e18,
-            volatilityThreshold: 0.1 * 1e18
-        });
-        init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
-            decimals: 18,
-            pricePerUnit: 1e18,
-            volatilityThreshold: 0
-        });
-        init.strategies[0] = IStrategy(address(mockStrategy));
-        init.strategies[1] = IStrategy(address(mockStrategy2));
-        liquidTokenManager.initialize(init);
-    }
 
-    function _initializeLiquidToken() private {
-        ILiquidToken.Init memory init = ILiquidToken.Init({
-            name: "Liquid Staking Token",
-            symbol: "LST",
-            initialOwner: admin,
-            pauser: pauser,
-            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
-        });
-        liquidToken.initialize(init);
+        vm.startPrank(admin);
+        liquidTokenManager.initialize(init);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(tokenRegistryOracle));
+        vm.stopPrank();
     }
 
     function _initializeStakerNodeCoordinator() private {
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
+            initialOwner: admin,
+            pauser: admin,
+            maxNodes: 10,
             liquidTokenManager: liquidTokenManager,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
-            maxNodes: 10,
-            initialOwner: admin,
-            pauser: pauser,
             stakerNodeCreator: admin,
             stakerNodesDelegator: admin
         });
+
+        vm.startPrank(admin);
         stakerNodeCoordinator.initialize(init);
-        stakerNodeCoordinator.registerStakerNodeImplementation(
-            address(_stakerNodeImplementation)
-        );
+        stakerNodeCoordinator.registerStakerNodeImplementation(address(_stakerNodeImplementation));
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), admin);
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), address(liquidTokenManager));
+        vm.stopPrank();
     }
 
     function _setupTestTokens() private {

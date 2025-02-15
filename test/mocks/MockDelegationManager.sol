@@ -155,8 +155,31 @@ contract MockDelegationManager {
         return operatorShares_[operator][strategy];
     }
 
-    function queueWithdrawals(IDelegationManager.QueuedWithdrawalParams[] calldata) external pure returns (bytes32[] memory) {
-        return new bytes32[](0);
+    function queueWithdrawals(IDelegationManager.QueuedWithdrawalParams[] calldata params) external returns (bytes32[] memory) {
+        bytes32[] memory withdrawalRoots = new bytes32[](params.length);
+
+        for (uint256 i = 0; i < params.length; i++) {
+            // Withdraw shares from each strategy
+            for (uint256 j = 0; j < params[i].strategies.length; j++) {
+                if (params[i].shares[j] > 0) {
+                    IStrategy strategy = params[i].strategies[j];
+                    uint256 shares = params[i].shares[j];
+                    
+                    // Decrease operator shares if they exist
+                    if (operatorShares_[msg.sender][strategy] >= shares) {
+                        operatorShares_[msg.sender][strategy] -= shares;
+                    }
+                }
+            }
+
+            // Mark as undelegated
+            delegatedTo[msg.sender] = address(0);
+
+            // Return a dummy withdrawal root
+            withdrawalRoots[i] = keccak256(abi.encode(params[i]));
+        }
+
+        return withdrawalRoots;
     }
 
     function stakerNonce(address staker) external view returns (uint256) {
