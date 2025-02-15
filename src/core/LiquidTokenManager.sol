@@ -448,18 +448,20 @@ contract LiquidTokenManager is
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
     function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
+        uint256 totalStaked = 0;
+        IStrategyManager manager = stakerNodeCoordinator.strategyManager();
+        for (uint256 i = 0; i < stakerNodeCoordinator.getStakerNodesCount(); i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById(i);
+            if (!node.isUndelegated()) {
+                (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
+                for (uint256 j = 0; j < strategies.length; j++) {
+                    if (strategies[j].underlyingToken() == asset) {
+                        totalStaked += amounts[j];
+                    }
+                }
+            }
         }
-
-        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
-        uint256 totalBalance = 0;
-        for (uint256 i = 0; i < nodes.length; i++) {
-            totalBalance += _getStakedAssetBalanceNode(asset, nodes[i]);
-        }
-
-        return totalBalance;
+        return totalStaked;
     }
 
     /// @notice Gets the staked balance of an asset for a specific node
@@ -523,5 +525,38 @@ contract LiquidTokenManager is
         emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
 
         tokens[asset].volatilityThreshold = newThreshold;
+    }
+
+    /// @notice Updates the LiquidToken address
+    /// @param newLiquidToken The new LiquidToken address
+    function updateLiquidToken(ILiquidToken newLiquidToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(newLiquidToken) == address(0)) revert ZeroAddress();
+        liquidToken = newLiquidToken;
+    }
+
+    /// @notice Retrieves the total assets
+    /// @return The total assets
+    function getTotalAssets(IERC20 token) public view returns (uint256) {
+        uint256 totalAssets = 0;
+        // Get total assets from each node
+        IStrategyManager manager = stakerNodeCoordinator.strategyManager();
+        for (uint256 i = 0; i < stakerNodeCoordinator.getStakerNodesCount(); i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById(i);
+            if (!node.isUndelegated()) {
+                (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
+                for (uint256 j = 0; j < strategies.length; j++) {
+                    if (strategies[j].underlyingToken() == token) {
+                        totalAssets += amounts[j];
+                    }
+                }
+            }
+        }
+        // Add unstaked assets
+        totalAssets += token.balanceOf(address(liquidToken));
+        // Add queued withdrawals
+        IERC20[] memory tokenArray = new IERC20[](1);
+        tokenArray[0] = token;
+        totalAssets += liquidToken.balanceQueuedAssets(tokenArray)[0];
+        return totalAssets;
     }
 }

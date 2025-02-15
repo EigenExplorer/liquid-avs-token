@@ -428,6 +428,14 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testStakeAssetsToNode() public {
+        // First create a node
+        vm.startPrank(admin);
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), admin);
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), address(liquidTokenManager));
+        stakerNodeCoordinator.createStakerNode();
+        vm.stopPrank();
+
+        // Then deposit assets
         vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
@@ -446,12 +454,16 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
 
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         (
             IStrategy[] memory depositStrategies,
             uint256[] memory depositAmounts
-        ) = strategyManager.getDeposits(address(stakerNode));
-        assertEq(address(depositStrategies[0]), address(mockStrategy));
-        assertEq(depositAmounts[0], 1 ether);
+        ) = strategyManager.getDeposits(address(node));
+
+        assertEq(depositStrategies.length, 1, "Wrong number of strategies");
+        assertEq(depositAmounts.length, 1, "Wrong number of amounts");
+        assertEq(address(depositStrategies[0]), address(mockStrategy), "Wrong strategy");
+        assertEq(depositAmounts[0], 1 ether, "Wrong amount");
     }
 
     function testStakeAssetsToNodeUnauthorized() public {
@@ -746,13 +758,13 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidToken.deposit(assets, amounts, user1);
 
         uint256 nodeId = 0;
-        uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 10 ether;
+        uint256[] memory stakingAmounts = new uint256[](1);
+        stakingAmounts[0] = 10 ether;
         IStrategy[] memory strategiesForNode = new IStrategy[](1);
         strategiesForNode[0] = mockStrategy;
 
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, stakingAmounts);
 
         uint256 sharesBeforeWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
 
@@ -925,7 +937,7 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(operator, address(0), "Node should be undelegated");
 
         vm.prank(admin);
-        vm.expectRevert(IStakerNode.NodeIsNotDelegated.selector);
+        vm.expectRevert(IStakerNode.NodeNotDelegated.selector);
         stakerNode.undelegate();
      }
 

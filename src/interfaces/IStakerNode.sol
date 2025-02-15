@@ -49,7 +49,7 @@ interface IStakerNode {
     error NodeIsDelegated(address operatorDelegation);
 
     /// @notice Error for undelegating node when not delegated
-     error NodeIsNotDelegated();
+    error NodeNotDelegated();
 
     /// @notice Initializes the StakerNode contract
     /// @param init Initialization parameters including coordinator address and node ID
@@ -77,6 +77,10 @@ interface IStakerNode {
 
     /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate() external;
+
+    /// @notice Returns whether the node is undelegated
+    /// @return True if the node is undelegated, false otherwise
+    function isUndelegated() external view returns (bool);
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract
