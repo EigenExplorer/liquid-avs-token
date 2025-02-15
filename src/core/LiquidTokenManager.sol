@@ -486,6 +486,10 @@ contract LiquidTokenManager is
         IERC20 asset,
         IStakerNode node
     ) internal view returns (uint256) {
+        if (node.isUndelegated()) {
+            return 0;
+        }
+
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -501,15 +505,26 @@ contract LiquidTokenManager is
     ) internal view returns (uint256[] memory) {
         uint256 length = supportedTokens.length;
         uint256[] memory balances = new uint256[](length);
-        unchecked {  // Safe because length is fixed
-            for (uint256 i; i < length; ++i) {
-                IStrategy strategy = tokenStrategies[supportedTokens[i]];
-                if (address(strategy) == address(0)) {
-                    revert StrategyNotFound(address(supportedTokens[i]));
+        
+        if (!node.isUndelegated()) {
+            IStrategyManager manager = stakerNodeCoordinator.strategyManager();
+            (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
+            
+            // For each supported token, find its corresponding strategy and amount
+            for (uint256 i = 0; i < length; i++) {
+                IERC20 token = supportedTokens[i];
+                IStrategy tokenStrategy = tokenStrategies[token];
+                
+                // Find matching strategy and amount
+                for (uint256 j = 0; j < strategies.length; j++) {
+                    if (strategies[j] == tokenStrategy) {
+                        balances[i] = amounts[j];
+                        break;
+                    }
                 }
-                balances[i] = strategy.userUnderlyingView(address(node));
             }
         }
+        
         return balances;
     }
 
