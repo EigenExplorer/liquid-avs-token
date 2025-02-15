@@ -56,25 +56,27 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         uint256[] calldata amounts,
         IStrategy[] calldata strategies
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
-        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        if (operatorDelegation == address(0)) revert NodeNotDelegated();
 
         IStrategyManager strategyManager = coordinator.strategyManager();
 
-        uint256 assetsLength = assets.length;
-        for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assets[i];
-            uint256 amount = amounts[i];
-            IStrategy strategy = strategies[i];
+        uint256 length = assets.length;
+        unchecked {
+            for (uint256 i; i < length; ++i) {
+                IERC20 asset = assets[i];
+                uint256 amount = amounts[i];
+                IStrategy strategy = strategies[i];
 
-            asset.forceApprove(address(strategyManager), amount);
+                asset.forceApprove(address(strategyManager), amount);
 
-            uint256 eigenShares = strategyManager.depositIntoStrategy(
-                strategy,
-                asset,
-                amount
-            );
+                uint256 eigenShares = strategyManager.depositIntoStrategy(
+                    strategy,
+                    asset,
+                    amount
+                );
 
-            emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+                emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+            }
         }
     }
 
@@ -102,7 +104,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         override
         onlyRole(STAKER_NODES_DELEGATOR_ROLE)
     {
-        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        if (operatorDelegation == address(0)) revert NodeNotDelegated();
 
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.undelegate(address(this));
@@ -141,6 +143,11 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @return The address of the delegated operator or zero address if not delegated
     function getOperatorDelegation() external view override returns (address) {
         return operatorDelegation;
+    }
+
+    /// @inheritdoc IStakerNode
+    function isUndelegated() external view returns (bool) {
+        return operatorDelegation == address(0);
     }
 
     /// @dev Reverts if the caller doesn't have the required role

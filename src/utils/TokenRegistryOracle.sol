@@ -12,9 +12,9 @@ import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 /// @notice A contract to provide and update rates for given tokens
 /// @dev This contract interacts with a TokenRegistry to manage token rates
 contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessControlUpgradeable {
-    ILiquidTokenManager public liquidTokenManager;
-
     bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
+
+    ILiquidTokenManager public liquidTokenManager;
 
     /// @notice Initializes the contract
     /// @param init Struct containing initial owner and price updater addresses
@@ -38,10 +38,13 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param tokens An array of token addresses
     /// @param newRates An array of new rates corresponding to the tokens
     function batchUpdateRates(IERC20[] calldata tokens, uint256[] calldata newRates) external onlyRole(RATE_UPDATER_ROLE) {
-        require(tokens.length == newRates.length, "Mismatched array lengths");
+        uint256 length = tokens.length;
+        require(length == newRates.length, "Mismatched array lengths");
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            _updateTokenRate(tokens[i], newRates[i]);
+        unchecked {
+            for (uint256 i; i < length; ++i) {
+                _updateTokenRate(tokens[i], newRates[i]);
+            }
         }
     }
 
@@ -49,8 +52,16 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param token The token address
     /// @return The current rate of the token
     function getRate(IERC20 token) external view returns (uint256) {
-        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(token);
-        return tokenInfo.pricePerUnit;
+        ILiquidTokenManager.TokenInfo memory info = liquidTokenManager.getTokenInfo(token);
+        require(info.decimals != 0, "Token not supported");
+        return info.pricePerUnit;
+    }
+
+    /// @notice Updates the LiquidTokenManager address
+    /// @param newLiquidTokenManager The new LiquidTokenManager address
+    function updateLiquidTokenManager(ILiquidTokenManager newLiquidTokenManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(address(newLiquidTokenManager) != address(0), "Zero address");
+        liquidTokenManager = newLiquidTokenManager;
     }
 
     /// @notice Internal function to update the rate of a token

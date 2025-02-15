@@ -82,24 +82,22 @@ contract StakerNodeCoordinator is
     function createStakerNode()
         public
         override
-        notZeroAddress(address(upgradeableBeacon))
         onlyRole(STAKER_NODE_CREATOR_ROLE)
         returns (IStakerNode)
     {
-        uint256 nodeId = stakerNodes.length;
-
-        if (nodeId >= maxNodes) {
+        uint256 currentNodesCount = stakerNodes.length;
+        if (currentNodesCount >= maxNodes) {
             revert TooManyStakerNodes(maxNodes);
         }
 
         BeaconProxy proxy = new BeaconProxy(address(upgradeableBeacon), "");
         IStakerNode node = IStakerNode(payable(proxy));
 
-        initializeStakerNode(node, nodeId);
+        initializeStakerNode(node, currentNodesCount);
 
         stakerNodes.push(node);
 
-        emit NodeCreated(nodeId, node, msg.sender);
+        emit NodeCreated(currentNodesCount, node, msg.sender);
 
         return node;
     }
@@ -175,9 +173,9 @@ contract StakerNodeCoordinator is
     function setMaxNodes(
         uint256 _maxNodes
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 nodeCount = stakerNodes.length;
-        if (_maxNodes < nodeCount) {
-            revert MaxNodesLowerThanCurrent(nodeCount, _maxNodes);
+        uint256 currentNodesCount = stakerNodes.length;
+        if (_maxNodes < currentNodesCount) {
+            revert MaxNodesLowerThanCurrent(currentNodesCount, _maxNodes);
         }
 
         uint256 oldMaxNodes = maxNodes;
@@ -225,6 +223,13 @@ contract StakerNodeCoordinator is
             revert NodeIdOutOfRange(nodeId);
         }
         return stakerNodes[nodeId];
+    }
+
+    /// @notice Updates the LiquidTokenManager address
+    /// @param newLiquidTokenManager The new LiquidTokenManager address
+    function updateLiquidTokenManager(ILiquidTokenManager newLiquidTokenManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(newLiquidTokenManager) == address(0)) revert ZeroAddress();
+        liquidTokenManager = newLiquidTokenManager;
     }
 
     modifier notZeroAddress(address _address) {

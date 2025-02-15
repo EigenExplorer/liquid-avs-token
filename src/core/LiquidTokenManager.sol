@@ -358,46 +358,38 @@ contract LiquidTokenManager is
         IERC20[] memory assets,
         uint256[] memory amounts
     ) internal {
-        uint256 assetsLength = assets.length;
-        uint256 amountsLength = amounts.length;
-
-        if (assetsLength != amountsLength) {
-            revert LengthMismatch(assetsLength, amountsLength);
-        }
+        uint256 length = assets.length;
+        if (length != amounts.length) revert LengthMismatch(length, amounts.length);
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-
-        IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
-        for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assets[i];
-            if (amounts[i] == 0) {
-                revert InvalidStakingAmount(amounts[i]);
+        IStrategy[] memory strategiesForNode = new IStrategy[](length);
+        
+        unchecked {  // Safe because we check length match above
+            for (uint256 i; i < length; ++i) {
+                if (amounts[i] == 0) revert InvalidStakingAmount(amounts[i]);
+                strategiesForNode[i] = tokenStrategies[assets[i]];
+                if (address(strategiesForNode[i]) == address(0)) {
+                    revert StrategyNotFound(address(assets[i]));
+                }
             }
-            IStrategy strategy = tokenStrategies[asset];
-            if (address(strategy) == address(0)) {
-                revert StrategyNotFound(address(asset));
-            }
-            strategiesForNode[i] = strategy;
         }
 
         liquidToken.transferAssets(assets, amounts);
 
-        IERC20[] memory depositAssets = new IERC20[](assetsLength);
-        uint256[] memory depositAmounts = new uint256[](amountsLength);
-
-        for (uint256 i = 0; i < assetsLength; i++) {
-            depositAssets[i] = assets[i];
-            depositAmounts[i] = amounts[i];
-            assets[i].safeTransfer(address(node), amounts[i]);
-        }
-
+        // Emit event before transfer to save gas on stack operations
         emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
 
-        node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
+        unchecked {  // Safe because we check length match above
+            for (uint256 i; i < length; ++i) {
+                assets[i].safeTransfer(address(node), amounts[i]);
+            }
+        }
+
+        node.depositAssets(assets, amounts, strategiesForNode);
 
         emit AssetsDepositedToEigenlayer(
-            depositAssets,
-            depositAmounts,
+            assets,
+            amounts,
             strategiesForNode,
             address(node)
         );
@@ -448,15 +440,19 @@ contract LiquidTokenManager is
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
     function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
-        uint256 totalStaked = 0;
+        uint256 totalStaked;  // Default initialization to 0
         IStrategyManager manager = stakerNodeCoordinator.strategyManager();
-        for (uint256 i = 0; i < stakerNodeCoordinator.getStakerNodesCount(); i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById(i);
-            if (!node.isUndelegated()) {
-                (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
-                for (uint256 j = 0; j < strategies.length; j++) {
-                    if (strategies[j].underlyingToken() == asset) {
-                        totalStaked += amounts[j];
+        uint256 nodesCount = stakerNodeCoordinator.getStakerNodesCount();
+        unchecked {  // Safe because loop counter can't overflow
+            for (uint256 i; i < nodesCount; ++i) {
+                IStakerNode node = stakerNodeCoordinator.getNodeById(i);
+                if (!node.isUndelegated()) {
+                    (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
+                    uint256 len = strategies.length;
+                    for (uint256 j; j < len; ++j) {
+                        if (strategies[j].underlyingToken() == asset) {
+                            totalStaked += amounts[j];
+                        }
                     }
                 }
             }
@@ -503,15 +499,47 @@ contract LiquidTokenManager is
     function _getAllStakedAssetBalancesNode(
         IStakerNode node
     ) internal view returns (uint256[] memory) {
-        uint256[] memory balances = new uint256[](supportedTokens.length);
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            IStrategy strategy = tokenStrategies[supportedTokens[i]];
-            if (address(strategy) == address(0)) {
-                revert StrategyNotFound(address(supportedTokens[i]));
+        uint256 length = supportedTokens.length;
+        uint256[] memory balances = new uint256[](length);
+        unchecked {  // Safe because length is fixed
+            for (uint256 i; i < length; ++i) {
+                IStrategy strategy = tokenStrategies[supportedTokens[i]];
+                if (address(strategy) == address(0)) {
+                    revert StrategyNotFound(address(supportedTokens[i]));
+                }
+                balances[i] = strategy.userUnderlyingView(address(node));
             }
-            balances[i] = strategy.userUnderlyingView(address(node));
         }
         return balances;
+    }
+
+    /// @notice Retrieves the total assets
+    /// @param token The token to get the total assets for
+    /// @return The total assets
+    function getTotalAssets(IERC20 token) public view returns (uint256) {
+        uint256 totalAssets;  // Default initialization to 0
+        IStrategyManager manager = stakerNodeCoordinator.strategyManager();
+        uint256 nodesCount = stakerNodeCoordinator.getStakerNodesCount();
+        unchecked {  // Safe because loop counter can't overflow
+            for (uint256 i; i < nodesCount; ++i) {
+                IStakerNode node = stakerNodeCoordinator.getNodeById(i);
+                if (!node.isUndelegated()) {
+                    (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
+                    uint256 len = strategies.length;
+                    for (uint256 j; j < len; ++j) {
+                        if (strategies[j].underlyingToken() == token) {
+                            totalAssets += amounts[j];
+                        }
+                    }
+                }
+            }
+        }
+        // Add unstaked assets
+        totalAssets += token.balanceOf(address(liquidToken));
+        // Add queued withdrawals - create array in memory directly
+        IERC20[] memory tokenArray = new IERC20[](1);
+        tokenArray[0] = token;
+        return totalAssets + liquidToken.balanceQueuedAssets(tokenArray)[0];
     }
 
     /// @notice Sets the volatility threshold for a given asset
@@ -532,31 +560,5 @@ contract LiquidTokenManager is
     function updateLiquidToken(ILiquidToken newLiquidToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(newLiquidToken) == address(0)) revert ZeroAddress();
         liquidToken = newLiquidToken;
-    }
-
-    /// @notice Retrieves the total assets
-    /// @return The total assets
-    function getTotalAssets(IERC20 token) public view returns (uint256) {
-        uint256 totalAssets = 0;
-        // Get total assets from each node
-        IStrategyManager manager = stakerNodeCoordinator.strategyManager();
-        for (uint256 i = 0; i < stakerNodeCoordinator.getStakerNodesCount(); i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById(i);
-            if (!node.isUndelegated()) {
-                (IStrategy[] memory strategies, uint256[] memory amounts) = manager.getDeposits(address(node));
-                for (uint256 j = 0; j < strategies.length; j++) {
-                    if (strategies[j].underlyingToken() == token) {
-                        totalAssets += amounts[j];
-                    }
-                }
-            }
-        }
-        // Add unstaked assets
-        totalAssets += token.balanceOf(address(liquidToken));
-        // Add queued withdrawals
-        IERC20[] memory tokenArray = new IERC20[](1);
-        tokenArray[0] = token;
-        totalAssets += liquidToken.balanceQueuedAssets(tokenArray)[0];
-        return totalAssets;
     }
 }
