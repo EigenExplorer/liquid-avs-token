@@ -481,6 +481,7 @@ contract LiquidTokenManager is
     }
 
     /// @notice Gets the staked balance of an asset for a specific node
+    /// @dev Uses the EigenLayer Strategy's userUnderlyingView to get the staked balance
     /// @param asset The asset token address
     /// @param node The node to get the staked balance for
     /// @return The staked balance of the asset for the node
