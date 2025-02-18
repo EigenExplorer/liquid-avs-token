@@ -131,7 +131,10 @@ contract LiquidTokenManager is
                 try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
                     if (decimalsFromContract == 0) revert InvalidDecimals();
                     if (tokenInfo.decimals != decimalsFromContract) revert InvalidDecimals();
-                } catch {} // Fallback to provided decimals if token doesn't implement decimals()
+                } catch {
+                    // If the token doesn't implement decimals(), just use the provided decimals
+                    // This is safe because we already checked tokenInfo.decimals != 0 above
+                }
 
                 tokens[token] = tokenInfo;
                 tokenStrategies[token] = strategy;
