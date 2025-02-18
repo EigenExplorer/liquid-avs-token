@@ -40,8 +40,14 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     function batchUpdateRates(IERC20[] calldata tokens, uint256[] calldata newRates) external onlyRole(RATE_UPDATER_ROLE) {
         require(tokens.length == newRates.length, "Mismatched array lengths");
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            _updateTokenRate(tokens[i], newRates[i]);
+        // Cache array length
+        uint256 len = tokens.length;
+        
+        // Use unchecked for counter increment since i < len
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                _updateTokenRate(tokens[i], newRates[i]);
+            }
         }
     }
 
@@ -57,8 +63,10 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     /// @param token The token address
     /// @param newRate The new rate for the token
     function _updateTokenRate(IERC20 token, uint256 newRate) internal {
-        uint256 oldRate = liquidTokenManager.getTokenInfo(token).pricePerUnit;
-        liquidTokenManager.updatePrice(token, newRate);
+        // Cache liquidTokenManager to save gas
+        ILiquidTokenManager manager = liquidTokenManager;
+        uint256 oldRate = manager.getTokenInfo(token).pricePerUnit;
+        manager.updatePrice(token, newRate);
         emit TokenRateUpdated(token, oldRate, newRate, msg.sender);
     }
 }

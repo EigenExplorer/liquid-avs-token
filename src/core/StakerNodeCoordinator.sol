@@ -92,12 +92,17 @@ contract StakerNodeCoordinator is
             revert TooManyStakerNodes(maxNodes);
         }
 
-        BeaconProxy proxy = new BeaconProxy(address(upgradeableBeacon), "");
+        // Cache upgradeableBeacon address to save gas
+        address beaconAddr = address(upgradeableBeacon);
+        BeaconProxy proxy = new BeaconProxy(beaconAddr, "");
         IStakerNode node = IStakerNode(payable(proxy));
 
         initializeStakerNode(node, nodeId);
 
-        stakerNodes.push(node);
+        // Use unchecked for nodeId increment since we already checked maxNodes
+        unchecked {
+            stakerNodes.push(node);
+        }
 
         emit NodeCreated(nodeId, node, msg.sender);
 
@@ -160,10 +165,14 @@ contract StakerNodeCoordinator is
 
         upgradeableBeacon.upgradeTo(_implementationContract);
 
+        // Cache array length
         uint256 nodeCount = stakerNodes.length;
-
-        for (uint256 i = 0; i < nodeCount; i++) {
-            initializeStakerNode(IStakerNode(stakerNodes[i]), i);
+        
+        // Use unchecked for counter increment since i < nodeCount
+        unchecked {
+            for (uint256 i = 0; i < nodeCount; i++) {
+                initializeStakerNode(IStakerNode(stakerNodes[i]), i);
+            }
         }
 
         emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, false);

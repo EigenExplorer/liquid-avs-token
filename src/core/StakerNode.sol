@@ -58,23 +58,29 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
+        // Cache strategyManager to save gas
         IStrategyManager strategyManager = coordinator.strategyManager();
-
+        
+        // Cache array length
         uint256 assetsLength = assets.length;
-        for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assets[i];
-            uint256 amount = amounts[i];
-            IStrategy strategy = strategies[i];
+        
+        // Use unchecked for counter increment since i < assetsLength
+        unchecked {
+            for (uint256 i = 0; i < assetsLength; i++) {
+                IERC20 asset = assets[i];
+                uint256 amount = amounts[i];
+                IStrategy strategy = strategies[i];
 
-            asset.forceApprove(address(strategyManager), amount);
+                asset.forceApprove(address(strategyManager), amount);
 
-            uint256 eigenShares = strategyManager.depositIntoStrategy(
-                strategy,
-                asset,
-                amount
-            );
+                uint256 eigenShares = strategyManager.depositIntoStrategy(
+                    strategy,
+                    asset,
+                    amount
+                );
 
-            emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+                emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+            }
         }
     }
 
@@ -89,6 +95,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
         if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
 
+        // Cache delegationManager to save gas
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
         operatorDelegation = operator;
@@ -102,12 +109,15 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         override
         onlyRole(STAKER_NODES_DELEGATOR_ROLE)
     {
-        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        // Cache operatorDelegation to save gas
+        address currentOperator = operatorDelegation;
+        if (currentOperator == address(0)) revert NodeIsNotDelegated();
 
+        // Cache delegationManager to save gas
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.undelegate(address(this));
 
-        emit UndelegatedFromOperator(operatorDelegation);
+        emit UndelegatedFromOperator(currentOperator);
 
         operatorDelegation = address(0);
     }
