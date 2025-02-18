@@ -97,55 +97,45 @@ contract LiquidTokenManager is
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
 
-        // Cache array length
+        // Initialize strategies for each asset
         uint256 len = init.assets.length;
-        
-        // Use unchecked for counter increment since i < len
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                IERC20 token = init.assets[i];
-                IStrategy strategy = init.strategies[i];
-                TokenInfo memory tokenInfo = init.tokenInfo[i];
-
-                if (address(token) == address(0) || address(strategy) == address(0)) {
+                if (
+                    address(init.assets[i]) == address(0) ||
+                    address(init.strategies[i]) == address(0)
+                ) {
                     revert ZeroAddress();
                 }
 
-                if (tokenInfo.decimals == 0) {
+                if (init.tokenInfo[i].decimals == 0) {
                     revert InvalidDecimals();
                 }
 
                 if (
-                    tokenInfo.volatilityThreshold != 0 &&
-                    (tokenInfo.volatilityThreshold < 1e16 || tokenInfo.volatilityThreshold > 1e18)
+                    init.tokenInfo[i].volatilityThreshold != 0 &&
+                    (
+                        init.tokenInfo[i].volatilityThreshold < 1e16 || 
+                        init.tokenInfo[i].volatilityThreshold > 1e18
+                    )
                 ) {
                     revert InvalidThreshold();
                 }
 
-                // Check if token already exists
-                if (tokens[token].decimals != 0) {
-                    revert TokenExists(address(token));
+                if (tokens[init.assets[i]].decimals != 0) {
+                    revert TokenExists(address(init.assets[i]));
                 }
 
-                // Try to get decimals from token contract
-                try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
-                    if (decimalsFromContract == 0) revert InvalidDecimals();
-                    if (tokenInfo.decimals != decimalsFromContract) revert InvalidDecimals();
-                } catch {
-                    // If the token doesn't implement decimals(), just use the provided decimals
-                    // This is safe because we already checked tokenInfo.decimals != 0 above
-                }
-
-                tokens[token] = tokenInfo;
-                tokenStrategies[token] = strategy;
-                supportedTokens.push(token);
+                tokens[init.assets[i]] = init.tokenInfo[i];
+                tokenStrategies[init.assets[i]] = init.strategies[i];
+                supportedTokens.push(init.assets[i]);
 
                 emit TokenAdded(
-                    token,
-                    tokenInfo.decimals,
-                    tokenInfo.pricePerUnit,
-                    tokenInfo.volatilityThreshold,
-                    address(strategy),
+                    init.assets[i],
+                    init.tokenInfo[i].decimals,
+                    init.tokenInfo[i].pricePerUnit,
+                    init.tokenInfo[i].volatilityThreshold,
+                    address(init.strategies[i]),
                     msg.sender
                 );
             }
