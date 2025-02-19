@@ -98,44 +98,47 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
 
         // Initialize strategies for each asset
-        for (uint256 i = 0; i < init.assets.length; i++) {
-            if (
-                address(init.assets[i]) == address(0) ||
-                address(init.strategies[i]) == address(0)
-            ) {
-                revert ZeroAddress();
+        uint256 len = init.assets.length;
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                if (
+                    address(init.assets[i]) == address(0) ||
+                    address(init.strategies[i]) == address(0)
+                ) {
+                    revert ZeroAddress();
+                }
+
+                if (init.tokenInfo[i].decimals == 0) {
+                    revert InvalidDecimals();
+                }
+
+                if (
+                    init.tokenInfo[i].volatilityThreshold != 0 &&
+                    (
+                        init.tokenInfo[i].volatilityThreshold < 1e16 || 
+                        init.tokenInfo[i].volatilityThreshold > 1e18
+                    )
+                ) {
+                    revert InvalidThreshold();
+                }
+
+                if (tokens[init.assets[i]].decimals != 0) {
+                    revert TokenExists(address(init.assets[i]));
+                }
+
+                tokens[init.assets[i]] = init.tokenInfo[i];
+                tokenStrategies[init.assets[i]] = init.strategies[i];
+                supportedTokens.push(init.assets[i]);
+
+                emit TokenAdded(
+                    init.assets[i],
+                    init.tokenInfo[i].decimals,
+                    init.tokenInfo[i].pricePerUnit,
+                    init.tokenInfo[i].volatilityThreshold,
+                    address(init.strategies[i]),
+                    msg.sender
+                );
             }
-
-            if (init.tokenInfo[i].decimals == 0) {
-                revert InvalidDecimals();
-            }
-
-            if (
-                init.tokenInfo[i].volatilityThreshold != 0 &&
-                (
-                    init.tokenInfo[i].volatilityThreshold < 1e16 || 
-                    init.tokenInfo[i].volatilityThreshold > 1e18
-                )
-            ) {
-                revert InvalidThreshold();
-            }
-
-            if (tokens[init.assets[i]].decimals != 0) {
-                revert TokenExists(address(init.assets[i]));
-            }
-
-            tokens[init.assets[i]] = init.tokenInfo[i];
-            tokenStrategies[init.assets[i]] = init.strategies[i];
-            supportedTokens.push(init.assets[i]);
-
-            emit TokenAdded(
-                init.assets[i],
-                init.tokenInfo[i].decimals,
-                init.tokenInfo[i].pricePerUnit,
-                init.tokenInfo[i].volatilityThreshold,
-                address(init.strategies[i]),
-                msg.sender
-            );
         }
     }
 
@@ -178,7 +181,8 @@ contract LiquidTokenManager is
     /// @notice Removes a token from the registry
     /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokens[token].decimals == 0) revert TokenNotSupported(token);
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
 
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
@@ -189,29 +193,36 @@ contract LiquidTokenManager is
         // Check for pending withdrawal balances
         if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
 
-        // Check for staked node balances
+        // Cache nodes array and length
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
-        for (uint256 i = 0; i < nodes.length; i++) {
-            uint256 stakedBalance = getStakedAssetBalanceNode(
-                token,
-                nodes[i].getId()
-            );
-            if (stakedBalance > 0) {
-                revert TokenInUse(token);
+        uint256 len = nodes.length;
+        
+        // Use unchecked for counter increment since i < len
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                uint256 stakedBalance = getStakedAssetBalanceNode(
+                    token,
+                    nodes[i].getId()
+                );
+                if (stakedBalance > 0) {
+                    revert TokenInUse(token);
+                }
+            }
+        }
+
+        // Cache supportedTokens length
+        uint256 tokenCount = supportedTokens.length;
+        for (uint256 i = 0; i < tokenCount; i++) {
+            if (supportedTokens[i] == token) {
+                // Move the last element to the position being removed
+                supportedTokens[i] = supportedTokens[tokenCount - 1];
+                supportedTokens.pop();
+                break;
             }
         }
 
         delete tokens[token];
         delete tokenStrategies[token];
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == token) {
-                supportedTokens[i] = supportedTokens[
-                    supportedTokens.length - 1
-                ];
-                supportedTokens.pop();
-                break;
-            }
-        }
 
         emit TokenRemoved(token, msg.sender);
     }

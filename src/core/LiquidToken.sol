@@ -79,40 +79,44 @@ contract LiquidToken is
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        uint256[] memory sharesArray = new uint256[](assets.length);
+        // Cache array length
+        uint256 len = assets.length;
+        uint256[] memory sharesArray = new uint256[](len);
 
-        for (uint256 i = 0; i < assets.length; i++) {
-            IERC20 asset = assets[i];
-            uint256 amount = amounts[i];
+        // Combined unchecked block for loop counter and safe arithmetic
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                IERC20 asset = assets[i];
+                uint256 amount = amounts[i];
 
-            if (amount == 0) revert ZeroAmount();
-            if (!liquidTokenManager.tokenIsSupported(asset))
-                revert UnsupportedAsset(asset);
+                if (amount == 0) revert ZeroAmount();
+                if (!liquidTokenManager.tokenIsSupported(asset))
+                    revert UnsupportedAsset(asset);
 
-            uint256 shares = calculateShares(asset, amount);
-            if (shares == 0) revert ZeroShares();
+                uint256 shares = calculateShares(asset, amount);
+                if (shares == 0) revert ZeroShares();
 
-            asset.safeTransferFrom(msg.sender, address(this), amount);
-            assetBalances[address(asset)] += amount;
-            
-            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
-                revert AssetBalanceOutOfSync(
-                    asset, 
-                    assetBalances[address(asset)], 
-                    asset.balanceOf(address(this))
+                asset.safeTransferFrom(msg.sender, address(this), amount);
+                assetBalances[address(asset)] += amount;
+                
+                if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
+                    revert AssetBalanceOutOfSync(
+                        asset, 
+                        assetBalances[address(asset)], 
+                        asset.balanceOf(address(this))
+                    );
+
+                _mint(receiver, shares);
+                sharesArray[i] = shares;
+
+                emit AssetDeposited(
+                    msg.sender,
+                    receiver,
+                    asset,
+                    amount,
+                    shares
                 );
-
-            _mint(receiver, shares);
-
-            sharesArray[i] = shares;
-
-            emit AssetDeposited(
-                msg.sender,
-                receiver,
-                asset,
-                amount,
-                shares
-            );
+            }
         }
 
         return sharesArray;
@@ -128,28 +132,35 @@ contract LiquidToken is
         if (withdrawAssets.length != shareAmounts.length)
             revert ArrayLengthMismatch();
 
-        uint256 totalShares = 0;
-        for (uint256 i = 0; i < withdrawAssets.length; i++) {
-            if (!liquidTokenManager.tokenIsSupported(withdrawAssets[i]))
-                revert UnsupportedAsset(withdrawAssets[i]);
-            if (shareAmounts[i] == 0) revert ZeroAmount();
-            totalShares += shareAmounts[i];
+        // Cache array length and msg.sender
+        uint256 len = withdrawAssets.length;
+        address sender = msg.sender;
+        uint256 totalShares;
+
+        // Use unchecked for counter increment and totalShares addition since we check balance later
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                if (!liquidTokenManager.tokenIsSupported(withdrawAssets[i]))
+                    revert UnsupportedAsset(withdrawAssets[i]);
+                if (shareAmounts[i] == 0) revert ZeroAmount();
+                totalShares += shareAmounts[i];
+            }
         }
 
-        if (balanceOf(msg.sender) < totalShares)
+        if (balanceOf(sender) < totalShares)
             revert InsufficientBalance(
                 IERC20(address(this)),
                 totalShares,
-                balanceOf(msg.sender)
+                balanceOf(sender)
             );
 
         bytes32 requestId = keccak256(
             abi.encodePacked(
-                msg.sender,
+                sender,
                 withdrawAssets,
                 shareAmounts,
                 block.timestamp,
-                _withdrawalNonce[msg.sender]++
+                _withdrawalNonce[sender]++
             )
         );
 
@@ -158,7 +169,7 @@ contract LiquidToken is
         }
 
         WithdrawalRequest memory request = WithdrawalRequest({
-            user: msg.sender,
+            user: sender,
             assets: withdrawAssets,
             shareAmounts: shareAmounts,
             requestTime: block.timestamp,
@@ -166,13 +177,13 @@ contract LiquidToken is
         });
 
         withdrawalRequests[requestId] = request;
-        userWithdrawalRequests[msg.sender].push(requestId);
+        userWithdrawalRequests[sender].push(requestId);
 
-        _transfer(msg.sender, address(this), totalShares);
+        _transfer(sender, address(this), totalShares);
 
         emit WithdrawalRequested(
             requestId,
-            msg.sender,
+            sender,
             withdrawAssets,
             shareAmounts,
             block.timestamp
@@ -404,6 +415,7 @@ contract LiquidToken is
     // ------------------------------------------------------------------------------
 
     function _convertToShares(uint256 amount) internal view returns (uint256) {
+        uint256 assetAmountInUnitOfAccount = amount;
         uint256 supply = totalSupply();
         uint256 totalAsset = totalAssets();
 
