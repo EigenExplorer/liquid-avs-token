@@ -1,0 +1,20 @@
+{
+  "contracts": {
+    "stakerNodeCoordinator": {
+      "init": {
+        "maxNodes": 10
+      }
+    },
+    "liquidToken": {
+      "init": {
+        "name": "Liquid Avs Token",
+        "symbol": "LAT"
+      }
+    }
+  },
+  "roles": {
+    "admin": "${ADMIN_ADDRESS}",
+    "pauser": "${PAUSER_ADDRESS}",
+    "priceUpdater": "${PRICE_UPDATER_ADDRESS}"
+  }
+}

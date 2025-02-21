@@ -415,7 +415,6 @@ contract LiquidToken is
     // ------------------------------------------------------------------------------
 
     function _convertToShares(uint256 amount) internal view returns (uint256) {
-        uint256 assetAmountInUnitOfAccount = amount;
         uint256 supply = totalSupply();
         uint256 totalAsset = totalAssets();
 
