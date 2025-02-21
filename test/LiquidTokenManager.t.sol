@@ -26,8 +26,12 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Create a staker node for testing
         vm.prank(admin);
-        stakerNodeCoordinator.createStakerNode();
-        stakerNode = stakerNodeCoordinator.getAllNodes()[0];
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            admin
+        );
+        IStakerNode node = stakerNodeCoordinator.createStakerNode();
+        stakerNode = node;
 
         // Register a mock operator to EL
         address operatorAddress = address(
@@ -591,6 +595,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
 
         liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0);  // Disable volatility check
+        liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken2)), 0);  // Disable volatility check
         liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 1 testToken = 2 units
         liquidTokenManager.updatePrice(IERC20(address(testToken2)), 1e18); // 1 testToken2 = 1 unit
         vm.stopPrank();
@@ -806,7 +811,7 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 totalAssetsBefore = liquidToken.totalAssets();
 
         // Fast forward time
-        vm.warp(block.timestamp + 15 days);
+        vm.warp(block.timestamp + 14 days);
 
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
@@ -871,7 +876,7 @@ contract LiquidTokenManagerTest is BaseTest {
         withdrawalAmounts[0] = 9 ether; // More than available
 
         liquidToken.requestWithdrawal(assets, withdrawalAmounts);
-        vm.warp(block.timestamp + 15 days);
+        vm.warp(block.timestamp + 14 days);
 
         bytes32 requestId = liquidToken.getUserWithdrawalRequests(user1)[0];
         vm.expectRevert(
@@ -1020,7 +1025,7 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
 
         // Fulfill in random order
-        vm.warp(block.timestamp + 15 days);
+        vm.warp(block.timestamp + 14 days);
 
         bytes32[] memory user1Requests = liquidToken.getUserWithdrawalRequests(user1);
         bytes32[] memory user2Requests = liquidToken.getUserWithdrawalRequests(user2);
@@ -1050,5 +1055,586 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(testToken.balanceOf(address(liquidToken)), 0, "testToken contract balance not zero");
         assertEq(testToken2.balanceOf(address(liquidToken)), 0, "testToken2 contract balance not zero");
         assertEq(liquidToken.totalSupply(), 0, "LiquidToken total supply not zero");
+    }
+
+    function testUndelegationSecurity() public {
+        // Setup: Create and delegate a node
+        vm.startPrank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            admin
+        );
+        vm.stopPrank();
+
+        // Create initial deposits
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Record initial states
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
+        
+        // Setup node and delegate
+        vm.startPrank(admin);
+        IStakerNode node = stakerNodeCoordinator.createStakerNode();
+        uint256 nodeId = stakerNodeCoordinator.getAllNodes().length - 1;
+        vm.stopPrank();
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        address[] memory operators = new address[](1);
+        address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
+            block.timestamp,
+            block.prevrandao
+        )))));
+        operators[0] = testOperator;
+        
+        ISignatureUtils.SignatureWithExpiry memory emptySig;
+        bytes32[] memory salts = new bytes32[](1);
+        salts[0] = bytes32(0);
+        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        sigs[0] = emptySig;
+
+        vm.prank(admin);
+        liquidTokenManager.delegateNodes(nodeIds, operators, sigs, salts);
+
+        // Try undelegating with non-admin (should fail)
+        vm.prank(user2);
+        vm.expectRevert();
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        // Properly undelegate with admin
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        // Verify share consistency
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change after undelegation");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User balance should not change after undelegation");
+    }
+
+    function testMultipleUndelegationScenarios() public {
+        // Setup: Create multiple nodes and delegate them
+        vm.startPrank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            admin
+        );
+        vm.stopPrank();
+
+        // Create deposits from multiple users
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 50 ether;
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        liquidToken.deposit(assets, amounts, user2);
+        vm.stopPrank();
+
+        // Record initial states
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
+        uint256 initialUser2Balance = liquidToken.balanceOf(user2);
+
+        // Create multiple nodes
+        vm.startPrank(admin);
+        IStakerNode node1 = stakerNodeCoordinator.createStakerNode();
+        IStakerNode node2 = stakerNodeCoordinator.createStakerNode();
+        uint256[] memory nodeIds = new uint256[](2);
+        nodeIds[0] = stakerNodeCoordinator.getAllNodes().length - 2;  // First node
+        nodeIds[1] = stakerNodeCoordinator.getAllNodes().length - 1;  // Second node
+        vm.stopPrank();
+
+        // Setup delegation parameters
+        address[] memory operators = new address[](2);
+        address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
+            block.timestamp,
+            block.prevrandao
+        )))));
+        operators[0] = testOperator;
+        operators[1] = testOperator;
+        
+        ISignatureUtils.SignatureWithExpiry memory emptySig;
+        bytes32[] memory salts = new bytes32[](2);
+        salts[0] = bytes32(0);
+        salts[1] = bytes32(0);
+        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](2);
+        sigs[0] = emptySig;
+        sigs[1] = emptySig;
+
+        // Delegate nodes
+        vm.prank(admin);
+        liquidTokenManager.delegateNodes(nodeIds, operators, sigs, salts);
+
+        // Undelegate nodes one by one
+        vm.startPrank(admin);
+        uint256[] memory singleNodeId = new uint256[](1);
+        
+        // Undelegate first node
+        singleNodeId[0] = nodeIds[0];
+        liquidTokenManager.undelegateNodes(singleNodeId);
+        
+        // Verify share consistency after first undelegation
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change after first undelegation");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User1 balance should not change after first undelegation");
+        assertEq(liquidToken.balanceOf(user2), initialUser2Balance, "User2 balance should not change after first undelegation");
+
+        // Undelegate second node
+        singleNodeId[0] = nodeIds[1];
+        liquidTokenManager.undelegateNodes(singleNodeId);
+        
+        // Verify final share consistency
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change after all undelegations");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User1 balance should not change after all undelegations");
+        assertEq(liquidToken.balanceOf(user2), initialUser2Balance, "User2 balance should not change after all undelegations");
+        vm.stopPrank();
+    }
+
+    function testShareInflationPreventionDuringUndelegation() public {
+        // Setup: Create and delegate a node
+        vm.startPrank(admin);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            admin
+        );
+        vm.stopPrank();
+
+        // Create initial deposits with multiple assets
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 100 ether;
+        amounts[1] = 50 ether;
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Record initial states
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
+        
+        // Create and delegate node
+        vm.startPrank(admin);
+        IStakerNode node = stakerNodeCoordinator.createStakerNode();
+        uint256 nodeId = stakerNodeCoordinator.getAllNodes().length - 1;
+        vm.stopPrank();
+
+        uint256[] memory nodeIds = new uint256[](1);
+        nodeIds[0] = nodeId;
+        
+        address[] memory operators = new address[](1);
+        address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
+            block.timestamp,
+            block.prevrandao
+        )))));
+        operators[0] = testOperator;
+        
+        ISignatureUtils.SignatureWithExpiry memory emptySig;
+        bytes32[] memory salts = new bytes32[](1);
+        salts[0] = bytes32(0);
+        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        sigs[0] = emptySig;
+
+        vm.prank(admin);
+        liquidTokenManager.delegateNodes(nodeIds, operators, sigs, salts);
+
+        // Update asset prices to simulate value changes
+        vm.startPrank(admin);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
+        // Disable volatility checks for both tokens
+        liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0);
+        liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken2)), 0);
+        // Update prices
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18);  // Double the price
+        liquidTokenManager.updatePrice(IERC20(address(testToken2)), 0.5e18);  // Halve the price
+        vm.stopPrank();
+
+        // Undelegate node
+        vm.prank(admin);
+        liquidTokenManager.undelegateNodes(nodeIds);
+
+        // Verify share consistency despite price changes
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change after undelegation");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User balance should not change after undelegation");
+
+        // Verify no share inflation through multiple operations
+        vm.startPrank(user1);
+        uint256[] memory withdrawShares = new uint256[](2);
+        withdrawShares[0] = 10 ether;
+        withdrawShares[1] = 5 ether;
+        liquidToken.requestWithdrawal(assets, withdrawShares);
+        vm.stopPrank();
+
+        assertEq(
+            liquidToken.totalSupply(),
+            initialTotalSupply,
+            "Total supply should remain constant after withdrawal request"
+        );
+    }
+
+    function testStrategyDisablingSafety() public {
+        // Setup initial state
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Create deposits
+        vm.startPrank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Try to disable strategy with active shares (should fail)
+        vm.startPrank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(IERC20(address(testToken)));
+        vm.stopPrank();
+
+        // Withdraw all shares
+        vm.startPrank(user1);
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        // Move time forward to allow withdrawal
+        vm.warp(block.timestamp + 14 days);
+
+        vm.startPrank(user1);
+        bytes32[] memory requestIds = liquidToken.getUserWithdrawalRequests(user1);
+        require(requestIds.length > 0, "No withdrawal requests found");
+        liquidToken.fulfillWithdrawal(requestIds[0]);
+        vm.stopPrank();
+
+        // Now should be able to disable strategy
+        vm.startPrank(admin);
+        liquidTokenManager.removeToken(IERC20(address(testToken)));
+
+        // Verify strategy is disabled
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "Token should not be supported"
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyNotFound.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.getTokenStrategy(IERC20(address(testToken)));
+
+        // Add token back with a new strategy
+        MockStrategy newStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
+        liquidTokenManager.addToken(
+            IERC20(address(testToken)),
+            18,
+            1e18,
+            0,
+            newStrategy
+        );
+
+        // Verify token and strategy are added back
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "Token should be supported"
+        );
+        assertEq(
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken)))),
+            address(newStrategy),
+            "Wrong strategy"
+        );
+        vm.stopPrank();
+    }
+
+    function testStrategyShareValueConsistency() public {
+        // Setup initial state with two strategies
+        MockERC20 tokenM = new MockERC20("Test Token M", "TESTM");
+        MockStrategy strategyM = new MockStrategy(strategyManager, IERC20(address(tokenM)));
+        
+        vm.startPrank(admin);
+        // Add first token with its strategy
+        liquidTokenManager.addToken(
+            IERC20(address(tokenM)),
+            18,
+            1e18,
+            0,
+            strategyM
+        );
+        vm.stopPrank();
+
+        // Create deposits
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(tokenM));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        vm.startPrank(user1);
+        tokenM.mint(user1, 100 ether);
+        tokenM.approve(address(liquidToken), type(uint256).max);
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Record share values
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
+
+        // Try to remove token (should fail due to active shares)
+        vm.startPrank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(tokenM)
+            )
+        );
+        liquidTokenManager.removeToken(IERC20(address(tokenM)));
+
+        // Verify share value consistency
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User balance should not change");
+        vm.stopPrank();
+    }
+
+    function testStrategyManagementSafety() public {
+        // Setup initial state
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Create deposits
+        vm.startPrank(user1);
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Try to remove token (and its strategy) with active shares (should fail)
+        vm.startPrank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.removeToken(IERC20(address(testToken)));
+        vm.stopPrank();
+
+        // Withdraw all shares
+        vm.startPrank(user1);
+        liquidToken.requestWithdrawal(assets, amounts);
+        vm.stopPrank();
+
+        // Move time forward to allow withdrawal
+        vm.warp(block.timestamp + 14 days);
+
+        vm.startPrank(user1);
+        bytes32[] memory requestIds = liquidToken.getUserWithdrawalRequests(user1);
+        require(requestIds.length > 0, "No withdrawal requests found");
+        liquidToken.fulfillWithdrawal(requestIds[0]);
+        vm.stopPrank();
+
+        // Now should be able to remove token and its strategy
+        vm.startPrank(admin);
+        liquidTokenManager.removeToken(IERC20(address(testToken)));
+
+        // Verify token and strategy are removed
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "Token should not be supported"
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyNotFound.selector,
+                address(testToken)
+            )
+        );
+        liquidTokenManager.getTokenStrategy(IERC20(address(testToken)));
+
+        // Add token back with a new strategy
+        MockStrategy newStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
+        liquidTokenManager.addToken(
+            IERC20(address(testToken)),
+            18,
+            1e18,
+            0,
+            newStrategy
+        );
+
+        // Verify token and strategy are added back
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "Token should be supported"
+        );
+        assertEq(
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(testToken)))),
+            address(newStrategy),
+            "Wrong strategy"
+        );
+        vm.stopPrank();
+    }
+
+    function testMultipleTokenStrategyManagement() public {
+        // Create a new token and strategy for testing
+        MockERC20 token3 = new MockERC20("Test Token 3", "TEST3");
+        MockERC20 token4 = new MockERC20("Test Token 4", "TEST4");
+        MockStrategy strategy3 = new MockStrategy(strategyManager, IERC20(address(token3)));
+        MockStrategy strategy4 = new MockStrategy(strategyManager, IERC20(address(token4)));
+        
+        vm.startPrank(admin);
+        // Add first token with its strategy
+        liquidTokenManager.addToken(
+            IERC20(address(token3)),
+            18,
+            1e18,
+            0,
+            strategy3
+        );
+
+        // Add second token with its strategy
+        liquidTokenManager.addToken(
+            IERC20(address(token4)),
+            18,
+            1e18,
+            0,
+            strategy4
+        );
+
+        // Verify both tokens are enabled
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
+            "Token3 should be supported"
+        );
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
+            "Token4 should be supported"
+        );
+
+        // Remove second token (which has no shares)
+        liquidTokenManager.removeToken(IERC20(address(token4)));
+
+        // Verify states
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
+            "Token3 should still be supported"
+        );
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
+            "Token4 should not be supported"
+        );
+
+        // Try to get token info for removed token (should fail)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenNotSupported.selector,
+                address(token4)
+            )
+        );
+        liquidTokenManager.getTokenInfo(IERC20(address(token4)));
+
+        // Try to get strategy for removed token (should fail)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyNotFound.selector,
+                address(token4)
+            )
+        );
+        liquidTokenManager.getTokenStrategy(IERC20(address(token4)));
+
+        vm.stopPrank();
+    }
+
+    function testTokenStrategyShareValueConsistency() public {
+        // Create new tokens and strategies for testing (use completely different names)
+        MockERC20 tokenM = new MockERC20("Test Token M", "TESTM");
+        MockERC20 tokenN = new MockERC20("Test Token N", "TESTN");
+        MockStrategy strategyM = new MockStrategy(strategyManager, IERC20(address(tokenM)));
+        MockStrategy strategyN = new MockStrategy(strategyManager, IERC20(address(tokenN)));
+        
+        vm.startPrank(admin);
+        // Add tokens with their strategies
+        liquidTokenManager.addToken(
+            IERC20(address(tokenM)),
+            18,
+            1e18,
+            0,
+            strategyM
+        );
+        liquidTokenManager.addToken(
+            IERC20(address(tokenN)),
+            18,
+            1e18,
+            0,
+            strategyN
+        );
+        vm.stopPrank();
+
+        // Create deposits for both tokens
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(tokenM));
+        assets[1] = IERC20(address(tokenN));
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 100 ether;
+        amounts[1] = 50 ether;
+
+        vm.startPrank(user1);
+        tokenM.mint(user1, 100 ether);
+        tokenN.mint(user1, 100 ether);
+        tokenM.approve(address(liquidToken), type(uint256).max);
+        tokenN.approve(address(liquidToken), type(uint256).max);
+        liquidToken.deposit(assets, amounts, user1);
+        vm.stopPrank();
+
+        // Record share values
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
+
+        // Try to remove first token (should fail due to active shares)
+        vm.startPrank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(tokenM)
+            )
+        );
+        liquidTokenManager.removeToken(IERC20(address(tokenM)));
+
+        // Try to remove second token (should fail due to active shares)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenInUse.selector,
+                address(tokenN)
+            )
+        );
+        liquidTokenManager.removeToken(IERC20(address(tokenN)));
+
+        // Verify share value consistency
+        assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change");
+        assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User balance should not change");
+        vm.stopPrank();
     }
 }

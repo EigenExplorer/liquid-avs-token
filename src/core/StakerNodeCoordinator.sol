@@ -66,6 +66,10 @@ contract StakerNodeCoordinator is
             revert("DelegationManager cannot be the zero address");
         }
 
+        if (init.maxNodes == 0) {
+            revert ZeroAmount();
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
@@ -162,6 +166,9 @@ contract StakerNodeCoordinator is
         if (address(upgradeableBeacon) == address(0)) {
             revert NoBeaconImplementationExists();
         }
+
+        // Implementation validation
+        if (_implementationContract.code.length == 0) revert NotAContract();
 
         upgradeableBeacon.upgradeTo(_implementationContract);
 
