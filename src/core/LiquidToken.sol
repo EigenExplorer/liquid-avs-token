@@ -137,7 +137,6 @@ contract LiquidToken is
         address sender = msg.sender;
         uint256 totalShares;
 
-        // Use unchecked for counter increment and totalShares addition since we check balance later
         unchecked {
             for (uint256 i = 0; i < len; i++) {
                 if (!liquidTokenManager.tokenIsSupported(withdrawAssets[i]))
@@ -160,6 +159,9 @@ contract LiquidToken is
                 withdrawAssets,
                 shareAmounts,
                 block.timestamp,
+                block.number,
+                tx.gasprice,
+                address(this),
                 _withdrawalNonce[sender]++
             )
         );
@@ -176,9 +178,11 @@ contract LiquidToken is
             fulfilled: false
         });
 
+        // Update state before external interactions
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[sender].push(requestId);
 
+        // External interaction last
         _transfer(sender, address(this), totalShares);
 
         emit WithdrawalRequested(
@@ -217,7 +221,7 @@ contract LiquidToken is
             IERC20 asset = request.assets[i];
 
             // Check the contract's actual token balance
-            if (asset.balanceOf(address(this)) < amount ) {
+            if (asset.balanceOf(address(this)) < amount) {
                 revert InsufficientBalance(
                     asset,
                     asset.balanceOf(address(this)),

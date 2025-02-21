@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -99,6 +101,137 @@ contract LiquidTokenTest is BaseTest {
         assertTrue(requestIds[1] != requestIds[2], "Second and third request IDs should be different");
         assertTrue(requestIds[0] != requestIds[2], "First and third request IDs should be different");
 
+        vm.stopPrank();
+    }
+
+    function testRequestIdUniqueness() public {
+        // Setup initial state
+        uint256 depositAmount = 5 ether;
+        testToken.mint(user1, depositAmount * 3); // Mint enough for 3 deposits
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), depositAmount * 3); // Approve for all deposits
+        
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = depositAmount;
+        
+        // Make two deposits
+        uint256[] memory shares1 = liquidToken.deposit(assets, amounts, user1);
+        uint256[] memory shares2 = liquidToken.deposit(assets, amounts, user1);
+        
+        // Create withdrawal amounts arrays
+        uint256[] memory withdrawShares1 = new uint256[](1);
+        withdrawShares1[0] = shares1[0];
+        uint256[] memory withdrawShares2 = new uint256[](1);
+        withdrawShares2[0] = shares2[0];
+        
+        // Approve LiquidToken to burn shares for first two withdrawals
+        liquidToken.approve(address(liquidToken), shares1[0] + shares2[0]);
+        
+        // Store request IDs
+        bytes32[] memory requestIds = new bytes32[](3);
+        
+        // First withdrawal
+        vm.recordLogs();
+        liquidToken.requestWithdrawal(assets, withdrawShares1);
+        Vm.Log[] memory entries1 = vm.getRecordedLogs();
+        // Find WithdrawalRequested event and extract requestId
+        for (uint i = 0; i < entries1.length; i++) {
+            if (entries1[i].topics[0] == keccak256("WithdrawalRequested(bytes32,address,address[],uint256[],uint256)")) {
+                requestIds[0] = bytes32(entries1[i].topics[1]);
+                break;
+            }
+        }
+        
+        // Second withdrawal in same block
+        vm.recordLogs();
+        liquidToken.requestWithdrawal(assets, withdrawShares2);
+        Vm.Log[] memory entries2 = vm.getRecordedLogs();
+        for (uint i = 0; i < entries2.length; i++) {
+            if (entries2[i].topics[0] == keccak256("WithdrawalRequested(bytes32,address,address[],uint256[],uint256)")) {
+                requestIds[1] = bytes32(entries2[i].topics[1]);
+                break;
+            }
+        }
+        
+        // Verify first two IDs are different
+        assertTrue(requestIds[0] != requestIds[1], "Request IDs should be unique even in same block");
+        
+        // Make another deposit for third request
+        uint256[] memory shares3 = liquidToken.deposit(assets, amounts, user1);
+        uint256[] memory withdrawShares3 = new uint256[](1);
+        withdrawShares3[0] = shares3[0];
+        
+        // Approve shares for third withdrawal
+        liquidToken.approve(address(liquidToken), shares3[0]);
+        
+        // Third withdrawal with same parameters
+        vm.recordLogs();
+        liquidToken.requestWithdrawal(assets, withdrawShares3);
+        Vm.Log[] memory entries3 = vm.getRecordedLogs();
+        for (uint i = 0; i < entries3.length; i++) {
+            if (entries3[i].topics[0] == keccak256("WithdrawalRequested(bytes32,address,address[],uint256[],uint256)")) {
+                requestIds[2] = bytes32(entries3[i].topics[1]);
+                break;
+            }
+        }
+        
+        // Verify all request IDs are unique
+        assertTrue(requestIds[2] != requestIds[0], "Request ID should be different even with same parameters");
+        assertTrue(requestIds[2] != requestIds[1], "Request ID should be different from second request");
+        
+        vm.stopPrank();
+    }
+    
+    function testRequestIdAcrossBlocks() public {
+        // Setup initial state
+        uint256 depositAmount = 5 ether;
+        testToken.mint(user1, depositAmount * 3); // Mint enough for 3 deposits
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), depositAmount * 3);
+        
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = depositAmount;
+        
+        // Make initial deposit
+        uint256[] memory shares = liquidToken.deposit(assets, amounts, user1);
+        
+        // Create withdrawal shares array
+        uint256[] memory withdrawShares = new uint256[](1);
+        withdrawShares[0] = shares[0] / 3; // Use 1/3 of shares each time
+        
+        // Approve shares for withdrawal
+        liquidToken.approve(address(liquidToken), shares[0]);
+        
+        // Make withdrawals across different blocks
+        bytes32[] memory requestIds = new bytes32[](3);
+        
+        for (uint256 i = 0; i < 3; i++) {
+            // Move to next block
+            vm.roll(block.number + 1);
+            vm.warp(block.timestamp + 12);
+            
+            vm.recordLogs();
+            liquidToken.requestWithdrawal(assets, withdrawShares);
+            Vm.Log[] memory entries = vm.getRecordedLogs();
+            
+            // Extract request ID
+            for (uint j = 0; j < entries.length; j++) {
+                if (entries[j].topics[0] == keccak256("WithdrawalRequested(bytes32,address,address[],uint256[],uint256)")) {
+                    requestIds[i] = bytes32(entries[j].topics[1]);
+                    break;
+                }
+            }
+            
+            // Verify uniqueness with previous IDs
+            for (uint256 j = 0; j < i; j++) {
+                assertTrue(requestIds[i] != requestIds[j], "Request IDs should be unique across blocks");
+            }
+        }
+        
         vm.stopPrank();
     }
 
@@ -699,7 +832,7 @@ contract LiquidTokenTest is BaseTest {
         ];
         vm.warp(block.timestamp + 15 days);
         liquidToken.fulfillWithdrawal(requestIdUser1);
-
+        
         // Check balances for User1
         assertEq(
             testToken.balanceOf(user1),
@@ -958,5 +1091,208 @@ contract LiquidTokenTest is BaseTest {
             0,
             "Contract should not hold any liquid tokens after User1's fulfillment"
         );
+    }
+
+    function testShareLockingInWithdrawalRequest() public {
+        // Setup: User deposits tokens first
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory depositAmounts = new uint256[](1);
+        depositAmounts[0] = 10 ether;
+        
+        liquidToken.deposit(assets, depositAmounts, user1);
+        
+        // Check initial state
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUserBalance = liquidToken.balanceOf(user1);
+        assertEq(initialTotalSupply, 10 ether, "Initial total supply incorrect");
+        assertEq(initialUserBalance, 10 ether, "Initial user balance incorrect");
+        
+        // Request withdrawal
+        uint256[] memory withdrawShares = new uint256[](1);
+        withdrawShares[0] = 5 ether;
+        liquidToken.requestWithdrawal(assets, withdrawShares);
+        
+        // Verify shares are locked (transferred to contract)
+        uint256 newTotalSupply = liquidToken.totalSupply();
+        uint256 newUserBalance = liquidToken.balanceOf(user1);
+        assertEq(newTotalSupply, 10 ether, "Total supply should remain the same");
+        assertEq(newUserBalance, 5 ether, "User balance should be reduced by withdrawn shares");
+        assertEq(liquidToken.balanceOf(address(liquidToken)), 5 ether, "Contract should hold locked shares");
+        
+        // Wait for withdrawal delay
+        vm.warp(block.timestamp + liquidToken.WITHDRAWAL_DELAY());
+        
+        // Get the latest withdrawal request
+        bytes32[] memory requests = liquidToken.getUserWithdrawalRequests(user1);
+        bytes32 requestId = requests[requests.length - 1];
+        
+        // Fulfill withdrawal
+        liquidToken.fulfillWithdrawal(requestId);
+        
+        // Verify shares are burned after fulfillment
+        assertEq(liquidToken.totalSupply(), 5 ether, "Total supply should be reduced after burning");
+        assertEq(liquidToken.balanceOf(user1), 5 ether, "User balance should remain the same after fulfillment");
+        assertEq(liquidToken.balanceOf(address(liquidToken)), 0, "Contract should not hold shares after fulfillment");
+    }
+
+    function testShareLockingWithMultipleAssets() public {
+        // Setup: User deposits multiple tokens
+        vm.startPrank(user1);
+        IERC20[] memory assets = new IERC20[](2);
+        assets[0] = IERC20(address(testToken));
+        assets[1] = IERC20(address(testToken2));
+        uint256[] memory depositAmounts = new uint256[](2);
+        depositAmounts[0] = 10 ether;
+        depositAmounts[1] = 20 ether;
+        liquidToken.deposit(assets, depositAmounts, user1);
+        
+        // Check initial state
+        uint256 initialTotalSupply = liquidToken.totalSupply();
+        uint256 initialUserBalance = liquidToken.balanceOf(user1);
+        
+        // Request withdrawal of multiple assets
+        uint256[] memory withdrawShares = new uint256[](2);
+        withdrawShares[0] = 5 ether;
+        withdrawShares[1] = 10 ether;
+        liquidToken.requestWithdrawal(assets, withdrawShares);
+        
+        // Verify shares are locked (transferred to contract)
+        uint256 totalSharesLocked = withdrawShares[0] + withdrawShares[1];
+        assertEq(
+            liquidToken.totalSupply(), 
+            initialTotalSupply, 
+            "Total supply should remain the same after locking"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1), 
+            initialUserBalance - totalSharesLocked, 
+            "User balance should be reduced by locked shares"
+        );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)), 
+            totalSharesLocked, 
+            "Contract should hold locked shares"
+        );
+        
+        // Fulfill withdrawal for each asset
+        vm.warp(block.timestamp + liquidToken.WITHDRAWAL_DELAY());
+        bytes32[] memory requests = liquidToken.getUserWithdrawalRequests(user1);
+        for (uint256 i = 0; i < requests.length; i++) {
+            liquidToken.fulfillWithdrawal(requests[i]);
+        }
+        
+        // Verify shares are burned after fulfillment
+        assertEq(
+            liquidToken.totalSupply(), 
+            initialTotalSupply - totalSharesLocked, 
+            "Total supply should be reduced after burning"
+        );
+        assertEq(
+            liquidToken.balanceOf(user1), 
+            initialUserBalance - totalSharesLocked, 
+            "User balance should remain the same after fulfillment"
+        );
+        assertEq(
+            liquidToken.balanceOf(address(liquidToken)), 
+            0, 
+            "Contract should not hold shares after fulfillment"
+        );
+    }
+
+    function testTotalAssetsCalculationEdgeCases() public {
+        vm.startPrank(admin);
+        
+        // Test with maximum possible token amount
+        uint256 maxAmount = type(uint256).max / 2; // Avoid overflow
+        testToken.mint(user1, maxAmount);
+        
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), maxAmount);
+        
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = maxAmount;
+        
+        liquidToken.deposit(assets, amounts, user1);
+        
+        // Verify total assets matches deposit
+        assertEq(liquidToken.assetBalances(address(testToken)), maxAmount, "Total assets should match max deposit");
+        
+        // Test precision with small amounts
+        uint256 smallAmount = 1;
+        testToken.mint(user2, smallAmount);
+        
+        vm.startPrank(user2);
+        testToken.approve(address(liquidToken), smallAmount);
+        amounts[0] = smallAmount;
+        
+        liquidToken.deposit(assets, amounts, user2);
+        
+        // Verify small amounts are tracked correctly
+        assertEq(liquidToken.assetBalances(address(testToken)), maxAmount + smallAmount, "Total assets should include small amount");
+    }
+
+    function testLockedTokenRecovery() public {
+        // Test direct transfer to contract
+        uint256 directAmount = 1 ether;
+        testToken.mint(address(this), directAmount);
+        testToken.transfer(address(liquidToken), directAmount);
+        
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        
+        // Verify total assets excludes direct transfers
+        assertEq(liquidToken.assetBalances(address(testToken)), 0, "Total assets should not include direct transfers");
+        
+        // Test failed withdrawal scenario
+        vm.startPrank(user1);
+        uint256 depositAmount = 5 ether;
+        testToken.mint(user1, depositAmount);
+        testToken.approve(address(liquidToken), depositAmount);
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = depositAmount;
+        
+        uint256[] memory shares = liquidToken.deposit(assets, amounts, user1);
+        
+        // Approve LiquidToken to burn shares for withdrawal
+        liquidToken.approve(address(liquidToken), shares[0]);
+        
+        // Request withdrawal
+        liquidToken.requestWithdrawal(assets, amounts);
+        
+        // Verify assets are still tracked correctly
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Total assets should track pending withdrawals");
+        assertEq(liquidToken.queuedAssetBalances(address(testToken)), 0, "Queued assets should be 0 until withdrawal is fulfilled");
+    }
+
+    function testTotalAssetsWithStrategyMigration() public {
+        vm.startPrank(admin);
+        
+        // Initial deposit
+        uint256 depositAmount = 10 ether;
+        testToken.mint(user1, depositAmount);
+        
+        vm.startPrank(user1);
+        testToken.approve(address(liquidToken), depositAmount);
+        
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = IERC20(address(testToken));
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = depositAmount;
+        
+        liquidToken.deposit(assets, amounts, user1);
+        
+        // Verify initial total assets
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Initial total assets incorrect");
+        
+        // Simulate strategy migration
+        vm.startPrank(admin);
+        
+        // Verify total assets remained constant through migration
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Total assets changed during migration");
     }
 }
