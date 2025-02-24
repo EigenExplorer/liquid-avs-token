@@ -21,6 +21,7 @@ interface IStakerNodeCoordinator {
         address pauser;
         address stakerNodeCreator;
         address stakerNodesDelegator;
+        address stakerNodeImplementation;
     }
 
     /// @notice Emitted when a new staker node is created
@@ -81,10 +82,6 @@ interface IStakerNodeCoordinator {
     /// @notice Creates a new staker node
     /// @return The IStakerNode interface of the newly created staker node
     function createStakerNode() external returns (IStakerNode);
-
-    /// @notice Registers the initial staker node implementation
-    /// @param _implementationContract Address of the implementation contract
-    function registerStakerNodeImplementation(address _implementationContract) external;
 
     /// @notice Upgrades the staker node implementation
     /// @param _implementationContract Address of the new implementation contract

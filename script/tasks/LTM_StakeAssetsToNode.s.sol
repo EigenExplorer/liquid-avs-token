@@ -8,16 +8,18 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
+/// @dev To run this task:
+// forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode --rpc-url $RPC_URL --broadcast --sig "run(string memory configFileName,uint256 nodeId,IERC20[] memory assets,uint256[] memory amounts)" -- "/local/mainnet_deployment_data.json" <NODE_ID> <ASSETS> <AMOUNTS> -vvvv
 contract StakeAssetsToNode is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     function run(
-      string memory configFile,
-			uint256 nodeId,
-			IERC20[] memory assets,
-			uint256[] memory amounts
+      string memory configFileName,
+      uint256 nodeId,
+      IERC20[] memory assets,
+      uint256[] memory amounts
     ) public {
-        string memory configPath = string(bytes(string.concat("script/outputs/", configFile)));
+        string memory configPath = string(bytes(string.concat("script/outputs/", configFileName)));
         string memory config = vm.readFile(configPath);
 
         address liquidTokenManageraddress = stdJson.readAddress(config, ".addresses.liquidTokenManager");

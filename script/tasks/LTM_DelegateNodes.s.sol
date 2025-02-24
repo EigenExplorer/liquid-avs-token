@@ -8,24 +8,46 @@ import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
+/// @dev To run this task:
+// forge script script/tasks/SNC_CreateStakerNodes.s.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --sig "run(string memory configFileName,uint256[] memory nodeIds,address[] memory operators,ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,bytes32[] calldata approverSalts)" -- "/local/mainnet_deployment_data.json" <NODE_IDS> <OPERATORS> <SIGNATURES> <SALTS> -vvvv
 contract DelegateNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     function run(
-      string memory configFile,
+      string memory configFileName,
       uint256[] memory nodeIds,
       address[] memory operators,
       ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
       bytes32[] calldata approverSalts
     ) public {
-        string memory configPath = string(bytes(string.concat("script/outputs/", configFile)));
+        string memory configPath = string(bytes(string.concat("script/outputs/", configFileName)));
         string memory config = vm.readFile(configPath);
 
         address liquidTokenManageraddress = stdJson.readAddress(config, ".addresses.liquidTokenManager");
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 
+        // Create default signatures and salts if empty arrays are provided
+        ISignatureUtils.SignatureWithExpiry[] memory signatures;
+        bytes32[] memory salts;
+
+        if (approverSignatureAndExpiries.length == 0 || approverSalts.length == 0) {
+            signatures = new ISignatureUtils.SignatureWithExpiry[](nodeIds.length);
+            salts = new bytes32[](nodeIds.length);
+            for (uint256 i = 0; i < nodeIds.length; i++) {
+                // Create empty signature with far-future expiry
+                signatures[i] = ISignatureUtils.SignatureWithExpiry({
+                    signature: new bytes(0),
+                    expiry: type(uint256).max
+                });
+                salts[i] = bytes32(0);
+            }
+        } else {
+            signatures = approverSignatureAndExpiries;
+            salts = approverSalts;
+        }
+
         vm.startBroadcast();
-        liquidTokenManager.delegateNodes(nodeIds, operators, approverSignatureAndExpiries, approverSalts);
+        liquidTokenManager.delegateNodes(nodeIds, operators, signatures, salts);
         vm.stopBroadcast();
     }
 }

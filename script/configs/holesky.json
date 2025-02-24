@@ -14,8 +14,8 @@
       "addr": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
       "strategy": "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3",
       "decimals": 18,
-      "pricePerUnit": "1000000000000000000",
-      "volatilityThreshold": "100000000000000000"
+      "pricePerUnit": 1000000000000000000,
+      "volatilityThreshold": 100000000000000000
     }
   ],
   "deployment": {

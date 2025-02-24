@@ -9,13 +9,15 @@
   },
   "tokens": [
     {
-      "name": "Lido Staked ETH",
-      "symbol": "stETH",
-      "addr": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
-      "strategy": "0x93c4b944D05dfe6df7645A86cd2536827c897DBA",
-      "decimals": 18,
-      "pricePerUnit": "1000000000000000000",
-      "volatilityThreshold": "100000000000000000"
+      "addresses": {
+        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "strategy": "0x93c4b944D05dfe6df7645A86cd2536827c897DBA"
+      },
+      "params": {
+        "pricePerUnit": 2000000000000000000,
+        "volatilityThreshold": 700000000000000000,
+        "decimals": 18
+      }
     }
   ],
   "deployment": {

@@ -1,8 +1,21 @@
 [profile.default]
 solc_version = "0.8.20"
-src = "src"
-out = "out"
-libs = ["lib"]
 via_ir = true
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+# Path to contract sources relative to the root of the project.
+src = "src"
+
+# Path to the script contract sources relative to the root of the project.
+script = "script"
+
+# Path to store contract artifacts relative to the root of the project.
+out = "out"
+
+# Array of paths that contain libraries, relative to the root of the project.
+libs = ["lib"]
+
+# Disable FFI for security
+ffi = false
+
+# Allow file access for deployment scripts
+fs_permissions = [{ access = "read-write", path = "./"}]

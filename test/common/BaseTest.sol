@@ -198,7 +198,8 @@ contract BaseTest is Test {
                 initialOwner: admin,
                 pauser: pauser,
                 stakerNodeCreator: admin,
-                stakerNodesDelegator: admin
+                stakerNodesDelegator: admin,
+                stakerNodeImplementation: address(_stakerNodeImplementation)
             });
 
             // Test each parameter individually
@@ -243,6 +244,12 @@ contract BaseTest is Test {
             // Zero address for delegationManager
             testInit = validInit;
             testInit.delegationManager = IDelegationManager(address(0));
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for stakerNodeImplementation
+            testInit = validInit;
+            testInit.stakerNodeImplementation = address(0);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
         }
@@ -383,12 +390,10 @@ contract BaseTest is Test {
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin
+            stakerNodesDelegator: admin,
+            stakerNodeImplementation: address(_stakerNodeImplementation)
         });
         stakerNodeCoordinator.initialize(init);
-        stakerNodeCoordinator.registerStakerNodeImplementation(
-            address(_stakerNodeImplementation)
-        );
     }
 
     function _setupTestTokens() private {
