@@ -1,0 +1,42 @@
+name: test
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes --optimizer-runs 200 --via-ir
+        id: build
+
+      - name: Run Forge tests
+        run: |
+          forge test --fork-url ${{ secrets.RPC_URL }} -vvvv --optimizer-runs 200 --via-ir
+        id: test
