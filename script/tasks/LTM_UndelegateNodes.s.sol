@@ -13,7 +13,7 @@ import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256[] memory nodeIds)" -- "/local/mainnet_deployment_data.json" <NODE_ID>
+// forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256[] memory nodeIds)" -- "/local/mainnet_deployment_data.json" <NODE_ID> -vvvv
 contract UndelegateNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

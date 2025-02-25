@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#-----------------------------------------------------------------------------------------------------
+# README
+#-----------------------------------------------------------------------------------------------------
+
 # With this script, we simulate a staker depositing funds and the re-staking manager (admin) deploying them to EigenLayer with the following steps:
 #  1. Deploy all LAT contracts with stETH token/strategy registered
 #  2. Restaking manager creates four staker nodes
@@ -29,6 +33,10 @@
 #  1. chmod +x script/tasks/run.sh
 #  2. script/tasks/run.sh
 
+#-----------------------------------------------------------------------------------------------------
+# SETUP
+#-----------------------------------------------------------------------------------------------------
+
 # Check for required dependencies
 if ! command -v jq &> /dev/null; then
     echo "Error: jq is required but not installed."
@@ -39,16 +47,16 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
-}
-
 # Environment configuration
 RPC_URL="127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 ADMIN=$(cast wallet address --private-key $ADMIN_PRIVATE_KEY)
 OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
+
+#-----------------------------------------------------------------------------------------------------
+# ACTION
+#-----------------------------------------------------------------------------------------------------
 
 # Deploy contracts
 forge script --via-ir script/deploy/local/DeployMainnet.s.sol:DeployMainnet \
@@ -119,7 +127,11 @@ forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
     --sig "run(string memory configFileName,uint256[] memory nodeIds)" \
     -- "/local/mainnet_deployment_data.json" "[$NODE_4]"
 
-# Verification setup
+#-----------------------------------------------------------------------------------------------------
+# VERIFICATION
+#-----------------------------------------------------------------------------------------------------
+
+# Prep all state info
 TOTAL_DEPOSIT=$(echo $DEPOSIT_AMOUNT | cast --from-wei)
 
 NODE_1_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_1)
@@ -143,7 +155,7 @@ STAKER_LAT_BALANCE=$(cast call $LIQUID_TOKEN "balanceOf(address)(uint256)" $TEST
 STAKER_STETH_FINAL_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint256)" $TEST_USER | awk '{print $1}' | cast --from-wei)
 STAKER_STETH_BALANCE_CHANGE=$(echo "$STAKER_STETH_INITIAL_BALANCE - $STAKER_STETH_FINAL_BALANCE" | bc)
 
-# Verification output
+# Log output
 echo "------------------------------------------------------------------"
 echo "End-state verification"
 echo "------------------------------------------------------------------"

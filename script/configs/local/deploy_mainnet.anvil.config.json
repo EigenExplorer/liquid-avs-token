@@ -7,8 +7,8 @@
     },
     "liquidToken": {
       "init": {
-        "name": "Liquid Avs Token",
-        "symbol": "LAT"
+        "name": "EigenDA Liquid Avs Token",
+        "symbol": "xEIGEN"
       }
     }
   },
