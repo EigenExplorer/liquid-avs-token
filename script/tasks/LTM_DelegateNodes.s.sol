@@ -40,7 +40,6 @@ contract DelegateNodes is Script, Test {
             signatures = new ISignatureUtils.SignatureWithExpiry[](nodeIds.length);
             salts = new bytes32[](nodeIds.length);
             for (uint256 i = 0; i < nodeIds.length; i++) {
-                // Create empty signature with far-future expiry
                 signatures[i] = ISignatureUtils.SignatureWithExpiry({
                     signature: new bytes(0),
                     expiry: type(uint256).max

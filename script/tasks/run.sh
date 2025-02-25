@@ -13,11 +13,11 @@
 #  6. Restaking manager undelegates the fourth node
 
 # End-state verification:
-# 1. Three nodes are delegated and the fourth one is not
-# 2. Nodes 0 and 1 hold 25% of deposited funds each
-# 3. Node 2 holds 30% of deposited funds and node 3 holds no funds
-# 4. `LiquidToken` holds 20% of deposited funds
-# 5. Staker holds no stETH and 10 stETH worth of LAT
+#  1. Three nodes are delegated and the fourth one is not
+#  2. First two nodes hold 25% of deposited funds each
+#  3. Third node holds 30% of deposited funds and the last one holds none
+#  4. `LiquidToken` holds 20% of deposited funds
+#  5. Staker holds no stETH and 10 stETH worth of LAT
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes
@@ -51,7 +51,6 @@ fi
 RPC_URL="127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
-ADMIN=$(cast wallet address --private-key $ADMIN_PRIVATE_KEY)
 OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
 
 #-----------------------------------------------------------------------------------------------------
@@ -165,12 +164,12 @@ echo "Node $NODE_2 delegation: $NODE_2_OPERATOR_DELEGATION"
 echo "Node $NODE_3 delegation: $NODE_3_OPERATOR_DELEGATION"
 echo "Node $NODE_4 delegation: $NODE_4_OPERATOR_DELEGATION"
 echo
-echo "2. Nodes 0 and 1 hold 25% of deposited funds each"
+echo "2. First two nodes hold 25% of deposited funds each"
 echo "Total deposit amount: $TOTAL_DEPOSIT"
 echo "Node $NODE_1 staked balance: $NODE_1_STAKED_BALANCE"
 echo "Node $NODE_2 staked balance: $NODE_2_STAKED_BALANCE"
 echo
-echo "3. Node 2 holds 30% of deposited funds and node 3 holds no funds"
+echo "3. Third node holds 30% of deposited funds and the last one holds none"
 echo "Total deposit amount: $TOTAL_DEPOSIT"
 echo "Node $NODE_3 staked balance: $NODE_3_STAKED_BALANCE"
 echo "Node $NODE_4 staked balance: $NODE_4_STAKED_BALANCE"

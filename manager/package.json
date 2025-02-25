@@ -1,0 +1,19 @@
+{
+  "name": "manager",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx watch --clear-screen=false ./src/index.ts"
+  },
+  "dependencies": {
+    "@openzeppelin/defender-sdk": "^2.2.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3"
+  }
+}
