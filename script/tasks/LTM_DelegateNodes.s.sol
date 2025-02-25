@@ -8,8 +8,14 @@ import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
-/// @dev To run this task:
-// forge script script/tasks/SNC_CreateStakerNodes.s.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --sig "run(string memory configFileName,uint256[] memory nodeIds,address[] memory operators,ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,bytes32[] calldata approverSalts)" -- "/local/mainnet_deployment_data.json" <NODE_IDS> <OPERATORS> <SIGNATURES> <SALTS> -vvvv
+/// @dev To load env file:
+// source .env
+
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256[] memory nodeIds,address[] memory operators,ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,bytes32[] calldata approverSalts)" -- "/local/mainnet_deployment_data.json" <NODE_IDS> <OPERATORS> <SIGNATURES> <SALTS> -vvvv
 contract DelegateNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

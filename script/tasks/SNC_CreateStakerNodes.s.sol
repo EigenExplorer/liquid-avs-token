@@ -7,8 +7,14 @@ import "forge-std/Test.sol";
 import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 
-/// @dev To run this task:
-// forge script script/tasks/SNC_CreateStakerNodes.s.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --sig "run(string memory configFileName,uint256 count)" -- "/local/mainnet_deployment_data.json" 2 -vvvv
+/// @dev To load env file:
+// source .env
+
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256 count)" -- "/local/mainnet_deployment_data.json" 4 -vvvv
 contract CreateStakerNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

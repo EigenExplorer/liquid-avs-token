@@ -11,10 +11,10 @@
     {
       "addresses": {
         "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
-        "strategy": "0x93c4b944D05dfe6df7645A86cd2536827c897DBA"
+        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
       },
       "params": {
-        "pricePerUnit": 2000000000000000000,
+        "pricePerUnit": 1000000000000000000,
         "volatilityThreshold": 700000000000000000,
         "decimals": 18
       }

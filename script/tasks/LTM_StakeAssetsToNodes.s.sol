@@ -6,8 +6,14 @@ import "forge-std/Test.sol";
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
-/// @dev To run this task:
-// forge script --via-ir script/tasks/LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNodes --rpc-url $RPC_URL --broadcast --sig "run(string memory configFileName,LiquidTokenManager.NodeAllocation[] calldata allocations)" -- "/local/mainnet_deployment_data.json" <ALLOCATIONS> -vvvv
+/// @dev To load env file:
+// source .env
+
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script --via-ir script/tasks/LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNodes --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,LiquidTokenManager.NodeAllocation[] calldata allocations)" -- "/local/mainnet_deployment_data.json" <ALLOCATIONS> -vvvv
 contract StakeAssetsToNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

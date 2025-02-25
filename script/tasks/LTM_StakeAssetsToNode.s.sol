@@ -8,8 +8,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
-/// @dev To run this task:
-// forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode --rpc-url $RPC_URL --broadcast --sig "run(string memory configFileName,uint256 nodeId,IERC20[] memory assets,uint256[] memory amounts)" -- "/local/mainnet_deployment_data.json" <NODE_ID> <ASSETS> <AMOUNTS> -vvvv
+/// @dev To load env file:
+// source .env
+
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256 nodeId,IERC20[] memory assets,uint256[] memory amounts)" -- "/local/mainnet_deployment_data.json" <NODE_ID> <ASSETS> <AMOUNTS> -vvvv
 contract StakeAssetsToNode is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

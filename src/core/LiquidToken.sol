@@ -93,11 +93,15 @@ contract LiquidToken is
                 if (!liquidTokenManager.tokenIsSupported(asset))
                     revert UnsupportedAsset(asset);
 
-                uint256 shares = calculateShares(asset, amount);
-                if (shares == 0) revert ZeroShares();
-
+                uint256 balanceBefore = asset.balanceOf(address(this));
                 asset.safeTransferFrom(msg.sender, address(this), amount);
-                assetBalances[address(asset)] += amount;
+                uint256 balanceAfter = asset.balanceOf(address(this));
+
+                uint256 trueAmount = balanceAfter - balanceBefore;
+                assetBalances[address(asset)] += trueAmount;
+
+                uint256 shares = calculateShares(asset, trueAmount);
+                if (shares == 0) revert ZeroShares();
                 
                 if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                     revert AssetBalanceOutOfSync(
@@ -113,7 +117,7 @@ contract LiquidToken is
                     msg.sender,
                     receiver,
                     asset,
-                    amount,
+                    trueAmount,
                     shares
                 );
             }

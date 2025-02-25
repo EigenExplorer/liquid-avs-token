@@ -8,7 +8,6 @@ import "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
@@ -28,9 +27,11 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To load env file:
 // source .env
 
-/// @dev To run this deploy script:
-// anvil --fork-url $RPC_URL (setup local node on a separate terminal instance)
-// forge script script/deploy/local/DeployMainnet.s.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --sig "run(string memory networkConfigFileName,string memory deployConfigFileName)" -- "mainnet.json" "deploy_mainnet.anvil.config.json" -vvvv
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script script/deploy/local/DeployMainnet.s.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string memory networkConfigFileName,string memory deployConfigFileName)" -- "mainnet.json" "deploy_mainnet.anvil.config.json" -vvvv
 contract DeployMainnet is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
@@ -257,7 +258,7 @@ contract DeployMainnet is Script, Test {
                 initialOwner: admin,
                 pauser: pauser,
                 stakerNodeCreator: admin,
-                stakerNodesDelegator: admin,
+                stakerNodesDelegator: address(liquidTokenManager),
                 stakerNodeImplementation: address(stakerNodeImpl)
             })
         );
