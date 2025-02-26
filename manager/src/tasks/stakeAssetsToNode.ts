@@ -12,15 +12,19 @@ import {
 
 const execAsync = promisify(exec);
 
-export async function createStakerNodes(
-  count: number
+export async function stakeAssetsToNode(
+  nodeId: string,
+  assets: string[],
+  amounts: string[]
 ): Promise<ProposalResponseWithUrl[]> {
   try {
     // Setup task params
-    const task = "SNC_CreateStakerNodes.s.sol:CreateStakerNodes";
+    const task = "LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode";
     const sender = ADMIN;
-    const sig = "run(string,uint256)";
-    const params = `${count}`;
+    const sig = "run(string,uint256,address[],uint256[])";
+    const assetsParam = `[${assets.map((op) => `"${op}"`).join(",")}]`;
+    const amountsParam = `[${amounts.join(",")}]`;
+    const params = `${nodeId} ${assetsParam} ${amountsParam}`;
 
     // Simulate task and retrieve transactions
     const { stdout } = await execAsync(forgeCommand(task, sender, sig, params));
@@ -29,8 +33,8 @@ export async function createStakerNodes(
     // Create an OZ proposal for each tx
     const proposals: ProposalResponseWithUrl[] = [];
     for (const tx of transactions) {
-      const title = `Create Staker Node - Nonce ${tx.transaction.nonce}`;
-      const description = `Proposal to create a staker node via contract at ${tx.transaction.to}`;
+      const title = `Stake Assets To Node - Nonce ${tx.transaction.nonce}`;
+      const description = `Proposal to stake a set of assets to a staker node via contract at ${tx.transaction.to}`;
       const proposal = await createOzProposal(tx, title, description);
       proposals.push(proposal);
     }

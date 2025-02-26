@@ -12,15 +12,15 @@ import {
 
 const execAsync = promisify(exec);
 
-export async function createStakerNodes(
-  count: number
+export async function undelegateNodes(
+  nodeIds: string[]
 ): Promise<ProposalResponseWithUrl[]> {
   try {
     // Setup task params
-    const task = "SNC_CreateStakerNodes.s.sol:CreateStakerNodes";
+    const task = "LTM_UndelegateNodes.s.sol:UndelegateNodes";
     const sender = ADMIN;
-    const sig = "run(string,uint256)";
-    const params = `${count}`;
+    const sig = "run(string,uint256[])";
+    const params = `[${nodeIds.join(",")}]`;
 
     // Simulate task and retrieve transactions
     const { stdout } = await execAsync(forgeCommand(task, sender, sig, params));
@@ -29,8 +29,8 @@ export async function createStakerNodes(
     // Create an OZ proposal for each tx
     const proposals: ProposalResponseWithUrl[] = [];
     for (const tx of transactions) {
-      const title = `Create Staker Node - Nonce ${tx.transaction.nonce}`;
-      const description = `Proposal to create a staker node via contract at ${tx.transaction.to}`;
+      const title = `Undelegate Staker Nodes - Nonce ${tx.transaction.nonce}`;
+      const description = `Proposal to undelegate a set of staker nodes via contract at ${tx.transaction.to}`;
       const proposal = await createOzProposal(tx, title, description);
       proposals.push(proposal);
     }

@@ -13,9 +13,9 @@
 #  6. Restaking manager undelegates the fourth node
 
 # End-state verification:
-#  1. Three nodes are delegated and the fourth one is not
+#  1. Three nodes are delegated, fourth and fifth are not
 #  2. First two nodes hold 25% of deposited funds each
-#  3. Third node holds 30% of deposited funds and the last one holds none
+#  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
 #  5. Staker holds no stETH and 10 stETH worth of LAT
 
@@ -61,7 +61,7 @@ OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
 forge script --via-ir script/deploy/local/DeployMainnet.s.sol:DeployMainnet \
     --rpc-url $RPC_URL --broadcast \
     --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string memory networkConfigFileName,string memory deployConfigFileName)" \
+    --sig "run(string,string)" \
     -- "mainnet.json" "deploy_mainnet.anvil.config.json"
 
 # Extract contract addresses from deployment output
@@ -70,17 +70,17 @@ LIQUID_TOKEN_MANAGER=$(jq -r '.addresses.liquidTokenManager' $OUTPUT_PATH_MAINNE
 STAKER_NODE_COORDINATOR=$(jq -r '.addresses.stakerNodeCoordinator' $OUTPUT_PATH_MAINNET)
 STETH_TOKEN=$(jq -r '.tokens.token0_address' $OUTPUT_PATH_MAINNET)
 
-# Create four Staker Nodes
+# Create five Staker Nodes
 NODE_IDS=$(forge script --via-ir script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
-    --sig "run(string memory configFileName,uint256 count)" \
-    -- "/local/mainnet_deployment_data.json" 4 2>&1 | \
+    --sig "run(string,uint256)" \
+    -- "/local/mainnet_deployment_data.json" 5 2>&1 | \
     grep "uint256\[\]" | sed -E 's/.*\[([0-9, ]+)\].*/\1/g')
 
 # Delegate all nodes to EigenYields
 EIGENYIELDS_OPERATOR_ADDRESS="0x5accc90436492f24e6af278569691e2c942a676d"
-OPERATORS="[$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS]"
+OPERATORS="[$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS,$EIGENYIELDS_OPERATOR_ADDRESS]"
 forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
@@ -118,13 +118,14 @@ forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode
     --sig "run(string,uint256,address[],uint256[])" \
     -- "/local/mainnet_deployment_data.json" $NODE_3 "[$STETH_TOKEN]" "[3000000000000000000]"
 
-# Undelegate fourth node
+# Undelegate fourth and fifth nodes
 NODE_4=$(echo $NODE_IDS | jq '.[3]')
+NODE_5=$(echo $NODE_IDS | jq '.[4]')
 forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
-    --sig "run(string memory configFileName,uint256[] memory nodeIds)" \
-    -- "/local/mainnet_deployment_data.json" "[$NODE_4]"
+    --sig "run(string,uint256[])" \
+    -- "/local/mainnet_deployment_data.json" "[$NODE_4,$NODE_5]"
 
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
@@ -149,6 +150,10 @@ NODE_4_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(addres
 NODE_4_OPERATOR_DELEGATION=$(cast call $NODE_4_ADDRESS "getOperatorDelegation()(address)")
 NODE_4_STAKED_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_4 | cast --to-dec | cast --from-wei)
 
+NODE_5_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_5)
+NODE_5_OPERATOR_DELEGATION=$(cast call $NODE_5_ADDRESS "getOperatorDelegation()(address)")
+NODE_5_STAKED_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_5 | cast --to-dec | cast --from-wei)
+
 LIQUID_TOKEN_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint256)" $LIQUID_TOKEN | awk '{print $1}' | cast --from-wei)
 STAKER_LAT_BALANCE=$(cast call $LIQUID_TOKEN "balanceOf(address)(uint256)" $TEST_USER | awk '{print $1}' | cast --from-wei)
 STAKER_STETH_FINAL_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint256)" $TEST_USER | awk '{print $1}' | cast --from-wei)
@@ -158,21 +163,23 @@ STAKER_STETH_BALANCE_CHANGE=$(echo "$STAKER_STETH_INITIAL_BALANCE - $STAKER_STET
 echo "------------------------------------------------------------------"
 echo "End-state verification"
 echo "------------------------------------------------------------------"
-echo "1. Three nodes are delegated and the fourth one is not"
+echo "1. Three nodes are delegated, fourth and fifth are not"
 echo "Node $NODE_1 delegation: $NODE_1_OPERATOR_DELEGATION"
 echo "Node $NODE_2 delegation: $NODE_2_OPERATOR_DELEGATION"
 echo "Node $NODE_3 delegation: $NODE_3_OPERATOR_DELEGATION"
 echo "Node $NODE_4 delegation: $NODE_4_OPERATOR_DELEGATION"
+echo "Node $NODE_5 delegation: $NODE_5_OPERATOR_DELEGATION"
 echo
 echo "2. First two nodes hold 25% of deposited funds each"
 echo "Total deposit amount: $TOTAL_DEPOSIT"
 echo "Node $NODE_1 staked balance: $NODE_1_STAKED_BALANCE"
 echo "Node $NODE_2 staked balance: $NODE_2_STAKED_BALANCE"
 echo
-echo "3. Third node holds 30% of deposited funds and the last one holds none"
+echo "3. Third node holds 30% of deposited funds, fourth and fifth hold none"
 echo "Total deposit amount: $TOTAL_DEPOSIT"
 echo "Node $NODE_3 staked balance: $NODE_3_STAKED_BALANCE"
 echo "Node $NODE_4 staked balance: $NODE_4_STAKED_BALANCE"
+echo "Node $NODE_5 staked balance: $NODE_5_STAKED_BALANCE"
 echo
 echo "4. LiquidToken holds 20% of deposited funds"
 echo "Total deposit amount: $TOTAL_DEPOSIT"

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@openzeppelin/defender-sdk": "^2.2.0",
+    "viem": "^2.9.21",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

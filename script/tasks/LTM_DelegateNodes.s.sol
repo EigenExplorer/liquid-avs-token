@@ -15,7 +15,7 @@ import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256[] memory nodeIds,address[] memory operators,ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,bytes32[] calldata approverSalts)" -- "/local/mainnet_deployment_data.json" <NODE_IDS> <OPERATORS> <SIGNATURES> <SALTS> -vvvv
+// forge script script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" -- "/local/mainnet_deployment_data.json" <NODE_IDS> <OPERATORS> <SIGNATURES> <SALTS> -vvvv
 contract DelegateNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
@@ -26,7 +26,7 @@ contract DelegateNodes is Script, Test {
       ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
       bytes32[] calldata approverSalts
     ) public {
-        string memory configPath = string(bytes(string.concat("script/outputs/", configFileName)));
+        string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
         address liquidTokenManageraddress = stdJson.readAddress(config, ".addresses.liquidTokenManager");

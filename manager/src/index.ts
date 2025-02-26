@@ -1,9 +1,6 @@
 import "dotenv/config";
 
-import { createStakerNodes } from "./tasks/createStakerNodes";
-
-async function runTasks() {
-  await createStakerNodes(2);
-}
-
-runTasks();
+/**
+ * TODO: Setup cron tasks for LAT indexing and responsibilities
+ *
+ */

@@ -14,12 +14,12 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string memory configFileName,uint256 count)" -- "/local/mainnet_deployment_data.json" <COUNT> -vvvv
+// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256)" -- "/local/mainnet_deployment_data.json" <COUNT> -vvvv
 contract CreateStakerNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     function run(string memory configFileName, uint256 count) public returns (uint256[] memory) {
-        string memory configPath = string(bytes(string.concat("script/outputs/", configFileName)));
+        string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
         address stakerNodeCoordinatorAddress = stdJson.readAddress(config, ".addresses.stakerNodeCoordinator");
