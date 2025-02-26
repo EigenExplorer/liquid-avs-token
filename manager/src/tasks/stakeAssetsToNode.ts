@@ -12,6 +12,14 @@ import {
 
 const execAsync = promisify(exec);
 
+/**
+ * Creates a proposal for the `StakeAssetsToNode` task
+ *
+ * @param nodeId
+ * @param assets
+ * @param amounts
+ * @returns
+ */
 export async function stakeAssetsToNode(
   nodeId: string,
   assets: string[],

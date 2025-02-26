@@ -1,15 +1,19 @@
 import "dotenv/config";
 
+import { DEPLOYMENT, NETWORK } from "../../utils/forge";
 import { createStakerNodes } from "../../tasks/createStakerNodes";
 import { delegateNodes } from "../../tasks/delegateNodes";
 import { stakeAssetsToNode } from "../../tasks/stakeAssetsToNode";
 import { undelegateNodes } from "../../tasks/undelegateNodes";
-import { DEPLOYMENT, NETWORK } from "../../utils/forge";
 import {
   type NodeAllocation,
   stakeAssetsToNodes,
 } from "../../tasks/stakeAssetsToNodes";
 
+/**
+ * Test script for creating staker nodes
+ *
+ */
 export async function testCreateStakerNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
@@ -24,6 +28,10 @@ export async function testCreateStakerNodes() {
   } catch {}
 }
 
+/**
+ * Test script for delegating staker nodes
+ *
+ */
 export async function testDelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
@@ -54,6 +62,10 @@ export async function testDelegateNodes() {
   } catch {}
 }
 
+/**
+ * Test script for staking assets to nodes
+ *
+ */
 export async function testStakeAssetsToNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
@@ -86,6 +98,10 @@ export async function testStakeAssetsToNodes() {
   } catch {}
 }
 
+/**
+ * Test script for staking assets to one node
+ *
+ */
 export async function testStakeAssetsToNode() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
@@ -109,6 +125,10 @@ export async function testStakeAssetsToNode() {
   } catch {}
 }
 
+/**
+ * Test script for undelegating nodes
+ *
+ */
 export async function testUndelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
@@ -121,12 +141,4 @@ export async function testUndelegateNodes() {
       console.log(proposal);
     }
   } catch {}
-}
-
-export async function testRun() {
-  await testCreateStakerNodes();
-  await testDelegateNodes();
-  await testStakeAssetsToNodes();
-  await testStakeAssetsToNode();
-  await testUndelegateNodes();
 }

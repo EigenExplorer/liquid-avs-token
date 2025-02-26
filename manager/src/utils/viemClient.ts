@@ -57,24 +57,21 @@ export function getViemClient(n?: Chain) {
 /**
  * Get the initialized viem wallet client for transactions that require signing
  *
- * @param privateKeyEnvVar - The environment variable name that contains the private key
- * @returns The wallet client configured for the current network
+ * @param privateKeyEnvVar
+ * @returns
  */
 export function getWalletClient(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
   if (n) {
     network = n;
   }
 
-  // Get the private key from environment variables
   const privateKey = process.env[privateKeyEnvVar];
   if (!privateKey) {
     throw new Error(`Environment variable ${privateKeyEnvVar} not set`);
   }
 
-  // Create an account from the private key
   const account = privateKeyToAccount(privateKey as `0x${string}`);
 
-  // Create a wallet client with the account
   walletViemClient = createWalletClient({
     account,
     chain: network,
@@ -86,18 +83,23 @@ export function getWalletClient(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
   return walletViemClient;
 }
 
+/**
+ * Get account from a given private key
+ *
+ * @param privateKeyEnvVar
+ * @param n
+ * @returns
+ */
 export function getAccount(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
   if (n) {
     network = n;
   }
 
-  // Get the private key from environment variables
   const privateKey = process.env[privateKeyEnvVar];
   if (!privateKey) {
     throw new Error(`Environment variable ${privateKeyEnvVar} not set`);
   }
 
-  // Create an account from the private key
   return privateKeyToAccount(privateKey as `0x${string}`);
 }
 

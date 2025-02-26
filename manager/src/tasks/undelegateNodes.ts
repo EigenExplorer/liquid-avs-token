@@ -12,6 +12,12 @@ import {
 
 const execAsync = promisify(exec);
 
+/**
+ * Creates a proposal for the `UndelegateNodes` task
+ *
+ * @param nodeIds
+ * @returns
+ */
 export async function undelegateNodes(
   nodeIds: string[]
 ): Promise<ProposalResponseWithUrl[]> {

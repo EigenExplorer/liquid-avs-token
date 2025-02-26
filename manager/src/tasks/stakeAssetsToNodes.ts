@@ -18,6 +18,12 @@ export type NodeAllocation = {
   amounts: string[];
 };
 
+/**
+ * Creates a proposal for the `StakeAssetsToNodes` task
+ *
+ * @param allocations
+ * @returns
+ */
 export async function stakeAssetsToNodes(
   allocations: NodeAllocation[]
 ): Promise<ProposalResponseWithUrl[]> {

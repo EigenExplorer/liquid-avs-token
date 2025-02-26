@@ -12,6 +12,15 @@ import {
 
 const execAsync = promisify(exec);
 
+/**
+ * Creates a proposal for the `DelegateNodes` task
+ *
+ * @param nodeIds
+ * @param operators
+ * @param signatures
+ * @param salts
+ * @returns
+ */
 export async function delegateNodes(
   nodeIds: string[],
   operators: string[],

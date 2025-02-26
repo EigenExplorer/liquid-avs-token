@@ -1,6 +1,6 @@
 import "dotenv/config";
 
 /**
- * TODO: Setup cron tasks for LAT indexing and responsibilities
+ * TODO: Setup cron jobs utilizing workflows for restaking mananger responsibilities
  *
  */

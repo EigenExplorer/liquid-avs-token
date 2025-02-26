@@ -6,11 +6,11 @@
 
 # With this script, we simulate a staker depositing funds and the re-staking manager (admin) deploying them to EigenLayer with the following steps:
 #  1. Deploy all LAT contracts with stETH token/strategy registered
-#  2. Restaking manager creates four staker nodes
+#  2. Restaking manager creates five staker nodes
 #  3. Restaking manager delegates nodes to an EigenLayer Operator
 #  4. Staker deposits stETH by interfacing with `LiquidToken`
-#  5. Restaking manager stakes the user's funds to three nodes
-#  6. Restaking manager undelegates the fourth node
+#  5. Restaking manager stakes the user's funds to the first three nodes
+#  6. Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
 #  1. Three nodes are delegated, fourth and fifth are not

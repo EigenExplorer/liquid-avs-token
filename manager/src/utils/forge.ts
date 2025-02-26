@@ -15,6 +15,15 @@ export const ADMIN = await getAdmin();
 export const LIQUID_TOKEN_ADDRESS = (await getOutputData()).addresses
   .liquidToken;
 
+/**
+ * Returns the forge command used to call a task from the /script folder
+ *
+ * @param task
+ * @param sender
+ * @param sig
+ * @param params
+ * @returns
+ */
 export function forgeCommand(
   task: string,
   sender: string,
@@ -24,6 +33,12 @@ export function forgeCommand(
   return `forge script ../script/tasks/${task} --rpc-url ${getRpcUrl()} --json --sender ${sender} --sig '${sig}' -- ${getConfigFile()} ${params} -vvvv`;
 }
 
+/**
+ * Extracts all simlated transactions from simulating the execution of a task
+ *
+ * @param stdout
+ * @returns
+ */
 export async function extractTransactions(stdout: string) {
   const broadcastMatch = stdout.match(/"transactions":"([^"]+)"/);
 
@@ -42,6 +57,14 @@ export async function extractTransactions(stdout: string) {
   return transactions;
 }
 
+/**
+ * Creates a proposal on OZ Defender to the admin multisig for a given simulated transaction
+ *
+ * @param tx
+ * @param title
+ * @param description
+ * @returns
+ */
 export async function createOzProposal(
   // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   tx: any,
@@ -63,10 +86,6 @@ export async function createOzProposal(
     name: `param${index}`,
     type: type,
   }));
-
-  console.log("functionName: ", functionName);
-  console.log("inputs: ", inputs);
-  console.log("functionInputs: ", functionInputs);
 
   const proposal = await defenderClient.proposal.create({
     proposal: {
@@ -93,28 +112,48 @@ export async function createOzProposal(
 
 // --- Helper functions ---
 
-// Default to public if DEPLOYMENT not set
+/**
+ * Returns whether the deployment is local or public (testnet/mainnet)
+ * Defaults to public if `DEPLOYMENT` env var not set
+ *
+ * @returns
+ */
 export function getDeployment(): string {
   const deployment = process.env.DEPLOYMENT;
   if (!deployment || deployment !== "local") return "public";
   return "local";
 }
 
-// Default to mainnet if NETWORK not set
+/**
+ * Returns the network of the deployment
+ * Defaults to mainnet if `NETWORK` env var not set
+ *
+ * @returns
+ */
 export function getNetwork(): string {
   const network = process.env.NETWORK;
   if (!network || network !== "holesky") return "mainnet";
   return "holesky";
 }
 
-// Default to local if RPC_URL not set
+/**
+ * Returns the RPC URL
+ * Defaults to local if `RPC_URL` env var not set
+ *
+ * @returns
+ */
 export function getRpcUrl(): string {
   const rpcUrl = process.env.RPC_URL;
   if (!rpcUrl || DEPLOYMENT === "local") return "http://localhost:8545";
   return rpcUrl;
 }
 
-// Default to mainnet if NETWORK not set & public if DEPLOYMENT not set
+/**
+ * Returns the input config used to create the deployment
+ * Defaults to mainnet if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
+ *
+ * @returns
+ */
 export function getConfigFile(): string {
   if (NETWORK === "mainnet") {
     if (DEPLOYMENT === "local") return "/local/mainnet_deployment_data.json";
@@ -124,7 +163,11 @@ export function getConfigFile(): string {
   return "/holesky/deployment_data.json";
 }
 
-// Default to local forge test account if ADMIN_PUBLIC_KEY not set
+/**
+ * Returns the admin public key
+ * Defaults to local forge test account #0 if `ADMIN_PUBLIC_KEY` env var not set
+ * @returns
+ */
 export async function getAdmin(): Promise<string> {
   if (DEPLOYMENT === "local") return (await getOutputData()).roles.admin;
   return (
@@ -132,6 +175,12 @@ export async function getAdmin(): Promise<string> {
   );
 }
 
+/**
+ * Returns the output file created after the deployment
+ * Defaults to mainnet if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
+ *
+ * @returns
+ */
 export async function getOutputData() {
   return JSON.parse(
     await fs.readFile(
@@ -142,7 +191,7 @@ export async function getOutputData() {
 }
 
 /**
- * Returns an array of parameter types from a function signature with support for complex types like tuples.
+ * Returns an array of parameter types from a function signature with support for complex types like tuples
  *
  * @param parameterString
  * @returns
@@ -156,7 +205,6 @@ function parseParameterTypes(parameterString: string): string[] {
   let currentParam = "";
   let parenDepth = 0;
 
-  // Process the parameter string character by character
   for (let i = 0; i < parameterString.length; i++) {
     const char = parameterString[i];
 

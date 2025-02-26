@@ -12,6 +12,12 @@ import {
 
 const execAsync = promisify(exec);
 
+/**
+ * Creates `count` proposals for the `CreateStakerNodes` task
+ *
+ * @param count
+ * @returns
+ */
 export async function createStakerNodes(
   count: number
 ): Promise<ProposalResponseWithUrl[]> {
