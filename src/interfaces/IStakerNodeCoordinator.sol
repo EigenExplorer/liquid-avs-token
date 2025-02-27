@@ -51,6 +51,9 @@ interface IStakerNodeCoordinator {
     /// @notice Error when contract is paused
     error Paused();
 
+    /// @notice Error when attempting to use a non-contract address as implementation
+    error NotAContract();
+
     /// @notice Error for zero amount
     error ZeroAmount();
 

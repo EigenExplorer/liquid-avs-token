@@ -170,7 +170,10 @@ interface ILiquidToken is IERC20 {
     /// @notice Returns the withdrawal requests for a user
     /// @param user The address of the user
     /// @return An array of withdrawal request IDs
-    function getUserWithdrawalRequests(address user) external view returns (bytes32[] memory);
+    function getUserWithdrawalRequests(address user)
+        external
+        view
+        returns (bytes32[] memory);
 
     /// @notice Returns the details of a withdrawal request
     /// @param requestId The ID of the withdrawal request
