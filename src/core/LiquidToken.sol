@@ -91,7 +91,7 @@ contract LiquidToken is
                 if (!liquidTokenManager.tokenIsSupported(asset))
                     revert UnsupportedAsset(asset);
 
-                // True amount received may differ from `amount` for tokens with transfer fees
+                // True amount received may differ from `amount` for rebasing tokens
                 uint256 balanceBefore = asset.balanceOf(address(this));
                 asset.safeTransferFrom(msg.sender, address(this), amount);
                 uint256 balanceAfter = asset.balanceOf(address(this));
