@@ -34,6 +34,7 @@ contract BaseTest is Test {
     TokenRegistryOracle public tokenRegistryOracle;
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
+    StakerNode public stakerNodeImplementation;
 
     // Mock contracts
     MockERC20 public testToken;
@@ -52,7 +53,6 @@ contract BaseTest is Test {
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
-    StakerNode private _stakerNodeImplementation;
 
     function setUp() public virtual {
         _setupELContracts();
@@ -199,7 +199,7 @@ contract BaseTest is Test {
                 pauser: pauser,
                 stakerNodeCreator: admin,
                 stakerNodesDelegator: admin,
-                stakerNodeImplementation: address(_stakerNodeImplementation)
+                stakerNodeImplementation: address(stakerNodeImplementation)
             });
 
             // Test each parameter individually
@@ -282,7 +282,7 @@ contract BaseTest is Test {
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
-        _stakerNodeImplementation = new StakerNode();
+        stakerNodeImplementation = new StakerNode();
     }
 
     function _deployProxies() private {
@@ -391,7 +391,7 @@ contract BaseTest is Test {
             pauser: pauser,
             stakerNodeCreator: admin,
             stakerNodesDelegator: admin,
-            stakerNodeImplementation: address(_stakerNodeImplementation)
+            stakerNodeImplementation: address(stakerNodeImplementation)
         });
         stakerNodeCoordinator.initialize(init);
     }
