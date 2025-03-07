@@ -56,7 +56,7 @@ export async function stakeAssetsToNodes(
 
     return proposals;
   } catch (error) {
-    console.log("Error:", error);
+    console.log("Error: ", error);
     return [];
   }
 }

@@ -45,7 +45,7 @@ export async function createStakerNodes(
 
     return proposals;
   } catch (error) {
-    console.log("Error:", error);
+    console.log("Error: ", error);
     return [];
   }
 }

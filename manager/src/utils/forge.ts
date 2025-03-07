@@ -34,7 +34,7 @@ export function forgeCommand(
 }
 
 /**
- * Extracts all simlated transactions from simulating the execution of a task
+ * Extracts all simulated transactions from forge script execution simulation
  *
  * @param stdout
  * @returns
