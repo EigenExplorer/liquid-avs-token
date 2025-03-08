@@ -65,10 +65,10 @@ forge script --via-ir script/deploy/local/DeployMainnet.s.sol:DeployMainnet \
     -- "mainnet.json" "deploy_mainnet.anvil.config.json"
 
 # Extract contract addresses from deployment output
-LIQUID_TOKEN=$(jq -r '.addresses.liquidToken' $OUTPUT_PATH_MAINNET)
-LIQUID_TOKEN_MANAGER=$(jq -r '.addresses.liquidTokenManager' $OUTPUT_PATH_MAINNET)
-STAKER_NODE_COORDINATOR=$(jq -r '.addresses.stakerNodeCoordinator' $OUTPUT_PATH_MAINNET)
-STETH_TOKEN=$(jq -r '.tokens.token0_address' $OUTPUT_PATH_MAINNET)
+LIQUID_TOKEN=$(jq -r '.proxyAddress' $OUTPUT_PATH_MAINNET)
+LIQUID_TOKEN_MANAGER=$(jq -r '.contractDeployments.proxy.liquidTokenManager.address' $OUTPUT_PATH_MAINNET)
+STAKER_NODE_COORDINATOR=$(jq -r '.contractDeployments.proxy.stakerNodeCoordinator.address' $OUTPUT_PATH_MAINNET)
+STETH_TOKEN=$(jq -r '.tokens["0"].address' $OUTPUT_PATH_MAINNET)
 
 # Create five Staker Nodes
 NODE_IDS=$(forge script --via-ir script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes \

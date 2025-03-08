@@ -28,7 +28,7 @@ contract StakeAssetsToNode is Script, Test {
         string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
-        address liquidTokenManageraddress = stdJson.readAddress(config, ".addresses.liquidTokenManager");
+        address liquidTokenManageraddress = stdJson.readAddress(config, ".contractDeployments.proxy.liquidTokenManager.address");
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 
         vm.startBroadcast();

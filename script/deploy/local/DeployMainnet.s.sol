@@ -61,6 +61,7 @@ contract DeployMainnet is Script, Test {
     TokenConfig[] public tokens;
 
     // Deployment-level config
+    address public AVS_ADDRESS;
     uint256 public STAKER_NODE_COORDINATOR_MAX_NODES;
     string public LIQUID_TOKEN_NAME;
     string public LIQUID_TOKEN_SYMBOL;
@@ -164,6 +165,7 @@ contract DeployMainnet is Script, Test {
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(deployConfigData, ".roles.priceUpdater");
 
+        AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(deployConfigData, ".contracts.stakerNodeCoordinator.init.maxNodes");
         LIQUID_TOKEN_NAME = stdJson.readString(deployConfigData, ".contracts.liquidToken.init.name");
         LIQUID_TOKEN_SYMBOL = stdJson.readString(deployConfigData, ".contracts.liquidToken.init.symbol");
@@ -435,73 +437,123 @@ contract DeployMainnet is Script, Test {
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";
-        string memory deployed_addresses = "addresses";
         
-        // Core proxy contracts
-        vm.serializeAddress(deployed_addresses, "proxyAdmin", address(proxyAdmin));
-        vm.serializeAddress(deployed_addresses, "liquidToken", address(liquidToken));
-        vm.serializeAddress(deployed_addresses, "liquidTokenManager", address(liquidTokenManager));
-        vm.serializeAddress(deployed_addresses, "stakerNodeCoordinator", address(stakerNodeCoordinator));
-        string memory deployed_addresses_output = vm.serializeAddress(
-            deployed_addresses, 
-            "tokenRegistryOracle", 
-            address(tokenRegistryOracle)
-        );
-
+        // Top level properties
+        vm.serializeAddress(parent_object, "proxyAddress", address(liquidToken));
+        vm.serializeAddress(parent_object, "implementationAddress", address(liquidTokenImpl));
+        vm.serializeString(parent_object, "name", LIQUID_TOKEN_NAME);
+        vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
+        vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
+        vm.serializeUint(parent_object, "chainId", block.chainid);
+        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); // Adjust as needed
+        vm.serializeUint(parent_object, "deploymentBlock", block.number);
+        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); // Converting to milliseconds
+        
+        // Contract deployments section
+        string memory contractDeployments = "contractDeployments";
+        
         // Implementation contracts
-        string memory implementations = "implementations";
-        vm.serializeAddress(implementations, "liquidTokenImpl", address(liquidTokenImpl));
-        vm.serializeAddress(implementations, "liquidTokenManagerImpl", address(liquidTokenManagerImpl));
-        vm.serializeAddress(implementations, "stakerNodeCoordinatorImpl", address(stakerNodeCoordinatorImpl));
-        vm.serializeAddress(implementations, "tokenRegistryOracleImpl", address(tokenRegistryOracleImpl));
-        string memory implementations_output = vm.serializeAddress(
-            implementations, 
-            "stakerNodeImpl", 
-            address(stakerNodeImpl)
-        );
-
-        deployed_addresses_output = vm.serializeString(
-            deployed_addresses, 
-            "implementations", 
-            implementations_output
-        );
-
-        // Roles
+        string memory implementation = "implementation";
+        
+        // LiquidTokenManager implementation
+        string memory liquidTokenManagerImpl_obj = "liquidTokenManager";
+        vm.serializeAddress(liquidTokenManagerImpl_obj, "address", address(liquidTokenManagerImpl));
+        vm.serializeUint(liquidTokenManagerImpl_obj, "block", liquidTokenManagerImplDeployBlock);
+        string memory liquidTokenManagerImpl_output = vm.serializeUint(liquidTokenManagerImpl_obj, "timestamp", liquidTokenManagerImplDeployTimestamp * 1000);
+        
+        // StakerNodeCoordinator implementation
+        string memory stakerNodeCoordinatorImpl_obj = "stakerNodeCoordinator";
+        vm.serializeAddress(stakerNodeCoordinatorImpl_obj, "address", address(stakerNodeCoordinatorImpl));
+        vm.serializeUint(stakerNodeCoordinatorImpl_obj, "block", stakerNodeCoordinatorImplDeployBlock);
+        string memory stakerNodeCoordinatorImpl_output = vm.serializeUint(stakerNodeCoordinatorImpl_obj, "timestamp", stakerNodeCoordinatorImplDeployTimestamp * 1000);
+        
+        // StakerNode implementation
+        string memory stakerNodeImpl_obj = "stakerNode";
+        vm.serializeAddress(stakerNodeImpl_obj, "address", address(stakerNodeImpl));
+        vm.serializeUint(stakerNodeImpl_obj, "block", stakerNodeImplDeployBlock);
+        string memory stakerNodeImpl_output = vm.serializeUint(stakerNodeImpl_obj, "timestamp", stakerNodeImplDeployTimestamp * 1000);
+        
+        // TokenRegistryOracle implementation
+        string memory tokenRegistryOracleImpl_obj = "tokenRegistryOracle";
+        vm.serializeAddress(tokenRegistryOracleImpl_obj, "address", address(tokenRegistryOracleImpl));
+        vm.serializeUint(tokenRegistryOracleImpl_obj, "block", tokenRegistryOracleImplDeployBlock);
+        string memory tokenRegistryOracleImpl_output = vm.serializeUint(tokenRegistryOracleImpl_obj, "timestamp", tokenRegistryOracleImplDeployTimestamp * 1000);
+        
+        // Combine all implementation objects
+        vm.serializeString(implementation, "liquidTokenManager", liquidTokenManagerImpl_output);
+        vm.serializeString(implementation, "stakerNodeCoordinator", stakerNodeCoordinatorImpl_output);
+        vm.serializeString(implementation, "stakerNode", stakerNodeImpl_output);
+        string memory implementation_output = vm.serializeString(implementation, "tokenRegistryOracle", tokenRegistryOracleImpl_output);
+        
+        // Proxy contracts
+        string memory proxy = "proxy";
+        
+        // LiquidTokenManager proxy
+        string memory liquidTokenManager_obj = "liquidTokenManager";
+        vm.serializeAddress(liquidTokenManager_obj, "address", address(liquidTokenManager));
+        vm.serializeUint(liquidTokenManager_obj, "block", liquidTokenManagerProxyDeployBlock);
+        string memory liquidTokenManager_output = vm.serializeUint(liquidTokenManager_obj, "timestamp", liquidTokenManagerProxyDeployTimestamp * 1000);
+        
+        // StakerNodeCoordinator proxy
+        string memory stakerNodeCoordinator_obj = "stakerNodeCoordinator";
+        vm.serializeAddress(stakerNodeCoordinator_obj, "address", address(stakerNodeCoordinator));
+        vm.serializeUint(stakerNodeCoordinator_obj, "block", stakerNodeCoordinatorProxyDeployBlock);
+        string memory stakerNodeCoordinator_output = vm.serializeUint(stakerNodeCoordinator_obj, "timestamp", stakerNodeCoordinatorProxyDeployTimestamp * 1000);
+        
+        // TokenRegistryOracle proxy
+        string memory tokenRegistryOracle_obj = "tokenRegistryOracle";
+        vm.serializeAddress(tokenRegistryOracle_obj, "address", address(tokenRegistryOracle));
+        vm.serializeUint(tokenRegistryOracle_obj, "block", tokenRegistryOracleProxyDeployBlock);
+        string memory tokenRegistryOracle_output = vm.serializeUint(tokenRegistryOracle_obj, "timestamp", tokenRegistryOracleProxyDeployTimestamp * 1000);
+        
+        // Combine all proxy objects
+        vm.serializeString(proxy, "liquidTokenManager", liquidTokenManager_output);
+        vm.serializeString(proxy, "stakerNodeCoordinator", stakerNodeCoordinator_output);
+        string memory proxy_output = vm.serializeString(proxy, "tokenRegistryOracle", tokenRegistryOracle_output);
+        
+        // Combine implementation and proxy under contractDeployments
+        vm.serializeString(contractDeployments, "implementation", implementation_output);
+        string memory contractDeployments_output = vm.serializeString(contractDeployments, "proxy", proxy_output);
+        
+        // Roles section
         string memory roles = "roles";
+        vm.serializeAddress(roles, "deployer", address(proxyAdmin));
         vm.serializeAddress(roles, "admin", admin);
         vm.serializeAddress(roles, "pauser", pauser);
         string memory roles_output = vm.serializeAddress(roles, "priceUpdater", priceUpdater);
-
-        // Tokens
-        string memory tokensObj = "tokens";
+        
+        // Tokens section
+        string memory tokens_array = "tokens";
+        
+        // Process each token
         for (uint256 i = 0; i < tokens.length; ++i) {
-            TokenConfig memory token = tokens[i];
-            string memory tokenKey = string.concat("token", vm.toString(i));
-            vm.serializeAddress(tokensObj, string.concat(tokenKey, "_address"), token.addresses.token);
-            if (i == tokens.length - 1) {
-                vm.serializeAddress(tokensObj, string.concat(tokenKey, "_strategy"), token.addresses.strategy);
-            } else {
-                vm.serializeAddress(tokensObj, string.concat(tokenKey, "_strategy"), token.addresses.strategy);
+            // Create an object for each token
+            string memory token_obj = string.concat("token", vm.toString(i));
+            vm.serializeAddress(token_obj, "address", tokens[i].addresses.token);
+            string memory token_output = vm.serializeAddress(token_obj, "strategy", tokens[i].addresses.strategy);
+            
+            // Add token object to the array using vm.serializeString
+            if (i < tokens.length - 1) {
+                vm.serializeString(tokens_array, vm.toString(i), token_output);
             }
         }
-        string memory tokens_output = tokens.length == 0 ? "" : vm.serializeAddress(
-            tokensObj,
-            string.concat("token", vm.toString(tokens.length - 1), "_strategy"),
-            tokens[tokens.length - 1].addresses.strategy
-        );
-
-        // Chain info
-        string memory chain_info = "chainInfo";
-        vm.serializeUint(chain_info, "chainId", block.chainid);
-        vm.serializeUint(chain_info, "deploymentBlock", block.number);
-        string memory chain_info_output = vm.serializeUint(chain_info, "timestamp", block.timestamp);
-
-        // Combine all sections
-        vm.serializeString(parent_object, "addresses", deployed_addresses_output);
+        
+        // Get the complete tokens array (with the last element if there are any tokens)
+        string memory tokens_array_output;
+        if (tokens.length == 0) {
+            tokens_array_output = "[]";
+        } else {
+            string memory lastTokenObj = string.concat("token", vm.toString(tokens.length - 1));
+            vm.serializeAddress(lastTokenObj, "address", tokens[tokens.length - 1].addresses.token);
+            string memory lastTokenOutput = vm.serializeAddress(lastTokenObj, "strategy", tokens[tokens.length - 1].addresses.strategy);
+            tokens_array_output = vm.serializeString(tokens_array, vm.toString(tokens.length - 1), lastTokenOutput);
+        }
+        
+        // Combine all sections into the parent object
+        vm.serializeString(parent_object, "contractDeployments", contractDeployments_output);
         vm.serializeString(parent_object, "roles", roles_output);
-        vm.serializeString(parent_object, "tokens", tokens_output);
-        string memory finalJson = vm.serializeString(parent_object, "chainInfo", chain_info_output);
-
+        string memory finalJson = vm.serializeString(parent_object, "tokens", tokens_array_output);
+        
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
     }

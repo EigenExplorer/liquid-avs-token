@@ -41,7 +41,7 @@ const MIN_ALLOCATION_ETH = 0.1;
  * Workflow for staking unstaked assets in the `LiquidToken` contract across nodes
  * Rules:
  * - Use 80% of funds for staking and leave 20% for withdrawals
- * - Even split of all asset amounts across all Operators
+ * - Even split of all asset amounts across all nodes
  * - Min allocation of 0.01 of the asset
  *
  * @returns
