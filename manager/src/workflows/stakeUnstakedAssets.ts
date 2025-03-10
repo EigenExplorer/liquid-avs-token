@@ -35,7 +35,7 @@ interface StakerNodesResponse {
 }
 
 const LAT_API_URL = process.env.LAT_API_URL;
-const MIN_ALLOCATION_ETH = 0.1;
+const MIN_ALLOCATION_ETH = 0.01;
 
 /**
  * Workflow for staking unstaked assets in the `LiquidToken` contract across nodes

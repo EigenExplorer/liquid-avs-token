@@ -31,7 +31,7 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployMainnet.s.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "mainnet.json" "deploy_mainnet.anvil.config.json" -vvvv
+// forge script script/deploy/local/DeployMainnet.s.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "mainnet.json" "xeigenda_mainnet.anvil.config.json" -vvvv
 contract DeployMainnet is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
