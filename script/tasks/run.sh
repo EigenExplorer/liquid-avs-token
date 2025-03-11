@@ -9,8 +9,8 @@
 #  1. Deploy all LAT contracts with stETH token/strategy registered
 #  2. Restaking manager creates five staker nodes
 #  3. Restaking manager delegates nodes to an EigenLayer Operator
-#  4. Staker deposits stETH by interfacing with `LiquidToken`
-#  5. Restaking manager stakes the user's funds to the first three nodes
+#  4. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
+#  5. Restaking manager stakes the users' funds to the first three nodes
 #  6. Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
@@ -18,7 +18,7 @@
 #  2. First two nodes hold 25% of deposited funds each
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
-#  5. Staker holds no stETH and 10 stETH worth of LAT
+#  5. Stakers hold no original tokens and equivalent LAT
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes

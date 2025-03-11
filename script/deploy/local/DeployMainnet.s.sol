@@ -58,7 +58,6 @@ contract DeployMainnet is Script, Test {
     // Network-level config
     address public strategyManager;
     address public delegationManager;
-    TokenConfig[] public tokens;
 
     // Deployment-level config
     address public AVS_ADDRESS;
@@ -69,6 +68,7 @@ contract DeployMainnet is Script, Test {
     address public admin;
     address public pauser;
     address public priceUpdater;
+    TokenConfig[] public tokens;
 
     // Contract instances
     ProxyAdmin public proxyAdmin;
@@ -156,7 +156,6 @@ contract DeployMainnet is Script, Test {
 
         strategyManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.strategyManager");
         delegationManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.delegationManager");
-        tokens = abi.decode(stdJson.parseRaw(networkConfigData, ".tokens"), (TokenConfig[]));
 
         // Load deployment-specific config
         string memory deployConfigPath = string(bytes(string.concat("script/configs/local/", deployConfigFileName)));
@@ -164,6 +163,7 @@ contract DeployMainnet is Script, Test {
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(deployConfigData, ".roles.priceUpdater");
+        tokens = abi.decode(stdJson.parseRaw(deployConfigData, ".tokens"), (TokenConfig[]));
 
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(deployConfigData, ".contracts.stakerNodeCoordinator.init.maxNodes");

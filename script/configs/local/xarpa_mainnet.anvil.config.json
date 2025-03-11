@@ -13,6 +13,30 @@
       }
     }
   },
+  "tokens": [
+    {
+      "addresses": {
+        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 700000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+        "strategy": "0x1bee69b7dfffa4e2d53c2a2df135c388ad25dcd2"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 700000000000000000,
+        "decimals": 18
+      }
+    }
+  ],
   "roles": {
     "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     "pauser": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",

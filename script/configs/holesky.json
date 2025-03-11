@@ -7,19 +7,6 @@
       "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7"
     }
   },
-  "tokens": [
-    {
-      "addresses": {
-        "token": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
-        "strategy": "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3"
-      },
-      "params": {
-        "pricePerUnit": 1000000000000000000,
-        "volatilityThreshold": 700000000000000000,
-        "decimals": 18
-      }
-    }
-  ],
   "deployment": {
     "gasLimit": 6000000,
     "verificationDelay": 60,
