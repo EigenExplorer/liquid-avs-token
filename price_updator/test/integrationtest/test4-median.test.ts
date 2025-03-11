@@ -100,27 +100,21 @@ describe("Integration Test 4: Median Calculation", () => {
   });
 
   test("Median Calculation", async () => {
-    console.log("\n=== 🧪 Test 4: Starting Median Calculations ===");
     expect(configs.length).toBeGreaterThan(0);
     
-    for (const [configIndex, config] of configs.entries()) {
-      console.log(`\n[🧮 Config ${configIndex + 1}]`);
+    for (const config of configs) {
       const tokenAddresses = Object.keys(config.token_mappings);
       
       for (const tokenAddress of tokenAddresses) {
         const symbol = config.token_mappings[tokenAddress];
-        console.log(`\n📈 Processing ${symbol}`);
         const prices: BN[] = [];
-  
+
         if (config.price_providers.coingecko?.enabled) {
           const price = await fetchPriceFromCoingecko(
             config.price_providers.coingecko.base_url,
             symbol
           );
-          if (price) {
-            prices.push(price);
-            console.log(`🦎 CoinGecko: ${price.toFixed(4)}`);
-          }
+          if (price) prices.push(price);
         }
         
         if (config.price_providers.binance?.enabled) {
@@ -128,32 +122,29 @@ describe("Integration Test 4: Median Calculation", () => {
             config.price_providers.binance.base_url,
             symbol
           );
-          if (price) {
-            prices.push(price);
-            console.log(`🅱️ Binance: ${price.toFixed(4)}`);
-          }
+          if (price) prices.push(price);
         }
-  
-        if (prices.length === 0) throw new Error(`❌ No prices fetched for ${symbol}`);
-  
+
+        if (prices.length === 0) throw new Error(`No prices fetched for ${symbol}`);
+
         const medianPrice = getMedian(prices);
         const scaledPrice = medianPrice.times(10 ** 18).toFixed(0);
-        
-        console.log(`📊 Raw Prices: ${prices.map(p => p.toFixed(4)).join(' | ')}`);
-        console.log(`📐 Calculated Median: ${medianPrice.toFixed(4)}`);
-        console.log(`⚖️  Scaled Price (18 decimals): ${scaledPrice}`);
-  
+
         expect(medianPrice).toBeInstanceOf(BN);
         expect(scaledPrice).toBeDefined();
+        console.log(`Median for ${symbol}: ${medianPrice.toString()}, scaled: ${scaledPrice}`);
         
+        // Added assertions to ensure the median is within expected range
         if (prices.length === 2) {
+          // If we have exactly 2 prices, median should be the average
           const average = prices[0].plus(prices[1]).dividedBy(2);
-          console.log(`⚖️  Average (2-price check): ${average.toFixed(4)}`);
           expect(medianPrice.toString()).toEqual(average.toString());
+        } else if (prices.length === 1) {
+          // If we have only 1 price, median should be that price
+          expect(medianPrice.toString()).toEqual(prices[0].toString());
         }
       }
     }
-    console.log("\n=== 🎉 Test 4: Median Calculations Completed ===");
   }, 60000);
 
   afterAll(() => {

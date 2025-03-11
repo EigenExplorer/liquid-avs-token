@@ -101,60 +101,43 @@ describe("Integration Test 3: Fetching Prices", () => {
   });
 
   test("Price Fetching", async () => {
-    console.log("\n=== 🧪 Test 3: Starting Price Fetching ===");
     expect(configs.length).toBeGreaterThan(0);
     
-    for (const [configIndex, config] of configs.entries()) {
-      console.log(`\n[📊 Config ${configIndex + 1}]`);
-      console.log(`⏱️  Update Interval: ${config.update_interval_minutes} minutes`);
-      console.log(`🔌 Enabled Providers: ${
-        Object.entries(config.price_providers)
-          .filter(([_, cfg]) => cfg?.enabled)
-          .map(([name]) => name)
-          .join(', ') || 'None'
-      }`);
-  
+    for (const config of configs) {
       const tokenAddresses = Object.keys(config.token_mappings);
+      
       for (const tokenAddress of tokenAddresses) {
         const symbol = config.token_mappings[tokenAddress];
-        console.log(`\n💎 Processing ${symbol} (${tokenAddress})`);
         const prices: BN[] = [];
-  
+
         if (config.price_providers.coingecko?.enabled) {
-          console.log(`🦎 Fetching CoinGecko price...`);
           const price = await fetchPriceFromCoingecko(
             config.price_providers.coingecko.base_url,
             symbol
           );
           if (price) {
             prices.push(price);
-            console.log(`✅ CoinGecko: ${price.toFixed(4)}`);
-          } else {
-            console.log(`⚠️  No CoinGecko price found`);
+            console.log(`Fetched Coingecko price for ${symbol}: ${price.toString()}`);
           }
         }
         
         if (config.price_providers.binance?.enabled) {
-          console.log(`🅱️ Fetching Binance price...`);
           const price = await fetchPriceFromBinance(
             config.price_providers.binance.base_url,
             symbol
           );
           if (price) {
             prices.push(price);
-            console.log(`✅ Binance: ${price.toFixed(4)}`);
-          } else {
-            console.log(`⚠️  No Binance price found`);
+            console.log(`Fetched Binance price for ${symbol}: ${price.toString()}`);
           }
         }
-  
+
         expect(prices.length).toBeGreaterThan(0);
-        console.log(`📊 Final Prices: ${prices.map(p => p.toFixed(4)).join(' | ')}`);
+        console.log(`All fetched prices for ${symbol}: ${prices.map((p) => p.toString())}`);
       }
     }
-    console.log("\n=== 🎉 Test 3: Price Fetching Completed ===");
-  }, 60000);
-  
+  }, 60000); // Reduced timeout since we're mocking API calls
+
   afterAll(() => {
     jest.restoreAllMocks();
   });

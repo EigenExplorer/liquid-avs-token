@@ -1,0 +1,15 @@
+{
+    "chainId": 1,
+    "contracts": {
+      "tokenA": "0xe64497116bE9e8d7e6E7118aAac201124078A416",
+      "liquidTokenA": "0x9b95344992E1f293f712633C4596B648BD229af1",
+      "oracleA": "0x8B42A9036731F6D5f96e50EaD33114Bfd4C58cfD",
+      "managerA": "0x9e33B9e59689eCB8f038Bd0285ddD46eE59Abf1d",
+      "strategyA": "0x8Be46BE34e3CCd3BCdDabCe1E7Ed397CB8Cf8731",
+      "tokenB": "0x9d8f095F2e145BE0dFCb73aC6bDD4A9900A76674",
+      "liquidTokenB": "0x97353cC78a3433e10E4d4023d6353916760Ea823",
+      "oracleB": "0x1679274F3c7f78a146018237ce15dBb025B92915",
+      "managerB": "0xcA0e3d30a67D6298dEf2Bd4813e078c9013a32e8",
+      "strategyB": "0x113B082C006091efb3F67d02Be403bBf95c4e682"
+    }
+  }
