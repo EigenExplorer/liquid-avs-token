@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --no-cache"
+    "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --no-cache"
   },
   "keywords": [],
   "author": "",

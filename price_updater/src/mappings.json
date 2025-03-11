@@ -1,0 +1,14 @@
+{
+  "coingecko_mappings": {
+    "tka": "eigenlayer",
+    "tkb": "arpa-chain"
+  },
+  "coinmarketcap_mappings": {
+    "TKA": "YOUR_CMC_EIGEN_ID",
+    "TKB": "6958"
+  },
+  "binance_mappings": {
+    "TKA": "EIGENUSDT",
+    "TKB": "ARPAUSDT"
+  }
+}
