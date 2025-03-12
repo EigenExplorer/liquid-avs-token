@@ -132,7 +132,8 @@ contract StakerNodeCoordinatorTest is BaseTest {
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin
+            stakerNodesDelegator: admin,
+            stakerNodeImplementation: address(stakerNodeImplementation)
         });
 
         vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.ZeroAmount.selector));
@@ -199,20 +200,17 @@ contract StakerNodeCoordinatorTest is BaseTest {
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin
+            stakerNodesDelegator: admin,
+            stakerNodeImplementation: address(stakerNodeImplementation)
         });
         proxiedCoordinator.initialize(init);
-        
-        // 6. Register the staker node implementation
-        vm.prank(admin);
-        proxiedCoordinator.registerStakerNodeImplementation(address(stakerNodeImplementation));
 
-        // 7. We can create a node successfully
+        // 6. We can create a node successfully
         vm.startPrank(admin);
         IStakerNode node = proxiedCoordinator.createStakerNode();
         assertEq(address(node) != address(0), true);
         
-        // 8. But we can't create more than maxNodes
+        // 7. But we can't create more than maxNodes
         vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
         proxiedCoordinator.createStakerNode();
         vm.stopPrank();

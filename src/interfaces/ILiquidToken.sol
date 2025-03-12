@@ -49,7 +49,7 @@ interface ILiquidToken is IERC20 {
         bytes32 indexed requestId,
         address indexed user,
         IERC20[] assets,
-        uint256[] amounts,
+        uint256[] shareAmounts,
         uint256 timestamp
     );
 

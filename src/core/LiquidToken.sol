@@ -79,11 +79,9 @@ contract LiquidToken is
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        // Cache array length
         uint256 len = assets.length;
         uint256[] memory sharesArray = new uint256[](len);
 
-        // Combined unchecked block for loop counter and safe arithmetic
         unchecked {
             for (uint256 i = 0; i < len; i++) {
                 IERC20 asset = assets[i];
@@ -93,12 +91,18 @@ contract LiquidToken is
                 if (!liquidTokenManager.tokenIsSupported(asset))
                     revert UnsupportedAsset(asset);
 
-                uint256 shares = calculateShares(asset, amount);
+                // True amount received may differ from `amount` for rebasing tokens
+                uint256 balanceBefore = asset.balanceOf(address(this));
+                asset.safeTransferFrom(msg.sender, address(this), amount);
+                uint256 balanceAfter = asset.balanceOf(address(this));
+
+                uint256 trueAmount = balanceAfter - balanceBefore;
+
+                uint256 shares = calculateShares(asset, trueAmount);
                 if (shares == 0) revert ZeroShares();
 
-                asset.safeTransferFrom(msg.sender, address(this), amount);
-                assetBalances[address(asset)] += amount;
-                
+                assetBalances[address(asset)] += trueAmount;
+
                 if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                     revert AssetBalanceOutOfSync(
                         asset, 
@@ -113,7 +117,7 @@ contract LiquidToken is
                     msg.sender,
                     receiver,
                     asset,
-                    amount,
+                    trueAmount,
                     shares
                 );
             }
@@ -132,7 +136,6 @@ contract LiquidToken is
         if (withdrawAssets.length != shareAmounts.length)
             revert ArrayLengthMismatch();
 
-        // Cache array length and msg.sender
         uint256 len = withdrawAssets.length;
         address sender = msg.sender;
         uint256 totalShares;
@@ -178,11 +181,9 @@ contract LiquidToken is
             fulfilled: false
         });
 
-        // Update state before external interactions
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[sender].push(requestId);
 
-        // External interaction last
         _transfer(sender, address(this), totalShares);
 
         emit WithdrawalRequested(
@@ -419,7 +420,6 @@ contract LiquidToken is
     // ------------------------------------------------------------------------------
 
     function _convertToShares(uint256 amount) internal view returns (uint256) {
-        uint256 assetAmountInUnitOfAccount = amount;
         uint256 supply = totalSupply();
         uint256 totalAsset = totalAssets();
 
