@@ -1,6 +1,5 @@
 import "dotenv/config";
 
-import type { ProposalResponseWithUrl } from "@openzeppelin/defender-sdk-proposal-client/lib/models/response";
 import {
   type MetaTransactionData,
   type SafeTransaction,
@@ -8,7 +7,6 @@ import {
 } from "@safe-global/types-kit";
 import { protocolKitOwner, apiKit } from "./safe";
 import { fileURLToPath } from "node:url";
-import { defenderClient } from "./defenderClient";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getAddress } from "viem/utils";
@@ -48,6 +46,9 @@ export function forgeCommand(
 export async function createSafeTransactions(
   stdout: string
 ): Promise<SafeTransaction[]> {
+  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.MULTISIG_PUBLIC_KEY)
+    throw new Error("Env vars not set correctly.");
+
   const broadcastMatch = stdout.match(/"transactions":"([^"]+)"/);
 
   if (!broadcastMatch)
@@ -64,6 +65,12 @@ export async function createSafeTransactions(
 
   const safeTransactions: SafeTransaction[] = [];
 
+  let nonce =
+    protocolKitOwner.pendingTransactions[
+      (await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY))
+        .results.length
+    ].nonce;
+
   for (const tx of transactions) {
     const metaTransactionData: MetaTransactionData = {
       to: getAddress(tx.transaction.to),
@@ -74,6 +81,7 @@ export async function createSafeTransactions(
 
     const safeTransaction = await protocolKitOwner.createTransaction({
       transactions: [metaTransactionData],
+      options: { nonce: ++nonce },
     });
 
     safeTransactions.push(safeTransaction);
@@ -93,27 +101,32 @@ export async function proposeSafeTransaction(
   safeTransaction: SafeTransaction,
   origin: { title: string; description: string }
 ) {
+  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.PROPOSER_PUBLIC_KEY)
+    throw new Error("Env vars not set correctly.");
+
   const safeTxHash = await protocolKitOwner.getTransactionHash(safeTransaction);
   const senderSignature = await protocolKitOwner.signHash(safeTxHash);
 
   await apiKit.proposeTransaction({
-    safeAddress: process.env.MULTISIG_PUBLIC_KEY!,
+    safeAddress: process.env.MULTISIG_PUBLIC_KEY,
     safeTransactionData: safeTransaction.data,
     safeTxHash,
-    senderAddress: process.env.PROPOSER_PUBLIC_KEY!,
+    senderAddress: process.env.PROPOSER_PUBLIC_KEY,
     senderSignature: senderSignature.data,
-    // origin: JSON.stringify(origin),
+    origin: JSON.stringify(origin),
   });
 
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   const pendingTransactions = (
-    await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY!)
+    await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
   ).results;
 
-  console.log("pendingTransactions: ", pendingTransactions);
-
-  return pendingTransactions;
+  console.log(
+    `[Proposal] ${origin.title}: pending proposals: ${
+      pendingTransactions?.length || 0
+    }`
+  );
 }
 
 // --- Helper functions ---
@@ -195,107 +208,3 @@ export async function getOutputData() {
     )
   );
 }
-
-/**
- * Returns an array of parameter types from a function signature with support for complex types like tuples
- *
- * @param parameterString
- * @returns
- */
-function parseParameterTypes(parameterString: string): string[] {
-  if (!parameterString.trim()) {
-    return [];
-  }
-
-  const result: string[] = [];
-  let currentParam = "";
-  let parenDepth = 0;
-
-  for (let i = 0; i < parameterString.length; i++) {
-    const char = parameterString[i];
-
-    if (char === "(" && parenDepth === 0) {
-      parenDepth++;
-      currentParam += char;
-    } else if (char === "(" && parenDepth > 0) {
-      parenDepth++;
-      currentParam += char;
-    } else if (char === ")" && parenDepth > 1) {
-      parenDepth--;
-      currentParam += char;
-    } else if (char === ")" && parenDepth === 1) {
-      parenDepth--;
-      currentParam += char;
-    } else if (char === "," && parenDepth === 0) {
-      if (currentParam.trim()) {
-        result.push(currentParam.trim());
-        currentParam = "";
-      }
-    } else {
-      currentParam += char;
-    }
-  }
-
-  if (currentParam.trim()) {
-    result.push(currentParam.trim());
-  }
-
-  return result;
-}
-
-// --- Deprecated ---
-
-/**
- * Creates a proposal on OZ Defender to the admin multisig for a given simulated transaction
- *
- * @param tx
- * @param title
- * @param description
- * @returns
- */
-export async function createOzProposal(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-  tx: any,
-  title: string,
-  description: string
-): Promise<ProposalResponseWithUrl> {
-  const functionSignature = tx.function;
-
-  const functionNameMatch = functionSignature.match(/^([^(]+)\((.*)\)$/);
-  if (!functionNameMatch) {
-    throw new Error(`Could not parse function signature: ${functionSignature}`);
-  }
-
-  const functionInputs = tx.arguments || [];
-  const functionName = functionNameMatch[1];
-  const parameterString = functionNameMatch[2];
-  const parameterTypes = parseParameterTypes(parameterString);
-  const inputs = parameterTypes.map((type, index) => ({
-    name: `param${index}`,
-    type: type,
-  }));
-
-  const proposal = await defenderClient.proposal.create({
-    proposal: {
-      contract: {
-        address: tx.transaction.to,
-        network: NETWORK,
-      },
-      title: title,
-      description: description,
-      type: "custom",
-      functionInterface: {
-        name: functionName,
-        inputs: inputs,
-      },
-      functionInputs: functionInputs,
-      via: process.env.ADMIN_PUBLIC_KEY,
-      viaType: "Safe",
-    },
-  });
-
-  if (!proposal) throw new Error("Couldn't create proposal");
-  return proposal;
-}
-
-export async function extractTransactions(stdout: string) {}

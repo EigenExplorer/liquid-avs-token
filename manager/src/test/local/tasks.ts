@@ -9,6 +9,7 @@ import {
   type NodeAllocation,
   stakeAssetsToNodes,
 } from "../../tasks/stakeAssetsToNodes";
+import { apiKit, protocolKitOwner } from "../../utils/safe";
 
 /**
  * Test script for creating staker nodes
@@ -17,15 +18,35 @@ import {
 export async function testCreateStakerNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!process.env.MULTISIG_PUBLIC_KEY)
+      throw new Error("Env vars not set correctly.");
 
     // Create five staker nodes
-    const proposals = await createStakerNodes(5);
+    await createStakerNodes(2);
 
-    // Log all proposals created
-    for (const proposal of proposals) {
-      console.log(proposal);
+    // Confirm and execute the tx
+    const pendingTransactions = (
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+        ordering: "submissionDate",
+        limit: 5,
+      })
+    ).results;
+
+    for (const pendingTx of pendingTransactions) {
+      const safeTxHash = pendingTx.safeTxHash;
+      const signature = await protocolKitOwner.signHash(safeTxHash);
+
+      if (safeTxHash) {
+        await apiKit.confirmTransaction(safeTxHash, signature.data);
+        const safeTransaction = await apiKit.getTransaction(safeTxHash);
+        const executeTxResponse = await protocolKitOwner.executeTransaction(
+          safeTransaction
+        );
+      }
     }
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /**
@@ -35,6 +56,8 @@ export async function testCreateStakerNodes() {
 export async function testDelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!process.env.MULTISIG_PUBLIC_KEY)
+      throw new Error("Env vars not set correctly.");
 
     // Delegate five nodes to EigenYields
     const operatorAddress =
@@ -42,8 +65,8 @@ export async function testDelegateNodes() {
         ? "0x5accc90436492f24e6af278569691e2c942a676d"
         : "0x5accc90436492f24e6af278569691e2c942a676d";
 
-    const proposals = await delegateNodes(
-      ["0", "1", "2", "3", "4"],
+    await delegateNodes(
+      ["5", "6", "7", "8", "9"],
       [
         operatorAddress,
         operatorAddress,
@@ -55,11 +78,24 @@ export async function testDelegateNodes() {
       []
     );
 
-    // Log all proposals created
-    for (const proposal of proposals) {
-      console.log(proposal);
+    // Confirm and execute the tx
+    const pendingTransactions = (
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
+    ).results;
+
+    const safeTxHash = pendingTransactions[0].transactionHash;
+    const signature = await protocolKitOwner.signHash(safeTxHash);
+
+    if (safeTxHash) {
+      await apiKit.confirmTransaction(safeTxHash, signature.data);
+      const safeTransaction = await apiKit.getTransaction(safeTxHash);
+      const executeTxResponse = await protocolKitOwner.executeTransaction(
+        safeTransaction
+      );
     }
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /**
@@ -69,6 +105,8 @@ export async function testDelegateNodes() {
 export async function testStakeAssetsToNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!process.env.MULTISIG_PUBLIC_KEY)
+      throw new Error("Env vars not set correctly.");
 
     const stEthAddress =
       NETWORK === "mainnet"
@@ -89,13 +127,26 @@ export async function testStakeAssetsToNodes() {
       },
     ];
 
-    const proposals = await stakeAssetsToNodes(allocations);
+    await stakeAssetsToNodes(allocations);
 
-    // Log all proposals created
-    for (const proposal of proposals) {
-      console.log(proposal);
+    // Confirm and execute the tx
+    const pendingTransactions = (
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
+    ).results;
+
+    const safeTxHash = pendingTransactions[0].transactionHash;
+    const signature = await protocolKitOwner.signHash(safeTxHash);
+
+    if (safeTxHash) {
+      await apiKit.confirmTransaction(safeTxHash, signature.data);
+      const safeTransaction = await apiKit.getTransaction(safeTxHash);
+      const executeTxResponse = await protocolKitOwner.executeTransaction(
+        safeTransaction
+      );
     }
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /**
@@ -105,6 +156,8 @@ export async function testStakeAssetsToNodes() {
 export async function testStakeAssetsToNode() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!process.env.MULTISIG_PUBLIC_KEY)
+      throw new Error("Env vars not set correctly.");
 
     const stEthAddress =
       NETWORK === "mainnet"
@@ -112,17 +165,26 @@ export async function testStakeAssetsToNode() {
         : "0x3f1c547b21f65e10480de3ad8e19faac46c95034";
 
     // Stake assets to third node
-    const proposals = await stakeAssetsToNode(
-      "2",
-      [stEthAddress],
-      ["3000000000000000000"]
-    );
+    await stakeAssetsToNode("2", [stEthAddress], ["3000000000000000000"]);
 
-    // Log all proposals created
-    for (const proposal of proposals) {
-      console.log(proposal);
+    // Confirm and execute the tx
+    const pendingTransactions = (
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
+    ).results;
+
+    const safeTxHash = pendingTransactions[0].transactionHash;
+    const signature = await protocolKitOwner.signHash(safeTxHash);
+
+    if (safeTxHash) {
+      await apiKit.confirmTransaction(safeTxHash, signature.data);
+      const safeTransaction = await apiKit.getTransaction(safeTxHash);
+      const executeTxResponse = await protocolKitOwner.executeTransaction(
+        safeTransaction
+      );
     }
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /**
@@ -132,13 +194,38 @@ export async function testStakeAssetsToNode() {
 export async function testUndelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!process.env.MULTISIG_PUBLIC_KEY)
+      throw new Error("Env vars not set correctly.");
 
     // Undelegate fourth and fifth nodes
-    const proposals = await undelegateNodes(["3", "4"]);
+    await undelegateNodes(["8", "9"]);
 
-    // Log all proposals created
-    for (const proposal of proposals) {
-      console.log(proposal);
+    // Confirm and execute the tx
+    const pendingTransactions = (
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
+    ).results;
+
+    const safeTxHash = pendingTransactions[0].transactionHash;
+    const signature = await protocolKitOwner.signHash(safeTxHash);
+
+    if (safeTxHash) {
+      await apiKit.confirmTransaction(safeTxHash, signature.data);
+      const safeTransaction = await apiKit.getTransaction(safeTxHash);
+      const executeTxResponse = await protocolKitOwner.executeTransaction(
+        safeTransaction
+      );
     }
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function testFlow() {
+  if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+
+  await testCreateStakerNodes();
+  await testDelegateNodes();
+  await testStakeAssetsToNodes();
+  await testStakeAssetsToNode();
+  await testUndelegateNodes();
 }
