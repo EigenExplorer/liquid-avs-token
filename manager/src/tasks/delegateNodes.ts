@@ -36,14 +36,14 @@ export async function delegateNodes(
     const signaturesParam =
       signatures.length > 0
         ? `[${signatures
-            .map((sig) => `{signature:"${sig.signature}",expiry:${sig.expiry}}`)
+            .map((sig) => `("${sig.signature}",${sig.expiry})`)
             .join(",")}]`
         : "[]";
     const saltsParam =
       salts.length > 0
         ? `[${salts.map((salt) => `"${salt}"`).join(",")}]`
         : "[]";
-    const params = `${nodeIdsParam} ${operatorsParam} ${signaturesParam} ${saltsParam}`;
+    const params = `${nodeIdsParam} ${operatorsParam} "${signaturesParam}" ${saltsParam}`;
 
     // Simulate task and create transaction
     const { stdout } = await execAsync(forgeCommand(task, sender, sig, params));

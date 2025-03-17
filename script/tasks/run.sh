@@ -49,7 +49,7 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Environment configuration
-RPC_URL="127.0.0.1:8545"
+RPC_URL="http://127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
