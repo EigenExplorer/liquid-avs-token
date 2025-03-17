@@ -17,7 +17,12 @@ const __dirname = path.dirname(__filename);
 export const NETWORK = getNetwork();
 export const DEPLOYMENT = getDeployment();
 export const ADMIN = await getAdmin();
-export const LIQUID_TOKEN_ADDRESS = (await getOutputData()).proxyAddress;
+
+export const {
+  liquidToken: LIQUID_TOKEN_ADDRESS,
+  liquidTokenManager: LIQUID_TOKEN_MANAGER_ADDRESS,
+  stakeNodeCoordinator: STAKER_NODE_COORDINATOR_ADDRESS,
+} = await getOutputData();
 
 /**
  * Returns the forge command used to call a task from the /script folder
@@ -195,15 +200,58 @@ export async function getAdmin(): Promise<string> {
 
 /**
  * Returns the output file created after the deployment
- * Defaults to mainnet if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
+ * Defaults to mainnet if local deployment & `NETWORK` env var not set, public if `DEPLOYMENT` env var not set
  *
  * @returns
  */
 export async function getOutputData() {
-  return JSON.parse(
-    await fs.readFile(
-      path.resolve(__dirname, `../../../script/outputs${getConfigFile()}`),
-      "utf8"
-    )
-  );
+  if (DEPLOYMENT === "local") {
+    const output = await JSON.parse(
+      await fs.readFile(
+        path.resolve(__dirname, `../../../script/outputs${getConfigFile()}`),
+        "utf8"
+      )
+    );
+
+    return {
+      liquidToken: String(output.proxyAddress),
+      liquidTokenManager: String(
+        output.contractDeployments.proxy.liquidTokenManager.address
+      ),
+      stakeNodeCoordinator: String(
+        output.contractDeployments.proxy.stakeNodeCoordinator.address
+      ),
+    };
+  }
+
+  try {
+    const latResponse = await fetch(
+      `${process.env.LAT_API_URL}/lat/${process.env.LIQUID_TOKEN_ADDRESS}`
+    );
+
+    if (!latResponse.ok) {
+      throw new Error(
+        `Failed to fetch LAT data: ${latResponse.status} ${latResponse.statusText}`
+      );
+    }
+
+    const latData = await latResponse.json();
+
+    return {
+      liquidToken: String(latData.proxyAddress),
+      liquidTokenManager: String(
+        latData.contractDeployments.proxy.liquidTokenManager.address
+      ),
+      stakeNodeCoordinator: String(
+        latData.contractDeployments.proxy.stakeNodeCoordinator.address
+      ),
+    };
+  } catch (error) {
+    console.log("Error: ", error);
+    return {
+      liquidToken: process.env.LIQUID_TOKEN_ADDRESS || "",
+      liquidTokenManager: "",
+      stakeNodeCoordinator: "",
+    };
+  }
 }

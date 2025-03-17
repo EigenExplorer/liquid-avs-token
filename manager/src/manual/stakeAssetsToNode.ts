@@ -6,9 +6,9 @@ import { apiKit } from "../utils/safe";
  * `npm run stake-assets-to-node` from the `/manager` folder
  *
  */
-export async function manualStakeAssetsToNode() {
+async function manualStakeAssetsToNode() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY)
+    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
       throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
@@ -34,3 +34,10 @@ export async function manualStakeAssetsToNode() {
     console.log(error);
   }
 }
+
+(async () => {
+  try {
+    console.log("[Manual] Running manual tx proposal...");
+    await manualStakeAssetsToNode();
+  } catch {}
+})();

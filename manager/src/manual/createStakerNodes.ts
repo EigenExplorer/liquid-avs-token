@@ -6,9 +6,9 @@ import { apiKit } from "../utils/safe";
  * `npm run create-staker-nodes` from the `/manager` folder
  *
  */
-export async function manualCreateStakerNodes() {
+async function manualCreateStakerNodes() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY)
+    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
       throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
@@ -36,3 +36,10 @@ export async function manualCreateStakerNodes() {
     console.log(error);
   }
 }
+
+(async () => {
+  try {
+    console.log("[Manual] Running manual tx proposal...");
+    await manualCreateStakerNodes();
+  } catch {}
+})();

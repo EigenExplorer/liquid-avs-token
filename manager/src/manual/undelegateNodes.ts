@@ -6,9 +6,9 @@ import { apiKit } from "../utils/safe";
  * `npm run undelegate-nodes` from the `/manager` folder
  *
  */
-export async function manualUndelegateNodes() {
+async function manualUndelegateNodes() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY)
+    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
       throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
@@ -32,3 +32,10 @@ export async function manualUndelegateNodes() {
     console.log(error);
   }
 }
+
+(async () => {
+  try {
+    console.log("[Manual] Running manual tx proposal...");
+    await manualUndelegateNodes();
+  } catch {}
+})();
