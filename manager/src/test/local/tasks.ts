@@ -171,7 +171,7 @@ export async function testStakeAssetsToNodes() {
         : "0x3f1c547b21f65e10480de3ad8e19faac46c95034";
 
     // Stake assets to first and second nodes
-    const allocation: NodeAllocation[] = [
+    const allocations: NodeAllocation[] = [
       {
         nodeId: "0",
         assets: [stEthAddress],
@@ -184,7 +184,7 @@ export async function testStakeAssetsToNodes() {
       },
     ];
 
-    await stakeAssetsToNodes(allocation);
+    await stakeAssetsToNodes(allocations);
 
     // Get proposed tx
     const pendingTx = (
