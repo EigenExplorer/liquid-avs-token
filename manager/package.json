@@ -8,13 +8,16 @@
     "start": "tsx watch --clear-screen=false ./src/index.ts"
   },
   "devDependencies": {
-    "@types/node-cron": "^3.0.11",
     "@types/node": "^20.12.2",
+    "@types/node-cron": "^3.0.11",
     "tsx": "^4.7.1",
     "typescript": "^5.4.3"
   },
   "dependencies": {
     "@openzeppelin/defender-sdk": "^2.2.0",
+    "@safe-global/api-kit": "^3.0.0",
+    "@safe-global/protocol-kit": "^6.0.0",
+    "@safe-global/types-kit": "^2.0.0",
     "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
     "viem": "^2.9.21"

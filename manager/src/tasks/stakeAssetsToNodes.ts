@@ -1,13 +1,12 @@
 import "dotenv/config";
 
-import type { ProposalResponseWithUrl } from "@openzeppelin/defender-sdk-proposal-client/lib/models/response";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   ADMIN,
   forgeCommand,
-  extractTransactions,
-  createOzProposal,
+  createSafeTransactions,
+  proposeSafeTransaction,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -24,9 +23,7 @@ export type NodeAllocation = {
  * @param allocations
  * @returns
  */
-export async function stakeAssetsToNodes(
-  allocations: NodeAllocation[]
-): Promise<ProposalResponseWithUrl[]> {
+export async function stakeAssetsToNodes(allocations: NodeAllocation[]) {
   try {
     // Setup task params
     const task = "LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNodes";
@@ -39,22 +36,18 @@ export async function stakeAssetsToNodes(
       )
       .join(",")}]'`;
 
-    // Simulate task and retrieve transactions
+    // Simulate task and create transaction
     const { stdout } = await execAsync(forgeCommand(task, sender, sig, params));
-    const transactions = await extractTransactions(stdout);
+    const safeTransactions = await createSafeTransactions(stdout);
 
-    // Create an OZ proposal for each tx
-    const proposals: ProposalResponseWithUrl[] = [];
-    for (const tx of transactions) {
-      const title = `Stake Assets To Nodes - Nonce ${tx.transaction.nonce}`;
-      const description = `Proposal for a set of staker node allocations via contract at ${tx.transaction.to}`;
-      const proposal = await createOzProposal(tx, title, description);
-      proposals.push(proposal);
+    // Propose transactions to multisig
+    for (const safeTx of safeTransactions) {
+      const metadata = {
+        title: `Stake Assets To ${allocations.length} Node(s)`,
+        description: `Proposal to stake a set of assets to a set of staker node(s) via ${task}`,
+      };
+      await proposeSafeTransaction(safeTx, metadata);
     }
-
-    if (!proposals) throw new Error("No proposals created");
-
-    return proposals;
   } catch (error) {
     console.log("Error: ", error);
     return [];
