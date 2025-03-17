@@ -1,0 +1,17 @@
+{
+  "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "strategyManager": "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+  "delegationManager": "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+  "stakerNodeCoordinator": "0xcb0154Ad63ABEF7a0Ebe02CaF0D125BDe3EEda54",
+  "tokenKeys": ["stETH", "rETH"],
+  "tokens": {
+    "stETH": {
+      "address": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+      "strategy": "0x93c4b944D05dfe6df7645A86cd2206016c51564D"
+    },
+    "rETH": {
+      "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+      "strategy": "0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2"
+    }
+  }
+}

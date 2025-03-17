@@ -1,0 +1,27 @@
+{
+  "web3": {
+    "provider_uri": "http://127.0.0.1:8545",
+    "network": "local",
+    "chain_id": 31337
+  },
+  "contracts": {
+    "oracle_address": "0xA45e2E9F6FEE59EdFa2586c6eF7ecee1F9caC51c",
+    "oracle_abi_path": "./ABIs/TokenRegistryOracle.json",
+    "manager_address": "0x26a5BE39521F8e70fEfe14dB40043De82B5B7784",
+    "manager_abi_path": "./ABIs/LiquidTokenManager.json"
+  },
+  "price_providers": {
+    "coingecko": {
+      "enabled": true,
+      "base_url": "https://api.coingecko.com/api/v3"
+    },
+    "binance": { 
+      "enabled": true,
+      "base_url": "https://api.binance.com/api/v3"
+    }
+  },
+  "token_mappings": { "0xae78736Cd615f374D3085123A210448E74Fc6393": "rETH" },
+  "update_interval_minutes": 60,
+  "volatility_threshold_bypass": true,
+  "individual_updates_on_batch_failure": true
+}

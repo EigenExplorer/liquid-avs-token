@@ -1,19 +1,26 @@
+// Modified to avoid import.meta.url and top-level await
 import "dotenv/config";
 
 import type { ProposalResponseWithUrl } from "@openzeppelin/defender-sdk-proposal-client/lib/models/response";
 import { defenderClient } from "./defenderClient";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Use __dirname directly (assuming CommonJS module)
+const __dirname = process.cwd();
 
 export const NETWORK = getNetwork();
 export const DEPLOYMENT = getDeployment();
-export const ADMIN = await getAdmin();
-export const LIQUID_TOKEN_ADDRESS = (await getOutputData()).addresses
-  .liquidToken;
+
+// Remove top-level await by creating async functions for later use
+export async function getAdminAddress() {
+  return await getAdmin();
+}
+
+export async function getLiquidTokenAddress() {
+  const data = await getOutputData();
+  return data.addresses.liquidToken;
+}
 
 /**
  * Returns the forge command used to call a task from the /script folder

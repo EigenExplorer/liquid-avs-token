@@ -12,6 +12,10 @@
 #  4. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
 #  5. Restaking manager stakes the users' funds to the first three nodes
 #  6. Restaking manager undelegates the fourth and fifth nodes
+#  7. Deploy price updater ecosystem
+#  8. Generate price updater configs
+#  9. Create token mappings for price feeds
+#  10. Verify price updater setup
 
 # End-state verification:
 #  1. Three nodes are delegated, fourth and fifth are not
@@ -19,6 +23,8 @@
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
 #  5. Stakers hold no original tokens and equivalent LAT
+#  6. Price updater ecosystem is properly configured
+
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes
@@ -26,7 +32,7 @@
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
 #  5. LTM_UndelegateNodes
-
+#  6. DeployPriceUpdater
 # Instructions:
 # To load env file: source .env
 # To setup a local node (on a separate terminal instance): anvil --fork-url $RPC_URL
@@ -49,7 +55,7 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Environment configuration
-RPC_URL="127.0.0.1:8545"
+RPC_URL="http://127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
@@ -57,6 +63,9 @@ OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
 #-----------------------------------------------------------------------------------------------------
 # ACTION
 #-----------------------------------------------------------------------------------------------------
+
+# Create output directory if it doesn't exist
+mkdir -p script/outputs/local
 
 # Deploy contracts
 forge script --via-ir script/deploy/local/DeployMainnet.s.sol:DeployMainnet \
@@ -146,6 +155,228 @@ forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
     --sig "run(string,uint256[])" \
     -- "/local/mainnet_deployment_data.json" "[$NODE_4,$NODE_5]"
 
+
+
+mkdir -p script/inputs/local
+
+# Extract contract addresses for price updater deployment
+STRATEGY_MANAGER=$(jq -r '.contractDeployments.proxy.strategyManager.address' $OUTPUT_PATH_MAINNET)
+if [ "$STRATEGY_MANAGER" = "null" ] || [ -z "$STRATEGY_MANAGER" ]; then
+    echo "Error: Could not find strategyManager address in deployment data"
+    echo "Using default address for strategyManager"
+    # Use a valid address format (20 bytes) for the default
+    STRATEGY_MANAGER="0x858646372CC42E1A627fcE94aa7A7033e7CF075A"
+fi
+
+DELEGATION_MANAGER=$(jq -r '.contractDeployments.proxy.delegationManager.address' $OUTPUT_PATH_MAINNET)
+if [ "$DELEGATION_MANAGER" = "null" ] || [ -z "$DELEGATION_MANAGER" ]; then
+    echo "Error: Could not find delegationManager address in deployment data"
+    echo "Using default address for delegationManager"
+    # Use a valid address format (20 bytes) for the default
+    DELEGATION_MANAGER="0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A"
+fi
+STETH_STRATEGY=$(jq -r '.tokens["0"].strategy' $OUTPUT_PATH_MAINNET)
+RETH_STRATEGY=$(jq -r '.tokens["1"].strategy' $OUTPUT_PATH_MAINNET)
+ADMIN_ADDRESS=$(cast wallet address --private-key $ADMIN_PRIVATE_KEY)
+# Create parameters JSON file for DeployPriceUpdater
+cat > script/inputs/local/price_updater_params.json << EOL
+{
+  "admin": "$ADMIN_ADDRESS",
+  "strategyManager": "$STRATEGY_MANAGER",
+  "delegationManager": "$DELEGATION_MANAGER",
+  "stakerNodeCoordinator": "$STAKER_NODE_COORDINATOR",
+  "tokenKeys": ["stETH", "rETH"],
+  "tokens": {
+    "stETH": {
+      "address": "$STETH_TOKEN",
+      "strategy": "$STETH_STRATEGY"
+    },
+    "rETH": {
+      "address": "$RETH_TOKEN",
+      "strategy": "$RETH_STRATEGY"
+    }
+  }
+}
+EOL
+
+# Deploy price updater ecosystem
+echo "Deploying Price Updater ecosystem contracts..."
+forge script --via-ir script/tasks/DeployPriceUpdater.s.sol:DeployPriceUpdater \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $ADMIN_PRIVATE_KEY \
+    --sig "run(string)" \
+    -- "local/price_updater_params.json"
+
+# Extract newly deployed addresses
+PRICE_UPDATER_OUTPUT="script/outputs/local/price_updater_addresses.json"
+STETH_LIQUID_TOKEN_MANAGER=$(jq -r '.contracts.manager0' $PRICE_UPDATER_OUTPUT)
+RETH_LIQUID_TOKEN_MANAGER=$(jq -r '.contracts.manager1' $PRICE_UPDATER_OUTPUT)
+STETH_LIQUID_TOKEN=$(jq -r '.contracts.liquidToken0' $PRICE_UPDATER_OUTPUT)
+RETH_LIQUID_TOKEN=$(jq -r '.contracts.liquidToken1' $PRICE_UPDATER_OUTPUT)
+STETH_ORACLE=$(jq -r '.contracts.oracle0' $PRICE_UPDATER_OUTPUT)
+RETH_ORACLE=$(jq -r '.contracts.oracle1' $PRICE_UPDATER_OUTPUT)
+
+# Add these new addresses to the main deployment JSON
+TEMP_FILE=$(mktemp)
+jq --arg stethLtm "$STETH_LIQUID_TOKEN_MANAGER" \
+   --arg rethLtm "$RETH_LIQUID_TOKEN_MANAGER" \
+   --arg stethLt "$STETH_LIQUID_TOKEN" \
+   --arg rethLt "$RETH_LIQUID_TOKEN" \
+   --arg stethOracle "$STETH_ORACLE" \
+   --arg rethOracle "$RETH_ORACLE" \
+   '.priceUpdater = {
+     "steth": {
+       "liquidTokenManager": $stethLtm,
+       "liquidToken": $stethLt,
+       "oracle": $stethOracle
+     },
+     "reth": {
+       "liquidTokenManager": $rethLtm,
+       "liquidToken": $rethLt,
+       "oracle": $rethOracle
+     }
+   }' $OUTPUT_PATH_MAINNET > $TEMP_FILE
+mv $TEMP_FILE $OUTPUT_PATH_MAINNET
+
+echo "Price updater contracts deployed and addresses added to main deployment JSON"
+
+# After the price updater deployment section in your run.sh, add:
+
+echo "Generating configuration files for the price updater"
+# Extract addresses from the deployments
+STETH_ORACLE=$(jq -r '.contracts.oracle0' $PRICE_UPDATER_OUTPUT)
+RETH_ORACLE=$(jq -r '.contracts.oracle1' $PRICE_UPDATER_OUTPUT)
+STETH_MANAGER=$(jq -r '.contracts.manager0' $PRICE_UPDATER_OUTPUT)
+RETH_MANAGER=$(jq -r '.contracts.manager1' $PRICE_UPDATER_OUTPUT)
+
+# Create configs directory
+mkdir -p script/configs/local/mainnet
+
+# Generate configuration files
+cat > script/configs/local/mainnet/price_updater_stETH_config.json << EOL
+{
+  "web3": {
+    "provider_uri": "$RPC_URL",
+    "network": "local",
+    "chain_id": 31337
+  },
+  "contracts": {
+    "oracle_address": "$STETH_ORACLE",
+    "oracle_abi_path": "./ABIs/TokenRegistryOracle.json",
+    "manager_address": "$STETH_MANAGER",
+    "manager_abi_path": "./ABIs/LiquidTokenManager.json"
+  },
+  "price_providers": {
+    "coingecko": {
+      "enabled": true,
+      "base_url": "https://api.coingecko.com/api/v3"
+    },
+    "binance": { 
+      "enabled": true,
+      "base_url": "https://api.binance.com/api/v3"
+    }
+  },
+  "token_mappings": { "$STETH_TOKEN": "stETH" },
+  "update_interval_minutes": 60,
+  "volatility_threshold_bypass": true,
+  "individual_updates_on_batch_failure": true
+}
+EOL
+
+cat > script/configs/local/mainnet/price_updater_rETH_config.json << EOL
+{
+  "web3": {
+    "provider_uri": "$RPC_URL",
+    "network": "local",
+    "chain_id": 31337
+  },
+  "contracts": {
+    "oracle_address": "$RETH_ORACLE",
+    "oracle_abi_path": "./ABIs/TokenRegistryOracle.json",
+    "manager_address": "$RETH_MANAGER",
+    "manager_abi_path": "./ABIs/LiquidTokenManager.json"
+  },
+  "price_providers": {
+    "coingecko": {
+      "enabled": true,
+      "base_url": "https://api.coingecko.com/api/v3"
+    },
+    "binance": { 
+      "enabled": true,
+      "base_url": "https://api.binance.com/api/v3"
+    }
+  },
+  "token_mappings": { "$RETH_TOKEN": "rETH" },
+  "update_interval_minutes": 60,
+  "volatility_threshold_bypass": true,
+  "individual_updates_on_batch_failure": true
+}
+EOL
+
+echo "Creating mappings.json for the price updater"
+cat > price_updater/src/mappings.json << EOL
+{
+  "coingecko_mappings": {
+    "steth": "staked-ether",
+    "reth": "rocket-pool-eth"
+  },
+  "binance_mappings": {
+    "steth": "STETHETH",
+    "reth": "RETHETH"
+  }
+}
+EOL
+
+# Create price updater directory structure and necessary files
+mkdir -p script/ABIs
+
+# Create ABIs for the price updater
+echo "Extracting ABIs for the price updater"
+forge inspect LiquidTokenManager abi > out/LiquidTokenManager.sol/LiquidTokenManager.json
+forge inspect TokenRegistryOracle abi > out/TokenRegistryOracle.sol/TokenRegistryOracle.json
+
+# Initialize oracles with initial prices (using conservative values)
+echo "Initializing oracles with initial prices"
+# For stETH (assuming 1:1 with ETH)
+INITIAL_STETH_PRICE="1000000000000000000"  # 1.0 with 18 decimals
+cast send $STETH_ORACLE --private-key $ADMIN_PRIVATE_KEY "updateRate(address,uint256)" $STETH_TOKEN $INITIAL_STETH_PRICE
+
+# For rETH (assuming 1.05:1 with ETH)
+INITIAL_RETH_PRICE="1050000000000000000"  # 1.05 with 18 decimals
+cast send $RETH_ORACLE --private-key $ADMIN_PRIVATE_KEY "updateRate(address,uint256)" $RETH_TOKEN $INITIAL_RETH_PRICE
+
+# Verify oracle rates were intiilized successfully
+#Check raw rates
+echo "Debug: Raw stETH rate: $(cast call $STETH_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)"
+echo "Debug: Raw rETH rate: $(cast call $RETH_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)"
+
+# Verify oracle rates
+echo "Verifying oracle rates"
+STETH_RATE_RAW=$(cast call $STETH_ORACLE "getRate(address)(uint256)" $STETH_TOKEN | sed 's/\[[^]]*\]//g')
+echo "Debug: Raw stETH rate: $STETH_RATE_RAW"
+STETH_RATE=$(cast --from-wei $STETH_RATE_RAW)
+echo "stETH rate: $STETH_RATE"
+
+# And similarly for rETH
+RETH_RATE_RAW=$(cast call $RETH_ORACLE "getRate(address)(uint256)" $RETH_TOKEN | sed 's/\[[^]]*\]//g')
+echo "Debug: Raw rETH rate: $RETH_RATE_RAW"
+RETH_RATE=$(cast --from-wei $RETH_RATE_RAW)
+echo "rETH rate: $RETH_RATE"
+# Run the price updater script once to verify it works
+# Compile TypeScript code
+if [ -f "price_updater/src/index.ts" ]; then
+  echo "Compiling TypeScript code..."
+  tsc --project price_updater/tsconfig.json || { echo "TypeScript compilation failed"; exit 1; }
+fi
+
+# Run price updater
+if [ -f "dist/index.js" ]; then
+  echo "Running price updater once to verify functionality"
+  NODE_ENV=development node dist/index.js --run-once
+else
+  echo "Price updater distribution not found. Skipping verification run."
+  echo "To manually run the updater: NODE_ENV=development node dist/index.js"
+fi
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
 #-----------------------------------------------------------------------------------------------------
