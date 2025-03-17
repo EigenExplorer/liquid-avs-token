@@ -48,7 +48,7 @@ const MIN_ALLOCATION_ETH = 0.5;
  */
 export async function stakeUnstakedAssets() {
   try {
-    // API: Fetch unstaked assets and amounts
+    // LAT API: Fetch unstaked assets and amounts
     const latResponse = await fetch(
       `${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}`
     );
@@ -62,7 +62,7 @@ export async function stakeUnstakedAssets() {
     const latData = (await latResponse.json()) as LATResponse;
     const unstakedAssets = latData.assets;
 
-    // API: Fetch nodes and their delegations
+    // LAT API: Fetch nodes and their delegations
     const nodesResponse = await fetch(
       `${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/staker-nodes`
     );
@@ -84,7 +84,7 @@ export async function stakeUnstakedAssets() {
 
     if (delegatedNodes.length === 0) return [];
 
-    // API: Fetch token data
+    // LAT API: Fetch token data
     const tokensResponse = await fetch(
       `${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/tokens`
     );
@@ -148,12 +148,7 @@ export async function stakeUnstakedAssets() {
     if (allocations.length === 0) return [];
 
     // Create proposals to stake assets to nodes
-    const proposals = await stakeAssetsToNodes(allocations);
-
-    // Log all tx proposals
-    for (const proposal of proposals) {
-      console.log(proposal);
-    }
+    await stakeAssetsToNodes(allocations);
   } catch (error) {
     console.log("Error: ", error);
   }

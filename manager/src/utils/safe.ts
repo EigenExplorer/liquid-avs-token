@@ -4,7 +4,7 @@ import { getChain } from "./viemClient";
 
 export const protocolKitOwner = await Safe.init({
   provider: process.env.RPC_URL,
-  signer: process.env.PROPOSER_PRIVATE_KEY,
+  signer: process.env.SIGNER_PRIVATE_KEY,
   safeAddress: process.env.MULTISIG_PUBLIC_KEY,
 });
 

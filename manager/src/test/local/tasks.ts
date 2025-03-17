@@ -22,14 +22,11 @@ export async function testCreateStakerNodes() {
       throw new Error("Env vars not set correctly.");
 
     // Create five staker nodes
-    await createStakerNodes(2);
+    await createStakerNodes(5);
 
     // Confirm and execute the tx
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
-        ordering: "submissionDate",
-        limit: 5,
-      })
+      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
     ).results;
 
     for (const pendingTx of pendingTransactions) {
@@ -39,9 +36,7 @@ export async function testCreateStakerNodes() {
       if (safeTxHash) {
         await apiKit.confirmTransaction(safeTxHash, signature.data);
         const safeTransaction = await apiKit.getTransaction(safeTxHash);
-        const executeTxResponse = await protocolKitOwner.executeTransaction(
-          safeTransaction
-        );
+        await protocolKitOwner.executeTransaction(safeTransaction);
       }
     }
   } catch (error) {
@@ -66,7 +61,7 @@ export async function testDelegateNodes() {
         : "0x5accc90436492f24e6af278569691e2c942a676d";
 
     await delegateNodes(
-      ["5", "6", "7", "8", "9"],
+      ["0", "1", "2", "3", "4"],
       [
         operatorAddress,
         operatorAddress,
@@ -83,15 +78,14 @@ export async function testDelegateNodes() {
       await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
     ).results;
 
-    const safeTxHash = pendingTransactions[0].transactionHash;
+    const safeTxHash =
+      pendingTransactions[pendingTransactions.length - 1].safeTxHash;
     const signature = await protocolKitOwner.signHash(safeTxHash);
 
     if (safeTxHash) {
       await apiKit.confirmTransaction(safeTxHash, signature.data);
       const safeTransaction = await apiKit.getTransaction(safeTxHash);
-      const executeTxResponse = await protocolKitOwner.executeTransaction(
-        safeTransaction
-      );
+      await protocolKitOwner.executeTransaction(safeTransaction);
     }
   } catch (error) {
     console.log(error);
@@ -134,15 +128,13 @@ export async function testStakeAssetsToNodes() {
       await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
     ).results;
 
-    const safeTxHash = pendingTransactions[0].transactionHash;
+    const safeTxHash = pendingTransactions[0].safeTxHash;
     const signature = await protocolKitOwner.signHash(safeTxHash);
 
     if (safeTxHash) {
       await apiKit.confirmTransaction(safeTxHash, signature.data);
       const safeTransaction = await apiKit.getTransaction(safeTxHash);
-      const executeTxResponse = await protocolKitOwner.executeTransaction(
-        safeTransaction
-      );
+      await protocolKitOwner.executeTransaction(safeTransaction);
     }
   } catch (error) {
     console.log(error);
@@ -172,15 +164,13 @@ export async function testStakeAssetsToNode() {
       await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
     ).results;
 
-    const safeTxHash = pendingTransactions[0].transactionHash;
+    const safeTxHash = pendingTransactions[0].safeTxHash;
     const signature = await protocolKitOwner.signHash(safeTxHash);
 
     if (safeTxHash) {
       await apiKit.confirmTransaction(safeTxHash, signature.data);
       const safeTransaction = await apiKit.getTransaction(safeTxHash);
-      const executeTxResponse = await protocolKitOwner.executeTransaction(
-        safeTransaction
-      );
+      await protocolKitOwner.executeTransaction(safeTransaction);
     }
   } catch (error) {
     console.log(error);
@@ -198,31 +188,31 @@ export async function testUndelegateNodes() {
       throw new Error("Env vars not set correctly.");
 
     // Undelegate fourth and fifth nodes
-    await undelegateNodes(["8", "9"]);
+    await undelegateNodes(["3", "4"]);
 
     // Confirm and execute the tx
     const pendingTransactions = (
       await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
     ).results;
 
-    const safeTxHash = pendingTransactions[0].transactionHash;
+    const safeTxHash = pendingTransactions[0].safeTxHash;
     const signature = await protocolKitOwner.signHash(safeTxHash);
 
     if (safeTxHash) {
       await apiKit.confirmTransaction(safeTxHash, signature.data);
       const safeTransaction = await apiKit.getTransaction(safeTxHash);
-      const executeTxResponse = await protocolKitOwner.executeTransaction(
-        safeTransaction
-      );
+      await protocolKitOwner.executeTransaction(safeTransaction);
     }
   } catch (error) {
     console.log(error);
   }
 }
 
+/**
+ * Integration test to make sure that all transaction proposals are created as intended
+ *
+ */
 export async function testFlow() {
-  if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-
   await testCreateStakerNodes();
   await testDelegateNodes();
   await testStakeAssetsToNodes();

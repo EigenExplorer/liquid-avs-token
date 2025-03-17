@@ -40,7 +40,7 @@ export async function stakeAssetsToNode(
     // Propose transactions to multisig
     for (const safeTx of safeTransactions) {
       const metadata = {
-        title: `Stake Assets  ${assets.length} To Node ${nodeId}`,
+        title: `Stake ${assets.length} Asset(s) To Node ${nodeId}`,
         description: `Proposal to stake a set of assets to a staker node via ${task}`,
       };
       await proposeSafeTransaction(safeTx, metadata);

@@ -38,7 +38,7 @@ export function forgeCommand(
 }
 
 /**
- * Creates a set of transaction ready to be proposed to a gnosis safe
+ * Creates a set of transactions ready to be proposed to a gnosis safe
  *
  * @param stdout
  * @returns
@@ -65,11 +65,9 @@ export async function createSafeTransactions(
 
   const safeTransactions: SafeTransaction[] = [];
 
-  let nonce =
-    protocolKitOwner.pendingTransactions[
-      (await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY))
-        .results.length
-    ].nonce;
+  let nonce = Number(
+    await apiKit.getNextNonce(process.env.MULTISIG_PUBLIC_KEY)
+  );
 
   for (const tx of transactions) {
     const metaTransactionData: MetaTransactionData = {
@@ -81,7 +79,7 @@ export async function createSafeTransactions(
 
     const safeTransaction = await protocolKitOwner.createTransaction({
       transactions: [metaTransactionData],
-      options: { nonce: ++nonce },
+      options: { nonce: nonce++ },
     });
 
     safeTransactions.push(safeTransaction);
@@ -101,7 +99,7 @@ export async function proposeSafeTransaction(
   safeTransaction: SafeTransaction,
   origin: { title: string; description: string }
 ) {
-  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.PROPOSER_PUBLIC_KEY)
+  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
     throw new Error("Env vars not set correctly.");
 
   const safeTxHash = await protocolKitOwner.getTransactionHash(safeTransaction);
@@ -111,7 +109,7 @@ export async function proposeSafeTransaction(
     safeAddress: process.env.MULTISIG_PUBLIC_KEY,
     safeTransactionData: safeTransaction.data,
     safeTxHash,
-    senderAddress: process.env.PROPOSER_PUBLIC_KEY,
+    senderAddress: process.env.SIGNER_PUBLIC_KEY,
     senderSignature: senderSignature.data,
     origin: JSON.stringify(origin),
   });
@@ -184,13 +182,14 @@ export function getConfigFile(): string {
 
 /**
  * Returns the admin public key
- * Defaults to local forge test account #0 if `ADMIN_PUBLIC_KEY` env var not set
+ * Defaults to local forge test account #0 if `MULTISIG_PUBLIC_KEY` env var not set
  * @returns
  */
 export async function getAdmin(): Promise<string> {
   if (DEPLOYMENT === "local") return (await getOutputData()).roles.admin;
   return (
-    process.env.ADMIN_PUBLIC_KEY || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    process.env.MULTISIG_PUBLIC_KEY ||
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   );
 }
 
