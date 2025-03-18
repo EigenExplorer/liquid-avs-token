@@ -1,0 +1,10 @@
+{
+  "coingecko_mappings": {
+    "steth": "staked-ether",
+    "reth": "rocket-pool-eth"
+  },
+  "binance_mappings": {
+    "steth": "STETHETH",
+    "reth": "RETHETH"
+  }
+}
