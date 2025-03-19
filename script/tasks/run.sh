@@ -30,7 +30,7 @@
 #  5. LTM_UndelegateNodes
 
 # Task files not tested:
-# 1. TRO_UpdatePrices (consider using these tasks in price-updater v2)
+#  1. TRO_UpdatePrices (consider using these tasks in price-updater v2)
 
 # Instructions:
 # To load env file: source .env
