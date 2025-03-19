@@ -15,5 +15,11 @@ export const protocolKitOwnerPauser = await Safe.init({
 });
 
 export const apiKit = new SafeApiKit({
+  ...(BigInt(getChain().id) === 17000n
+    ? {
+        txServiceUrl:
+          "https://transaction-holesky.holesky-safe.protofire.io/api",
+      }
+    : {}),
   chainId: BigInt(getChain().id),
 });
