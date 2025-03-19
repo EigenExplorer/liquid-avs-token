@@ -220,7 +220,7 @@ export async function getOutputData() {
         output.contractDeployments.proxy.liquidTokenManager.address
       ),
       stakeNodeCoordinator: String(
-        output.contractDeployments.proxy.stakeNodeCoordinator.address
+        output.contractDeployments.proxy.stakerNodeCoordinator.address
       ),
       roles: output.roles,
     };

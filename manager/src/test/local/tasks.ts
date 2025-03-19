@@ -334,10 +334,6 @@ function compareTxData(
   expectedTxData: `0x${string}`,
   abi: Abi
 ): boolean {
-  console.log("Comparing actual: ");
-  console.log(actualTxData);
-  console.log("against expected: ");
-  console.log(expectedTxData);
   if (actualTxData === expectedTxData) {
     return true;
   }
