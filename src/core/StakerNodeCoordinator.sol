@@ -78,6 +78,7 @@ contract StakerNodeCoordinator is
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         maxNodes = init.maxNodes;
+        _registerStakerNodeImplementation(init.stakerNodeImplementation);
     }
 
     /// @notice Creates a new staker node
@@ -132,12 +133,10 @@ contract StakerNodeCoordinator is
     /// @notice Registers the initial staker node implementation
     /// @param _implementationContract Address of the implementation contract
     /// @dev Can only be called once by an account with DEFAULT_ADMIN_ROLE
-    function registerStakerNodeImplementation(
+    function _registerStakerNodeImplementation(
         address _implementationContract
     )
-        public
-        override
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        internal
         notZeroAddress(_implementationContract)
     {
         if (address(upgradeableBeacon) != address(0)) {

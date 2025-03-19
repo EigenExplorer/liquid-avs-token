@@ -1,0 +1,30 @@
+{
+  "name": "manager",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx watch --clear-screen=false ./src/index.ts",
+    "create-staker-nodes": "tsx ./src/manual/createStakerNodes.ts",
+    "delegate-nodes": "tsx ./src/manual/delegateNodes.ts",
+    "stake-assets-to-nodes": "tsx ./src/manual/stakeAssetsToNodes.ts",
+    "stake-assets-to-node": "tsx ./src/manual/stakeAssetsToNode.ts",
+    "undelegate-nodes": "tsx ./src/manual/undelegateNodes.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.2",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3"
+  },
+  "dependencies": {
+    "@openzeppelin/defender-sdk": "^2.2.0",
+    "@safe-global/api-kit": "^3.0.0",
+    "@safe-global/protocol-kit": "^6.0.0",
+    "@safe-global/types-kit": "^2.0.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "viem": "^2.9.21"
+  }
+}

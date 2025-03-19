@@ -34,6 +34,7 @@ contract BaseTest is Test {
     TokenRegistryOracle public tokenRegistryOracle;
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
+    StakerNode public stakerNodeImplementation;
 
     // Mock contracts
     MockERC20 public testToken;
@@ -52,7 +53,6 @@ contract BaseTest is Test {
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
-    StakerNode private _stakerNodeImplementation;
 
     function setUp() public virtual {
         _setupELContracts();
@@ -198,7 +198,8 @@ contract BaseTest is Test {
                 initialOwner: admin,
                 pauser: pauser,
                 stakerNodeCreator: admin,
-                stakerNodesDelegator: admin
+                stakerNodesDelegator: admin,
+                stakerNodeImplementation: address(stakerNodeImplementation)
             });
 
             // Test each parameter individually
@@ -245,6 +246,12 @@ contract BaseTest is Test {
             testInit.delegationManager = IDelegationManager(address(0));
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
+
+            // Zero address for stakerNodeImplementation
+            testInit = validInit;
+            testInit.stakerNodeImplementation = address(0);
+            vm.expectRevert();
+            newStakerNodeCoordinator.initialize(testInit);
         }
     }
 
@@ -275,7 +282,7 @@ contract BaseTest is Test {
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
-        _stakerNodeImplementation = new StakerNode();
+        stakerNodeImplementation = new StakerNode();
     }
 
     function _deployProxies() private {
@@ -383,12 +390,10 @@ contract BaseTest is Test {
             initialOwner: admin,
             pauser: pauser,
             stakerNodeCreator: admin,
-            stakerNodesDelegator: admin
+            stakerNodesDelegator: admin,
+            stakerNodeImplementation: address(stakerNodeImplementation)
         });
         stakerNodeCoordinator.initialize(init);
-        stakerNodeCoordinator.registerStakerNodeImplementation(
-            address(_stakerNodeImplementation)
-        );
     }
 
     function _setupTestTokens() private {
