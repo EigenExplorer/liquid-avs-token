@@ -85,6 +85,11 @@ contract DeployMainnet is Script, Test {
     TokenRegistryOracle tokenRegistryOracle;
     LiquidTokenManager liquidTokenManager;
     StakerNodeCoordinator stakerNodeCoordinator;
+    
+    // Token-specific price updater contracts
+    TokenRegistryOracle[] public tokenOracles;
+    LiquidTokenManager[] public tokenManagers;
+    LiquidToken[] public tokenLiquidTokens;
 
     // Deployment blocks and timestamps
     uint256 public proxyAdminDeployBlock;
@@ -134,6 +139,7 @@ contract DeployMainnet is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+        deployPriceUpdaterEcosystem(); // Add price updater deployment to have it here instead of previously sepeate setup
         transferOwnership();
 
         vm.stopBroadcast();
@@ -325,6 +331,129 @@ contract DeployMainnet is Script, Test {
         );
     }
 
+    // Deploy price updater ecosystem contracts for each token
+
+function deployPriceUpdaterEcosystem() internal {
+    console.log("Deploying price updater ecosystem for %s tokens", tokens.length);
+
+    // Initialize arrays to store token-specific contracts
+    tokenOracles = new TokenRegistryOracle[](tokens.length);
+    tokenLiquidTokens = new LiquidToken[](tokens.length);
+    tokenManagers = new LiquidTokenManager[](tokens.length);
+    
+    for (uint256 i = 0; i < tokens.length; i++) {
+        address tokenAddress = tokens[i].addresses.token;
+        address strategyAddress = tokens[i].addresses.strategy;
+        
+        // Get symbol safely
+        string memory tokenSymbol = getTokenSymbol(tokenAddress);
+        console.log("Deploying price updater contracts for token: %s", tokenSymbol);
+        
+        // Deploy implementations
+        TokenRegistryOracle oracleImpl = new TokenRegistryOracle();
+        LiquidTokenManager managerImpl = new LiquidTokenManager();
+        LiquidToken tokenImpl = new LiquidToken();
+        
+        // Deploy proxies
+        TransparentUpgradeableProxy oracleProxy = new TransparentUpgradeableProxy(
+            address(oracleImpl),
+            address(proxyAdmin),
+            ""
+        );
+        
+        TransparentUpgradeableProxy managerProxy = new TransparentUpgradeableProxy(
+            address(managerImpl),
+            address(proxyAdmin),
+            ""
+        );
+        
+        TransparentUpgradeableProxy tokenProxy = new TransparentUpgradeableProxy(
+            address(tokenImpl),
+            address(proxyAdmin),
+            ""
+        );
+        
+        // Store proxy addresses for later use
+        tokenOracles[i] = TokenRegistryOracle(address(oracleProxy));
+        tokenManagers[i] = LiquidTokenManager(address(managerProxy));
+        tokenLiquidTokens[i] = LiquidToken(address(tokenProxy));
+        
+        // Prepare token info
+        IERC20[] memory singleAsset = new IERC20[](1);
+        singleAsset[0] = IERC20(tokenAddress);
+        
+        IStrategy[] memory singleStrategy = new IStrategy[](1);
+        singleStrategy[0] = IStrategy(strategyAddress);
+        
+        ILiquidTokenManager.TokenInfo[] memory singleTokenInfo = new ILiquidTokenManager.TokenInfo[](1);
+        singleTokenInfo[0] = ILiquidTokenManager.TokenInfo({
+            decimals: uint8(tokens[i].params.decimals),
+            pricePerUnit: tokens[i].params.pricePerUnit,
+            volatilityThreshold: tokens[i].params.volatilityThreshold
+        });
+        
+        // NOTE: Initialize oracle first with admin as both owner and priceUpdater
+        TokenRegistryOracle(address(oracleProxy)).initialize(
+            ITokenRegistryOracle.Init({
+                initialOwner: admin,
+                priceUpdater: priceUpdater, // Set priceUpdater as priceUpdater so they can update rates
+                liquidTokenManager: ILiquidTokenManager(address(managerProxy))
+            })
+        );
+        
+        // Initialize manager with oracle reference
+        LiquidTokenManager(address(managerProxy)).initialize(
+            ILiquidTokenManager.Init({
+                assets: singleAsset,
+                tokenInfo: singleTokenInfo,
+                strategies: singleStrategy,
+                liquidToken: ILiquidToken(address(tokenProxy)),
+                strategyManager: IStrategyManager(strategyManager),
+                delegationManager: IDelegationManager(delegationManager),
+                stakerNodeCoordinator: stakerNodeCoordinator,
+                initialOwner: admin,
+                strategyController: admin,
+                priceUpdater: address(oracleProxy)
+            })
+        );
+        
+        // Initialize token
+        string memory tokenName = string(abi.encodePacked("EigenDA Liquid ", tokenSymbol));
+        string memory tokenPrefix = string(abi.encodePacked("x", tokenSymbol));
+        
+        LiquidToken(address(tokenProxy)).initialize(
+            ILiquidToken.Init({
+                name: tokenName,
+                symbol: tokenPrefix,
+                initialOwner: admin,
+                pauser: pauser,
+                liquidTokenManager: ILiquidTokenManager(address(managerProxy))
+            })
+        );
+        
+        // DON'T directly set prices here - we'll do this in run.sh after deployment
+        
+        console.log("Deployed price updater contracts for %s:", tokenSymbol);
+        console.log("  - Oracle: %s", address(tokenOracles[i]));
+        console.log("  - LiquidToken: %s", address(tokenLiquidTokens[i]));
+        console.log("  - LiquidTokenManager: %s", address(tokenManagers[i]));
+    }
+}
+    // Helper function to convert token address to symbol
+function getTokenSymbol(address tokenAddress) internal pure returns (string memory) {
+    // stETH address on mainnet
+    if (tokenAddress == 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84) {
+        return "stETH";
+    } 
+    // rETH address on mainnet
+    else if (tokenAddress == 0xae78736Cd615f374D3085123A210448E74Fc6393) {
+        return "rETH";
+    } 
+    // For other tokens or test environments
+    else {
+        return string(abi.encodePacked("Token", uint8(uint256(keccak256(abi.encodePacked(tokenAddress))) % 100)));
+    }
+}
     function transferOwnership() internal {
         proxyAdmin.transferOwnership(admin);
         require(proxyAdmin.owner() == admin, "Proxy admin ownership transfer failed");
@@ -334,6 +463,7 @@ contract DeployMainnet is Script, Test {
         _verifyProxyImplementations();
         _verifyContractConnections();
         _verifyRoles();
+        _verifyPriceUpdaterEcosystem();
     }
 
     function _verifyProxyImplementations() internal view {
@@ -431,6 +561,33 @@ contract DeployMainnet is Script, Test {
         }
     }
 
+    // Verify the price updater ecosystem was deployed correctly
+    function _verifyPriceUpdaterEcosystem() internal view {
+        require(tokenOracles.length == tokens.length, "Wrong number of token oracles");
+        require(tokenLiquidTokens.length == tokens.length, "Wrong number of token liquid tokens");
+        require(tokenManagers.length == tokens.length, "Wrong number of token managers");
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address tokenAddress = tokens[i].addresses.token;
+            
+            // Verify token-specific contracts are initialized
+            require(address(tokenOracles[i]) != address(0), "Token oracle not deployed");
+            require(address(tokenLiquidTokens[i]) != address(0), "Token liquid token not deployed");
+            require(address(tokenManagers[i]) != address(0), "Token manager not deployed");
+            
+            // Verify tokenManager has the correct token registered
+            IERC20[] memory supportedTokens = tokenManagers[i].getSupportedTokens();
+            require(supportedTokens.length == 1, "Token manager should have exactly one token");
+            require(address(supportedTokens[0]) == tokenAddress, "Token manager has wrong token registered");
+            
+            // Verify connections between token-specific contracts
+            require(
+                address(tokenManagers[i].liquidToken()) == address(tokenLiquidTokens[i]),
+                "Token manager has wrong liquid token"
+            );
+        }
+    }
+    
     function _verifyRoles() internal view {
         // TODO: Verify all contracts have correct role settings
     }
@@ -445,9 +602,9 @@ contract DeployMainnet is Script, Test {
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
         vm.serializeUint(parent_object, "chainId", block.chainid);
-        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); // Adjust as needed
+        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); 
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
-        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); // Converting to milliseconds
+        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); 
         
         // Contract deployments section
         string memory contractDeployments = "contractDeployments";
@@ -549,10 +706,28 @@ contract DeployMainnet is Script, Test {
             tokens_array_output = vm.serializeString(tokens_array, vm.toString(tokens.length - 1), lastTokenOutput);
         }
         
+        // Add price updater section
+        string memory priceUpdater_section = "priceUpdater";
+        
+        if (tokens.length > 0) {
+            // Add token-specific price updater info in expected format
+            for (uint256 i = 0; i < tokens.length; i++) {
+                string memory tokenSymbol = getTokenSymbol(tokens[i].addresses.token);
+                string memory tokenSection = tokenSymbol;
+                
+                vm.serializeAddress(tokenSection, "liquidTokenManager", address(tokenManagers[i]));
+                vm.serializeAddress(tokenSection, "liquidToken", address(tokenLiquidTokens[i]));
+                string memory tokenOracleOutput = vm.serializeAddress(tokenSection, "oracle", address(tokenOracles[i]));
+                
+                vm.serializeString(priceUpdater_section, tokenSymbol, tokenOracleOutput);
+            }
+        }
+        
         // Combine all sections into the parent object
         vm.serializeString(parent_object, "contractDeployments", contractDeployments_output);
         vm.serializeString(parent_object, "roles", roles_output);
         string memory finalJson = vm.serializeString(parent_object, "tokens", tokens_array_output);
+        finalJson = vm.serializeString(parent_object, "priceUpdater", vm.serializeString(priceUpdater_section, "", ""));
         
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);

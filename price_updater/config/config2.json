@@ -1,0 +1,32 @@
+{
+  "web3": {
+    "provider_uri": "http://localhost:8545"
+  },
+  "contracts": {
+    "oracle_address": "0x1679274F3c7f78a146018237ce15dBb025B92915",
+    "oracle_abi_path": "ABIs/oracleABI.json",
+    "manager_address": "0xcA0e3d30a67D6298dEf2Bd4813e078c9013a32e8",
+    "manager_abi_path": "ABIs/managerABI.json"
+  },
+  "price_providers": {
+    "coingecko": {
+      "enabled": true,
+      "base_url": "https://api.coingecko.com/api/v3"
+    },
+    "coinmarketcap": {
+      "enabled": false,
+      "base_url": "https://pro-api.coinmarketcap.com",
+      "api_key": ""
+    },
+    "binance": {
+      "enabled": true,
+      "base_url": "https://api.binance.com/api/v3"
+    }
+  },
+  "token_mappings": {
+    "0x9d8f095F2e145BE0dFCb73aC6bDD4A9900A76674": "TKB"
+  },
+  "update_interval_minutes": 720,
+  "volatility_threshold_bypass": false,
+  "individual_updates_on_batch_failure": true
+}
