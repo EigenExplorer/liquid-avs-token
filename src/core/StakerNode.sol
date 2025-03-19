@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
@@ -90,7 +90,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @param approverSalt Salt used in the signature
     function delegate(
         address operator,
-        ISignatureUtils.SignatureWithExpiry memory signature,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
         bytes32 approverSalt
     ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
         if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);

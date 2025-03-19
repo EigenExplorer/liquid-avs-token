@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
@@ -10,7 +10,7 @@ import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
@@ -422,7 +422,7 @@ contract LiquidTokenManager is
      function delegateNodes(
          uint256[] memory nodeIds,
          address[] memory operators,
-         ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+         ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
          bytes32[] calldata approverSalts
      ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
          uint256 arrayLength = nodeIds.length;

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
@@ -23,7 +23,7 @@ contract DelegateNodes is Script, Test {
       string memory configFileName,
       uint256[] memory nodeIds,
       address[] memory operators,
-      ISignatureUtils.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+      ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
       bytes32[] calldata approverSalts
     ) public {
         string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
@@ -33,14 +33,14 @@ contract DelegateNodes is Script, Test {
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 
         // Create default signatures and salts if empty arrays are provided
-        ISignatureUtils.SignatureWithExpiry[] memory signatures;
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[] memory signatures;
         bytes32[] memory salts;
 
         if (approverSignatureAndExpiries.length == 0 || approverSalts.length == 0) {
-            signatures = new ISignatureUtils.SignatureWithExpiry[](nodeIds.length);
+            signatures = new ISignatureUtilsMixinTypes.SignatureWithExpiry[](nodeIds.length);
             salts = new bytes32[](nodeIds.length);
             for (uint256 i = 0; i < nodeIds.length; i++) {
-                signatures[i] = ISignatureUtils.SignatureWithExpiry({
+                signatures[i] = ISignatureUtilsMixinTypes.SignatureWithExpiry({
                     signature: new bytes(0),
                     expiry: type(uint256).max
                 });

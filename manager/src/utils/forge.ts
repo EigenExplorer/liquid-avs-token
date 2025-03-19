@@ -188,6 +188,7 @@ export function getConfigFile(): string {
 /**
  * Returns the admin public key
  * Defaults to local forge test account #0 if `MULTISIG_PUBLIC_KEY` env var not set
+ *
  * @returns
  */
 export async function getAdmin(): Promise<string> {
@@ -221,6 +222,7 @@ export async function getOutputData() {
       stakeNodeCoordinator: String(
         output.contractDeployments.proxy.stakeNodeCoordinator.address
       ),
+      roles: output.roles,
     };
   }
 
