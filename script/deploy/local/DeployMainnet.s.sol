@@ -445,9 +445,9 @@ contract DeployMainnet is Script, Test {
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
         vm.serializeUint(parent_object, "chainId", block.chainid);
-        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); // Adjust as needed
+        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES);
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
-        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); // Converting to milliseconds
+        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000);
         
         // Contract deployments section
         string memory contractDeployments = "contractDeployments";

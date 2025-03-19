@@ -9,8 +9,10 @@
 #  1. Deploy all LAT contracts with stETH token/strategy registered
 #  2. Restaking manager creates five staker nodes
 #  3. Restaking manager delegates nodes to an EigenLayer Operator
-#  4. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
-#  5. Restaking manager stakes the users' funds to the first three nodes
+#  4. Update token prices via price updater
+#  5. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
+#  6. Restaking manager stakes the users' funds to the first three nodes
+#  7. Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
 #  1. Three nodes are delegated, fourth and fifth are not
@@ -18,12 +20,16 @@
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
 #  5. Stakers hold no original tokens and equivalent LAT
+#  6. Each token had 2 price updates each
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes
 #  2. LTM_DelegateNodes
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
+
+# Task files not tested:
+#  1. TRO_UpdatePrices (consider using these tasks in price-updater v2)
 
 # Instructions:
 # To load env file: source .env
@@ -50,6 +56,8 @@ fi
 RPC_URL="http://127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+PRICE_UPDATER_PRIVATE_KEY="${PRICE_UPDATER_PRIVATE_KEY:-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a}"
+mkdir -p script/outputs/local
 
 # Chain configuration (replace mainnet <> holesky to switch chains)
 NETWORK_CONFIG_FILE="holesky.json"
@@ -92,6 +100,36 @@ forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" \
     -- $OUTPUT_FILE "[$NODE_IDS]" $OPERATORS "[]" "[]"
+
+# Update prices of stETH and rETH individually
+TOKEN_REGISTRY_ORACLE=$(jq -r '.contractDeployments.proxy.tokenRegistryOracle.address' $OUTPUT_PATH)
+STETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
+STETH_INITIAL_PRICE_CLEAN=$(echo $STETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+STETH_INITIAL_PRICE_ETH=$(cast --from-wei $STETH_INITIAL_PRICE_CLEAN)
+RETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
+RETH_INITIAL_PRICE_CLEAN=$(echo $RETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+RETH_INITIAL_PRICE_ETH=$(cast --from-wei $RETH_INITIAL_PRICE_CLEAN)
+NEW_STETH_PRICE="1020000000000000000"
+cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $STETH_TOKEN $NEW_STETH_PRICE
+NEW_RETH_PRICE="1070000000000000000"
+cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $RETH_TOKEN $NEW_RETH_PRICE
+STETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
+STETH_UPDATED_PRICE_1_CLEAN=$(echo $STETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+STETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_1_CLEAN)
+RETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
+RETH_UPDATED_PRICE_1_CLEAN=$(echo $RETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+RETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_1_CLEAN)
+
+# Update prices of stETH and rETH in a single transaction
+NEW_STETH_PRICE_2="1030000000000000000"
+NEW_RETH_PRICE_2="1080000000000000000"
+cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "batchUpdateRates(address[],uint256[])" "[$STETH_TOKEN,$RETH_TOKEN]" "[$NEW_STETH_PRICE_2,$NEW_RETH_PRICE_2]"
+STETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
+STETH_UPDATED_PRICE_2_CLEAN=$(echo $STETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+STETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_2_CLEAN)
+RETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
+RETH_UPDATED_PRICE_2_CLEAN=$(echo $RETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
+RETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_2_CLEAN)
 
 # Create two test users to play the role of staker
 TEST_USER_1_PRIVATE_KEY="${TEST_USER_1_PRIVATE_KEY:-0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6}"
@@ -148,7 +186,6 @@ forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256[])" \
     -- $OUTPUT_FILE "[$NODE_4,$NODE_5]"
-
 
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
@@ -247,4 +284,8 @@ echo "Staker 1 LAT balance: $STAKER_1_LAT_BALANCE"
 echo "Staker 2 stETH balance change: $STAKER_2_STETH_BALANCE_CHANGE"
 echo "Staker 2 rETH balance change: $STAKER_2_RETH_BALANCE_CHANGE"
 echo "Staker 2 LAT balance: $STAKER_2_LAT_BALANCE"
+echo 
+echo "6. Each token had 2 price updates each"
+echo "stETH: $STETH_INITIAL_PRICE_ETH → $STETH_UPDATED_PRICE_1_ETH → $STETH_UPDATED_PRICE_2_ETH ETH"
+echo "rETH:  $RETH_INITIAL_PRICE_ETH → $RETH_UPDATED_PRICE_1_ETH → $RETH_UPDATED_PRICE_2_ETH ETH"
 echo "------------------------------------------------------------------"
