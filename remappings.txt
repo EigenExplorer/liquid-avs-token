@@ -1,4 +1,5 @@
 @eigenlayer/=lib/eigenlayer-contracts/src/
 @openzeppelin/=lib/openzeppelin-contracts/
 lib/eigenlayer-contracts/src/contracts/libraries/SlashingLib.sol:@openzeppelin/contracts/utils/math/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/utils/math/
+lib/eigenlayer-contracts/src/contracts/libraries/SlashingLib.sol:@openzeppelin-upgrades/contracts/utils/math/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/contracts/utils/math/
 @openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/
