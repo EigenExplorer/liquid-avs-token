@@ -20,7 +20,7 @@
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
 #  5. Stakers hold no original tokens and equivalent LAT
-#  6. Price updater ecosystem is properly configured
+#  6. Each token had 2 price updates each
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes
@@ -28,7 +28,9 @@
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
 #  5. LTM_UndelegateNodes
-#  6. TRO_UpdatePrices.s.sol
+
+# Task files not tested:
+# 1. TRO_UpdatePrices (consider using these tasks in price-updater v2)
 
 # Instructions:
 # To load env file: source .env
@@ -55,6 +57,7 @@ fi
 RPC_URL="http://127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+PRICE_UPDATER_PRIVATE_KEY="${PRICE_UPDATER_PRIVATE_KEY:-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a}"
 OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
 
 #-----------------------------------------------------------------------------------------------------
@@ -95,121 +98,35 @@ forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" \
     -- "/local/mainnet_deployment_data.json" "[$NODE_IDS]" $OPERATORS "[]" "[]"
 
-#-----------------------------------------------------------------------------------------------------
-# PRICE UPDATER INTEGRATION
-#-----------------------------------------------------------------------------------------------------
-echo "========== PRICE UPDATER INTEGRATION ==========" 
-
-# Extract the main token registry oracle address
-echo "Extracting token registry oracle address from deployment data..."
+# Update prices of stETH and rETH individually
 TOKEN_REGISTRY_ORACLE=$(jq -r '.contractDeployments.proxy.tokenRegistryOracle.address' $OUTPUT_PATH_MAINNET)
-echo "Found token registry oracle address: $TOKEN_REGISTRY_ORACLE"
-
-# Set up a dedicated price updater
-PRICE_UPDATER_PRIVATE_KEY="${PRICE_UPDATER_PRIVATE_KEY:-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a}"
-PRICE_UPDATER_ADDRESS=$(cast wallet address --private-key $PRICE_UPDATER_PRIVATE_KEY)
-echo "Using price updater with address: $PRICE_UPDATER_ADDRESS"
-
-# Verify oracle exists
-if ! cast code $TOKEN_REGISTRY_ORACLE &>/dev/null || [ "$(cast code $TOKEN_REGISTRY_ORACLE)" = "0x" ]; then
-    echo "❌ Token Registry Oracle has no code at $TOKEN_REGISTRY_ORACLE"
-    exit 1
-fi
-echo "✅ Token Registry Oracle verified at $TOKEN_REGISTRY_ORACLE"
-
-# Create mappings.json for token exchange IDs (essential for price updater)
-echo "Creating price feed mappings..."
-mkdir -p price_updater/src
-cat > price_updater/src/mappings.json << EOL
-{
-  "coingecko_mappings": {
-    "steth": "staked-ether",
-    "reth": "rocket-pool-eth"
-  },
-  "binance_mappings": {
-    "steth": "STETHETH",
-    "reth": "RETHETH"
-  }
-}
-EOL
-
-# Extract token registry oracle and liquid token manager addresses for verification
-echo "Extracting contract addresses for verification..."
-TOKEN_REGISTRY_ORACLE=$(jq -r '.contractDeployments.proxy.tokenRegistryOracle.address' $OUTPUT_PATH_MAINNET)
-LIQUID_TOKEN_MANAGER=$(jq -r '.contractDeployments.proxy.liquidTokenManager.address' $OUTPUT_PATH_MAINNET)
-echo "Found token registry oracle address: $TOKEN_REGISTRY_ORACLE"
-echo "Found liquid token manager address: $LIQUID_TOKEN_MANAGER"
-
-# Verify that the deployment data contains the necessary token information
-TOKEN_COUNT=$(jq '.tokens | length' $OUTPUT_PATH_MAINNET)
-echo "Found $TOKEN_COUNT tokens in deployment data"
-
-# Note: We no longer need to create a compatibility layer JSON since the price_updater
-# has been updated to work directly with the deployment data structure from DeployMainnet.s.sol
-
-# Test Price Updates
-echo "\n========== TESTING PRICE UPDATER INTEGRATION ==========" 
-
-# Get initial token prices
 STETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_INITIAL_PRICE_CLEAN=$(echo $STETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 STETH_INITIAL_PRICE_ETH=$(cast --from-wei $STETH_INITIAL_PRICE_CLEAN)
-
 RETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
 RETH_INITIAL_PRICE_CLEAN=$(echo $RETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 RETH_INITIAL_PRICE_ETH=$(cast --from-wei $RETH_INITIAL_PRICE_CLEAN)
-
-echo "Initial token prices:"
-echo "  stETH initial price: $STETH_INITIAL_PRICE_ETH ETH"
-echo "  rETH initial price: $RETH_INITIAL_PRICE_ETH ETH"
-
-# First update: individual updates
-echo "Performing first price update (individual updates)..."
-
-# Update stETH price to 1.02 ETH
 NEW_STETH_PRICE="1020000000000000000"
-echo "Setting stETH price to 1.02 ETH"
 cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $STETH_TOKEN $NEW_STETH_PRICE
-
-# Update rETH price to 1.07 ETH
 NEW_RETH_PRICE="1070000000000000000"
-echo "Setting rETH price to 1.07 ETH"
 cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $RETH_TOKEN $NEW_RETH_PRICE
-
-# Verify first price update
 STETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_UPDATED_PRICE_1_CLEAN=$(echo $STETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 STETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_1_CLEAN)
-
 RETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
 RETH_UPDATED_PRICE_1_CLEAN=$(echo $RETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 RETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_1_CLEAN)
 
-echo "Prices after first update:"
-echo "  stETH price: $STETH_UPDATED_PRICE_1_ETH ETH"
-echo "  rETH price: $RETH_UPDATED_PRICE_1_ETH ETH"
-
-# Second update: batch update
-echo "Performing second price update (batch update)..."
-
-# Update both prices in a single transaction
-NEW_STETH_PRICE_2="1030000000000000000" # 1.03 ETH
-NEW_RETH_PRICE_2="1080000000000000000" # 1.08 ETH
-echo "Setting stETH price to 1.03 ETH and rETH price to 1.08 ETH via batch update"
+# Update prices of stETH and rETH in a single transaction
+NEW_STETH_PRICE_2="1030000000000000000"
+NEW_RETH_PRICE_2="1080000000000000000"
 cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "batchUpdateRates(address[],uint256[])" "[$STETH_TOKEN,$RETH_TOKEN]" "[$NEW_STETH_PRICE_2,$NEW_RETH_PRICE_2]"
-
-# Verify second price update
 STETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_UPDATED_PRICE_2_CLEAN=$(echo $STETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 STETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_2_CLEAN)
-
 RETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
 RETH_UPDATED_PRICE_2_CLEAN=$(echo $RETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 RETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_2_CLEAN)
-
-echo "Prices after second update (batch):"
-echo "  stETH price: $STETH_UPDATED_PRICE_2_ETH ETH"
-echo "  rETH price: $RETH_UPDATED_PRICE_2_ETH ETH"
 
 # Store these values for verification output
 STETH_INITIAL_PRICE_FOR_VERIFY=$STETH_INITIAL_PRICE_ETH
@@ -218,12 +135,6 @@ STETH_PRICE_AFTER_FIRST_UPDATE=$STETH_UPDATED_PRICE_1_ETH
 RETH_PRICE_AFTER_FIRST_UPDATE=$RETH_UPDATED_PRICE_1_ETH
 STETH_PRICE_AFTER_SECOND_UPDATE=$STETH_UPDATED_PRICE_2_ETH
 RETH_PRICE_AFTER_SECOND_UPDATE=$RETH_UPDATED_PRICE_2_ETH
-
-#-----------------------------------------------------------------------------------------------------
-# STAKER NODE CONFIGURATION
-#-----------------------------------------------------------------------------------------------------
-
-echo "\n========== STAKER NODE CONFIGURATION ==========" 
 
 # Create two test users to play the role of staker
 TEST_USER_1_PRIVATE_KEY="${TEST_USER_1_PRIVATE_KEY:-0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6}"
@@ -380,32 +291,7 @@ echo "Staker 2 stETH balance change: $STAKER_2_STETH_BALANCE_CHANGE"
 echo "Staker 2 rETH balance change: $STAKER_2_RETH_BALANCE_CHANGE"
 echo "Staker 2 LAT balance: $STAKER_2_LAT_BALANCE"
 echo 
-echo "6. Price Updater Outcome Verification"
-
-# Verify directly from the contract again to ensure outcome persistence
-FINAL_STETH_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
-FINAL_STETH_PRICE_CLEAN=$(echo $FINAL_STETH_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-FINAL_STETH_PRICE_ETH=$(cast --from-wei $FINAL_STETH_PRICE_CLEAN)
-
-FINAL_RETH_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
-FINAL_RETH_PRICE_CLEAN=$(echo $FINAL_RETH_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-FINAL_RETH_PRICE_ETH=$(cast --from-wei $FINAL_RETH_PRICE_CLEAN)
-
-echo "Price Update History:"
-echo "  stETH: $STETH_INITIAL_PRICE_FOR_VERIFY → $STETH_PRICE_AFTER_FIRST_UPDATE → $STETH_PRICE_AFTER_SECOND_UPDATE ETH"
-echo "  rETH:  $RETH_INITIAL_PRICE_FOR_VERIFY → $RETH_PRICE_AFTER_FIRST_UPDATE → $RETH_PRICE_AFTER_SECOND_UPDATE ETH"
-echo ""
-echo "Outcome Verification:"
-echo "  Final stETH price on contract: $FINAL_STETH_PRICE_ETH ETH"
-echo "  Final rETH price on contract: $FINAL_RETH_PRICE_ETH ETH"
-echo ""
-
-# Check if final values match expected values
-if [[ "$FINAL_STETH_PRICE_ETH" == "$STETH_PRICE_AFTER_SECOND_UPDATE" && "$FINAL_RETH_PRICE_ETH" == "$RETH_PRICE_AFTER_SECOND_UPDATE" ]]; then
-    echo "✅ SUCCESS: Contract prices match expected values after transaction"
-else
-    echo "⚠️ WARNING: Contract prices don't match expected values after transaction"
-    echo "  stETH: Expected $STETH_PRICE_AFTER_SECOND_UPDATE, Got $FINAL_STETH_PRICE_ETH"
-    echo "  rETH: Expected $RETH_PRICE_AFTER_SECOND_UPDATE, Got $FINAL_RETH_PRICE_ETH"
-fi
+echo "6. Each token had 2 price updates each"
+echo "stETH: $STETH_INITIAL_PRICE_ETH → $STETH_UPDATED_PRICE_1_ETH → $STETH_UPDATED_PRICE_2_ETH ETH"
+echo "rETH:  $RETH_INITIAL_PRICE_ETH → $RETH_UPDATED_PRICE_1_ETH → $RETH_UPDATED_PRICE_2_ETH ETH"
 echo "------------------------------------------------------------------"
