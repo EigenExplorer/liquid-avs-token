@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import "forge-std/Test.sol";
 import {BaseTest} from "./common/BaseTest.sol";
@@ -14,7 +14,7 @@ import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
@@ -31,47 +31,16 @@ contract LiquidTokenManagerTest is BaseTest {
     
     // Add a helper function to safely handle contract interactions on Holesky
     function _safeRegisterOperator(address operator) internal {
-        if (_isHoleskyTestnet()) {
-            // On Holesky, we'll try multiple approaches and ignore failures
-            // Use only low-level call for Holesky to avoid interface mismatch
-            (bool success,) = address(delegationManager).call(
-                abi.encodeWithSignature("registerAsOperator(address,uint32,string)", address(0), 0, "")
-            );
-            // Ignore failure - the test might still work if operator is already registered
-        } else {
-            // On mainnet, use the standard approach with the correct interface
-            try delegationManager.registerAsOperator(
-                IDelegationManager.OperatorDetails({
-                    __deprecated_earningsReceiver: operator,
-                    delegationApprover: address(0),
-                    stakerOptOutWindowBlocks: 1
-                }),
-                "ipfs://"
-            ) {} catch {
-                // If direct call fails, try low-level call as fallback
-                (bool success,) = address(delegationManager).call(
-                    abi.encodeWithSignature("registerAsOperator((address,address,uint32),string)",
-                        IDelegationManager.OperatorDetails({
-                            __deprecated_earningsReceiver: operator,
-                            delegationApprover: address(0),
-                            stakerOptOutWindowBlocks: 1
-                        }),
-                        "ipfs://"
-                    )
-                );
-                require(success, "registerAsOperator failed");
-            }
+        vm.prank(operator);
+        delegationManager.registerAsOperator(
+            address(0),
+            1,
+            "ipfs://"
+        );
         }
-    }
 
     function setUp() public override {
         super.setUp();
-
-        // Skip certain operations on Holesky to avoid storage access errors
-        if (_isHoleskyTestnet()) {
-            // Create a minimal setup for Holesky tests
-            return;
-        }
 
         // Create a staker node for testing
         vm.prank(admin);
@@ -97,17 +66,14 @@ contract LiquidTokenManagerTest is BaseTest {
         _safeRegisterOperator(operatorAddress);
 
         // Strategy whitelist
-        ISignatureUtils.SignatureWithExpiry memory signature;
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature;
         IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
-        bool[] memory thirdPartyTransfersForbiddenValues = new bool[](1);
 
         strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
-        thirdPartyTransfersForbiddenValues[0] = false;
 
         vm.prank(strategyManager.strategyWhitelister());
         strategyManager.addStrategiesToDepositWhitelist(
-            strategiesToWhitelist,
-            thirdPartyTransfersForbiddenValues
+            strategiesToWhitelist
         );
 
         // Check if operator is registered before trying to delegate
@@ -135,22 +101,16 @@ contract LiquidTokenManagerTest is BaseTest {
                 block.timestamp, block.prevrandao, nodeId
             )))));
             
-            vm.prank(testOperator);
             _safeRegisterOperator(testOperator);
             
             // Delegate the node
             vm.prank(admin);
-            ISignatureUtils.SignatureWithExpiry memory emptySig;
+            ISignatureUtilsMixinTypes.SignatureWithExpiry memory emptySig;
             node.delegate(testOperator, emptySig, bytes32(0));
         }
     }
 
     function testInitialize() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         assertEq(
             address(liquidTokenManager.liquidToken()),
             address(liquidToken)
@@ -446,11 +406,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testRemoveTokenFailsIfNodeHasShares() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -481,11 +436,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testRemoveTokenFailsIfNonZeroQueuedAssetBalance() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -526,11 +476,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testStakeAssetsToNode() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -585,12 +530,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
     }
 
-    function testInvalidStakingAmount() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
+    function testInvalidStakingAmount() public {        
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
@@ -603,11 +543,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testGetStakedAssetBalanceInvalidNodeId() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -814,11 +749,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testQueuedAssetBalancesUpdateAfterWithdrawalRequest() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -859,11 +789,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testQueuedWithdrawalsDoNotInflateShares() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -905,11 +830,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testFulfillWithdrawal() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -992,11 +912,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testFulfillWithdrawalFailsForInsufficientBalance() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
         
@@ -1040,17 +955,11 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testCannotDelegateDelegatedNode() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
             block.timestamp + 1,  // Different from setUp() operator
             block.prevrandao
         )))));
 
-        vm.prank(testOperator);
         _safeRegisterOperator(testOperator);
 
         address currentOperator = stakerNode.getOperatorDelegation();
@@ -1058,7 +967,7 @@ contract LiquidTokenManagerTest is BaseTest {
         // If the node is not already delegated, delegate it first
         if (currentOperator == address(0)) {
             vm.prank(admin);
-            ISignatureUtils.SignatureWithExpiry memory emptySig;
+            ISignatureUtilsMixinTypes.SignatureWithExpiry memory emptySig;
             stakerNode.delegate(testOperator, emptySig, bytes32(0));
             currentOperator = testOperator;
         }
@@ -1066,7 +975,7 @@ contract LiquidTokenManagerTest is BaseTest {
         assertTrue(currentOperator != address(0), "Node should be delegated");
 
         vm.prank(admin);
-        ISignatureUtils.SignatureWithExpiry memory signature;
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature;
         vm.expectRevert(
             abi.encodeWithSelector(
                 IStakerNode.NodeIsDelegated.selector,
@@ -1077,11 +986,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testCannotUndelegateUndelegatedNode() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Make sure the node is delegated first
         address currentOperator = stakerNode.getOperatorDelegation();
         if (currentOperator == address(0)) {
@@ -1096,7 +1000,7 @@ contract LiquidTokenManagerTest is BaseTest {
             
             // Delegate the node
             vm.prank(admin);
-            ISignatureUtils.SignatureWithExpiry memory emptySig;
+            ISignatureUtilsMixinTypes.SignatureWithExpiry memory emptySig;
             stakerNode.delegate(testOperator, emptySig, bytes32(0));
         }
         
@@ -1234,12 +1138,7 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(liquidToken.totalSupply(), 0, "LiquidToken total supply not zero");
     }
 
-    function testUndelegationSecurity() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
+    function testUndelegationSecurity() public {        
         // Setup: Create and delegate a node
         vm.startPrank(admin);
         stakerNodeCoordinator.grantRole(
@@ -1280,15 +1179,11 @@ contract LiquidTokenManagerTest is BaseTest {
             block.prevrandao
         )))));
         operators[0] = testOperator;
-        
-        // Register the operator first
-        vm.prank(testOperator);
-        _safeRegisterOperator(testOperator);
-        
-        ISignatureUtils.SignatureWithExpiry memory emptySig;
+
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory emptySig;
         bytes32[] memory salts = new bytes32[](1);
         salts[0] = bytes32(0);
-        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[] memory sigs = new ISignatureUtilsMixinTypes.SignatureWithExpiry[](1);
         sigs[0] = emptySig;
 
         vm.prank(admin);
@@ -1309,11 +1204,6 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testMultipleUndelegationScenarios() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
         // Setup: Create multiple nodes and delegate them
         vm.startPrank(admin);
         stakerNodeCoordinator.grantRole(
@@ -1381,12 +1271,7 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
     }
 
-    function testShareInflationPreventionDuringUndelegation() public {
-        if (_isHoleskyTestnet()) {
-            // Skip this test on Holesky
-            return;
-        }
-        
+    function testShareInflationPreventionDuringUndelegation() public {        
         // Setup: Create and delegate a node
         vm.startPrank(admin);
         stakerNodeCoordinator.grantRole(
@@ -1430,14 +1315,10 @@ contract LiquidTokenManagerTest is BaseTest {
         )))));
         operators[0] = testOperator;
         
-        // Register the operator first
-        vm.prank(testOperator);
-        _safeRegisterOperator(testOperator);
-        
-        ISignatureUtils.SignatureWithExpiry memory emptySig;
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory emptySig;
         bytes32[] memory salts = new bytes32[](1);
         salts[0] = bytes32(0);
-        ISignatureUtils.SignatureWithExpiry[] memory sigs = new ISignatureUtils.SignatureWithExpiry[](1);
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[] memory sigs = new ISignatureUtilsMixinTypes.SignatureWithExpiry[](1);
         sigs[0] = emptySig;
 
         vm.prank(admin);

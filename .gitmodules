@@ -10,3 +10,4 @@
 [submodule "lib/eigenlayer-contracts"]
 	path = lib/eigenlayer-contracts
 	url = https://github.com/Layr-Labs/eigenlayer-contracts
+	branch = dev

@@ -11,7 +11,6 @@
 #  3. Restaking manager delegates nodes to an EigenLayer Operator
 #  4. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
 #  5. Restaking manager stakes the users' funds to the first three nodes
-#  6. Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
 #  1. Three nodes are delegated, fourth and fifth are not
@@ -25,7 +24,6 @@
 #  2. LTM_DelegateNodes
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
-#  5. LTM_UndelegateNodes
 
 # Instructions:
 # To load env file: source .env
@@ -52,32 +50,38 @@ fi
 RPC_URL="http://127.0.0.1:8545"
 DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
 ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
-OUTPUT_PATH_MAINNET="script/outputs/local/mainnet_deployment_data.json"
+
+# Chain configuration (replace mainnet <> holesky to switch chains)
+NETWORK_CONFIG_FILE="holesky.json"
+DEPLOYMENT_CONFIG_FILE="xeigenda_holesky.anvil.config.json"
+OUTPUT_PATH="script/outputs/local/holesky_deployment_data.json"
+OUTPUT_FILE="/local/holesky_deployment_data.json"
+RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb" # mainnet: "0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
+
+# Deploy contracts (replace Mainnet <> Holesky to switch chains)
+forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:DeployHolesky \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $DEPLOYER_PRIVATE_KEY \
+    --sig "run(string,string)" \
+    -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION
 #-----------------------------------------------------------------------------------------------------
 
-# Deploy contracts
-forge script --via-ir script/deploy/local/DeployMainnet.s.sol:DeployMainnet \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string,string)" \
-    -- "mainnet.json" "xeigenda_mainnet.anvil.config.json"
-
 # Extract contract addresses from deployment output
-LIQUID_TOKEN=$(jq -r '.proxyAddress' $OUTPUT_PATH_MAINNET)
-LIQUID_TOKEN_MANAGER=$(jq -r '.contractDeployments.proxy.liquidTokenManager.address' $OUTPUT_PATH_MAINNET)
-STAKER_NODE_COORDINATOR=$(jq -r '.contractDeployments.proxy.stakerNodeCoordinator.address' $OUTPUT_PATH_MAINNET)
-STETH_TOKEN=$(jq -r '.tokens["0"].address' $OUTPUT_PATH_MAINNET)
-RETH_TOKEN=$(jq -r '.tokens["1"].address' $OUTPUT_PATH_MAINNET)
+LIQUID_TOKEN=$(jq -r '.proxyAddress' $OUTPUT_PATH)
+LIQUID_TOKEN_MANAGER=$(jq -r '.contractDeployments.proxy.liquidTokenManager.address' $OUTPUT_PATH)
+STAKER_NODE_COORDINATOR=$(jq -r '.contractDeployments.proxy.stakerNodeCoordinator.address' $OUTPUT_PATH)
+STETH_TOKEN=$(jq -r '.tokens["0"].address' $OUTPUT_PATH)
+RETH_TOKEN=$(jq -r '.tokens["1"].address' $OUTPUT_PATH)
 
 # Create five Staker Nodes
 NODE_IDS=$(forge script --via-ir script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256)" \
-    -- "/local/mainnet_deployment_data.json" 5 2>&1 | \
+    -- $OUTPUT_FILE 5 2>&1 | \
     grep "uint256\[\]" | sed -E 's/.*\[([0-9, ]+)\].*/\1/g')
 
 # Delegate all nodes to EigenYields
@@ -87,7 +91,7 @@ forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" \
-    -- "/local/mainnet_deployment_data.json" "[$NODE_IDS]" $OPERATORS "[]" "[]"
+    -- $OUTPUT_FILE "[$NODE_IDS]" $OPERATORS "[]" "[]"
 
 # Create two test users to play the role of staker
 TEST_USER_1_PRIVATE_KEY="${TEST_USER_1_PRIVATE_KEY:-0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6}"
@@ -109,7 +113,6 @@ cast send $STETH_TOKEN --private-key $TEST_USER_2_PRIVATE_KEY --value $STAKER_2_
 STAKER_2_STETH_INITIAL_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint256)" $TEST_USER_2 | awk '{print $1}' | cast --from-wei)
 cast send $STETH_TOKEN --private-key $TEST_USER_2_PRIVATE_KEY "approve(address,uint256)" $LIQUID_TOKEN $STAKER_2_STETH_DEPOSIT_AMOUNT
 STAKER_2_RETH_DEPOSIT_AMOUNT=20000000000000000000
-RETH_WHALE="0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
 cast rpc anvil_impersonateAccount $RETH_WHALE
 cast send $RETH_TOKEN --unlocked --from $RETH_WHALE "transfer(address,uint256)" $TEST_USER_2 $STAKER_2_RETH_DEPOSIT_AMOUNT * 10
 cast rpc anvil_stopImpersonatingAccount $RETH_WHALE
@@ -127,7 +130,7 @@ forge script --via-ir script/tasks/LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNod
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,(uint256,address[],uint256[])[])" \
-    -- "/local/mainnet_deployment_data.json" $ALLOCATIONS
+    -- $OUTPUT_FILE $ALLOCATIONS
 
 # Stake assets to third node
 NODE_3=$(echo $NODE_IDS | jq '.[2]')
@@ -135,7 +138,7 @@ forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256,address[],uint256[])" \
-    -- "/local/mainnet_deployment_data.json" $NODE_3 "[$STETH_TOKEN,$RETH_TOKEN]" "[9000000000000000000,6000000000000000000]"
+    -- $OUTPUT_FILE $NODE_3 "[$STETH_TOKEN,$RETH_TOKEN]" "[9000000000000000000,6000000000000000000]"
 
 # Undelegate fourth and fifth nodes
 NODE_4=$(echo $NODE_IDS | jq '.[3]')
@@ -144,7 +147,8 @@ forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
     --rpc-url $RPC_URL --broadcast \
     --private-key $ADMIN_PRIVATE_KEY \
     --sig "run(string,uint256[])" \
-    -- "/local/mainnet_deployment_data.json" "[$NODE_4,$NODE_5]"
+    -- $OUTPUT_FILE "[$NODE_4,$NODE_5]"
+
 
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
