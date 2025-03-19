@@ -25,6 +25,11 @@ jobs:
         with:
           submodules: false
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
       - name: Clean and initialize minimal submodules
         run: |
           rm -rf lib
@@ -37,11 +42,6 @@ jobs:
           cd ../..
 
           forge install --no-commit
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: stable
 
       - name: Run Forge build
         run: |
