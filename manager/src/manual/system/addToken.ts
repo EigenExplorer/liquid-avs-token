@@ -1,7 +1,6 @@
-import { LIQUID_TOKEN_MANAGER_ADDRESS } from "../../utils/forge";
-import { OperationType } from "@safe-global/types-kit";
-import { protocolKitOwner, apiKit } from "../../utils/safe";
-import { encodeFunctionData, parseAbi, getAddress } from "viem/utils";
+import { addToken } from "../../tasks/system/addToken";
+import { ADMIN } from "../../utils/forge";
+import { apiKit } from "../../utils/safe";
 
 /**
  * To run this script, edit the params and run
@@ -10,8 +9,7 @@ import { encodeFunctionData, parseAbi, getAddress } from "viem/utils";
  */
 async function manualAddToken() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
@@ -21,55 +19,18 @@ async function manualAddToken() {
     const initialPrice = "1000000000000000000";
     const volatilityThreshold = "50000000000000000";
     const strategyAddress = "0x";
-    const metadata = {
-      title: `Add Token ${tokenAddress}`,
-      description: "Proposal to add token via manual proposal",
-    };
     // ------------------------------------------------------------------------------------
 
-    const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS;
-    const abi = parseAbi([
-      "function addToken(address,uint8,uint256,uint256,address)",
-    ]);
-
-    const data = encodeFunctionData({
-      abi,
-      functionName: "addToken",
-      args: [
-        tokenAddress,
-        decimals,
-        BigInt(initialPrice),
-        BigInt(volatilityThreshold),
-        strategyAddress,
-      ],
-    });
-    const metaTransactionData = {
-      to: getAddress(contractAddress),
-      value: "0",
-      data: data,
-      operation: OperationType.Call,
-    };
-
-    const safeTransaction = await protocolKitOwner.createTransaction({
-      transactions: [metaTransactionData],
-    });
-    const safeTxHash = await protocolKitOwner.getTransactionHash(
-      safeTransaction
+    await addToken(
+      tokenAddress,
+      decimals,
+      initialPrice,
+      volatilityThreshold,
+      strategyAddress
     );
-    const signature = await protocolKitOwner.signTransactionHash(safeTxHash);
-
-    await protocolKitOwner.proposeTransaction({
-      safeTransactionData: safeTransaction.data,
-      safeTxHash,
-      senderAddress: process.env.SIGNER_PUBLIC_KEY,
-      senderSignature: signature.data,
-      origin: JSON.stringify(metadata),
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results;

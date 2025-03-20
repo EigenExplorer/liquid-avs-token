@@ -5,7 +5,7 @@ import {
   type SafeTransaction,
   OperationType,
 } from "@safe-global/types-kit";
-import { protocolKitOwner, apiKit } from "./safe";
+import { apiKit, protocolKitOwnerAdmin, protocolKitOwnerPauser } from "./safe";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -16,7 +16,10 @@ const __dirname = path.dirname(__filename);
 
 export const NETWORK = getNetwork();
 export const DEPLOYMENT = getDeployment();
-export const ADMIN = await getAdmin();
+export const ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY;
+export const PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY;
+export const SIGNER_ADMIN = process.env.SIGNER_ADMIN_PUBLIC_KEY;
+export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY;
 
 export const {
   liquidToken: LIQUID_TOKEN_ADDRESS,
@@ -49,10 +52,15 @@ export function forgeCommand(
  * @returns
  */
 export async function createSafeTransactions(
-  stdout: string
+  stdout: string,
+  to: "admin" | "pauser" = "admin"
 ): Promise<SafeTransaction[]> {
-  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.MULTISIG_PUBLIC_KEY)
-    throw new Error("Env vars not set correctly.");
+  const multisigAddress = to === "admin" ? ADMIN : PAUSER;
+
+  if (!multisigAddress) throw new Error("Env vars not set correctly.");
+
+  const protocolKitOwner =
+    to === "admin" ? protocolKitOwnerAdmin : protocolKitOwnerPauser;
 
   const broadcastMatch = stdout.match(/"transactions":"([^"]+)"/);
 
@@ -70,9 +78,7 @@ export async function createSafeTransactions(
 
   const safeTransactions: SafeTransaction[] = [];
 
-  let nonce = Number(
-    await apiKit.getNextNonce(process.env.MULTISIG_PUBLIC_KEY)
-  );
+  let nonce = Number(await apiKit.getNextNonce(multisigAddress));
 
   for (const tx of transactions) {
     const metaTransactionData: MetaTransactionData = {
@@ -102,19 +108,26 @@ export async function createSafeTransactions(
  */
 export async function proposeSafeTransaction(
   safeTransaction: SafeTransaction,
-  origin: { title: string; description: string }
+  origin: { title: string; description: string },
+  to: "admin" | "pauser" = "admin"
 ) {
-  if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
+  const multisigAddress = to === "admin" ? ADMIN : PAUSER;
+  const signerAddress = to === "admin" ? SIGNER_ADMIN : SIGNER_PAUSER;
+
+  if (!multisigAddress || !signerAddress)
     throw new Error("Env vars not set correctly.");
+
+  const protocolKitOwner =
+    to === "admin" ? protocolKitOwnerAdmin : protocolKitOwnerPauser;
 
   const safeTxHash = await protocolKitOwner.getTransactionHash(safeTransaction);
   const senderSignature = await protocolKitOwner.signHash(safeTxHash);
 
   await apiKit.proposeTransaction({
-    safeAddress: process.env.MULTISIG_PUBLIC_KEY,
+    safeAddress: multisigAddress,
     safeTransactionData: safeTransaction.data,
     safeTxHash,
-    senderAddress: process.env.SIGNER_PUBLIC_KEY,
+    senderAddress: signerAddress,
     senderSignature: senderSignature.data,
     origin: JSON.stringify(origin),
   });
@@ -122,7 +135,7 @@ export async function proposeSafeTransaction(
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   const pendingTransactions = (
-    await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY)
+    await apiKit.getPendingTransactions(multisigAddress)
   ).results;
 
   console.log(
@@ -186,27 +199,13 @@ export function getConfigFile(): string {
 }
 
 /**
- * Returns the admin public key
- * Defaults to local forge test account #0 if `MULTISIG_PUBLIC_KEY` env var not set
- *
- * @returns
- */
-export async function getAdmin(): Promise<string> {
-  if (DEPLOYMENT === "local") return (await getOutputData()).roles.admin;
-  return (
-    process.env.MULTISIG_PUBLIC_KEY ||
-    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-  );
-}
-
-/**
  * Returns the output file created after the deployment
  * Defaults to mainnet if local deployment & `NETWORK` env var not set, public if `DEPLOYMENT` env var not set
  *
  * @returns
  */
 export async function getOutputData() {
-  if (DEPLOYMENT === "local") {
+  try {
     const output = await JSON.parse(
       await fs.readFile(
         path.resolve(__dirname, `../../../script/outputs${getConfigFile()}`),
@@ -223,30 +222,6 @@ export async function getOutputData() {
         output.contractDeployments.proxy.stakerNodeCoordinator.address
       ),
       roles: output.roles,
-    };
-  }
-
-  try {
-    const latResponse = await fetch(
-      `${process.env.LAT_API_URL}/lat/${process.env.LIQUID_TOKEN_ADDRESS}`
-    );
-
-    if (!latResponse.ok) {
-      throw new Error(
-        `Failed to fetch LAT data: ${latResponse.status} ${latResponse.statusText}`
-      );
-    }
-
-    const latData = await latResponse.json();
-
-    return {
-      liquidToken: String(latData.proxyAddress),
-      liquidTokenManager: String(
-        latData.contractDeployments.proxy.liquidTokenManager.address
-      ),
-      stakeNodeCoordinator: String(
-        latData.contractDeployments.proxy.stakeNodeCoordinator.address
-      ),
     };
   } catch (error) {
     console.log("Error: ", error);

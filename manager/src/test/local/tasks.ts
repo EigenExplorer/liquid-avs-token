@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import type { Abi } from "viem";
-import { DEPLOYMENT, NETWORK } from "../../utils/forge";
+import { ADMIN, DEPLOYMENT, NETWORK, PAUSER } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
 import { decodeFunctionData, encodeFunctionData, parseAbi } from "viem/utils";
 import { createStakerNodes } from "../../tasks/createStakerNodes";
@@ -12,6 +12,15 @@ import {
   type NodeAllocation,
   stakeAssetsToNodes,
 } from "../../tasks/stakeAssetsToNodes";
+import { addToken } from "../../tasks/system/addToken";
+import { pauseLiquidToken } from "../../tasks/system/pauseLiquidToken";
+import { removeToken } from "../../tasks/system/removeToken";
+import { setMaxNodes } from "../../tasks/system/setMaxNodes";
+import { setVolatilityThreshold } from "../../tasks/system/setVolatilityThreshold";
+import { unpauseLiquidToken } from "../../tasks/system/unpauseLiquidToken";
+import { upgradeStakerNodeImplementation } from "../../tasks/system/upgradeStakerNodeImplementation";
+
+// --- Manager tasks tests ---
 
 const ABIS: Record<string, string[]> = {
   createStakerNode: ["function createStakerNode()"],
@@ -34,8 +43,7 @@ const ABIS: Record<string, string[]> = {
 export async function testCreateStakerNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-    if (!process.env.MULTISIG_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     let passing = true;
     const functionName = "createStakerNode";
@@ -46,7 +54,7 @@ export async function testCreateStakerNodes() {
 
     // Get proposed txs
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 2,
       })
     ).results;
@@ -77,8 +85,7 @@ export async function testCreateStakerNodes() {
 export async function testDelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-    if (!process.env.MULTISIG_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     let passing = true;
     const functionName = "delegateNodes";
@@ -113,7 +120,7 @@ export async function testDelegateNodes() {
 
     // Get proposed tx
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results[0];
@@ -158,8 +165,7 @@ export async function testDelegateNodes() {
 export async function testStakeAssetsToNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-    if (!process.env.MULTISIG_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     let passing = true;
     const functionName = "stakeAssetsToNodes";
@@ -188,7 +194,7 @@ export async function testStakeAssetsToNodes() {
 
     // Get proposed tx
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results[0];
@@ -230,8 +236,7 @@ export async function testStakeAssetsToNodes() {
 export async function testStakeAssetsToNode() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-    if (!process.env.MULTISIG_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     let passing = true;
     const functionName = "stakeAssetsToNode";
@@ -253,7 +258,7 @@ export async function testStakeAssetsToNode() {
 
     // Get proposed tx
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results[0];
@@ -282,8 +287,7 @@ export async function testStakeAssetsToNode() {
 export async function testUndelegateNodes() {
   try {
     if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
-    if (!process.env.MULTISIG_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     let passing = true;
     const functionName = "undelegateNodes";
@@ -296,7 +300,332 @@ export async function testUndelegateNodes() {
 
     // Get proposed tx
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args,
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// --- System tasks tests ---
+
+/**
+ * Test script for adding token
+ *
+ */
+export async function testAddToken() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "addToken";
+    const abi = parseAbi([
+      "function addToken(address,uint8,uint256,uint256,address)",
+    ]);
+
+    const args: [string, number, string, string, string] = [
+      NETWORK === "holesky"
+        ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
+        : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
+      18,
+      "1000000000000000000",
+      "50000000000000000",
+      NETWORK === "holesky"
+        ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
+        : "0x8ca7a5d6f3acd3a7a8bc468a8cd0fb14b6bd28b6",
+    ];
+
+    await addToken(...args);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args: [
+        NETWORK === "holesky"
+          ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
+          : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
+        18,
+        BigInt("1000000000000000000"),
+        BigInt("50000000000000000"),
+        NETWORK === "holesky"
+          ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
+          : "0x8ca7a5d6f3acd3a7a8bc468a8cd0fb14b6bd28b6",
+      ],
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for pausing liquid token
+ *
+ */
+export async function testPauseLiquidToken() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!PAUSER) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "pause";
+    const abi = parseAbi(["function pause()"]);
+
+    await pauseLiquidToken();
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(PAUSER, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args: [],
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for removing token
+ *
+ */
+export async function testRemoveToken() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "removeToken";
+    const abi = parseAbi(["function removeToken(address)"]);
+
+    const args: [string] = [
+      NETWORK === "holesky"
+        ? "0x3f1c547b21f65e10480de3ad8e19faac46c95034" // stETH
+        : "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84", // stETH
+    ];
+
+    await removeToken(args[0]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args,
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for setting max nodes
+ *
+ */
+export async function testSetMaxNodes() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "setMaxNodes";
+    const abi = parseAbi(["function setMaxNodes(uint256)"]);
+
+    const args: [string] = ["1000"];
+
+    await setMaxNodes(args[0]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args: [BigInt("1000")],
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for setting volatility threshold
+ *
+ */
+export async function testSetVolatilityThreshold() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "setVolatilityThreshold";
+    const abi = parseAbi(["function setVolatilityThreshold(address,uint256)"]);
+
+    const args: [string, string] = [
+      NETWORK === "holesky"
+        ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
+        : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
+      "50000000000000000",
+    ];
+
+    await setVolatilityThreshold(args[0], args[1]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args: [
+        NETWORK === "holesky"
+          ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
+          : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
+        BigInt("50000000000000000"),
+      ],
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for unpausing liquid token
+ *
+ */
+export async function testUnpauseLiquidToken() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "unpause";
+    const abi = parseAbi(["function unpause()"]);
+
+    await unpauseLiquidToken();
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args: [],
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for upgrading staker node implementation
+ *
+ */
+export async function testUpgradeStakerNodeImplementation() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "upgradeStakerNodeImplementation";
+    const abi = parseAbi(["function upgradeStakerNodeImplementation(address)"]);
+
+    const args: [string] = [
+      NETWORK === "holesky"
+        ? "0x1234567890123456789012345678901234567890"
+        : "0x0987654321098765432109876543210987654321",
+    ];
+
+    await upgradeStakerNodeImplementation(args[0]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results[0];
