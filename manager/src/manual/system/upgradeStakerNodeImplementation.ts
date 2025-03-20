@@ -1,7 +1,5 @@
-import { STAKER_NODE_COORDINATOR_ADDRESS } from "../../utils/forge";
-import { OperationType } from "@safe-global/types-kit";
-import { protocolKitOwner, apiKit } from "../../utils/safe";
-import { encodeFunctionData, parseAbi, getAddress } from "viem/utils";
+import { upgradeStakerNodeImplementation } from "../../tasks/system/upgradeStakerNodeImplementation";
+import { apiKit } from "../../utils/safe";
 
 /**
  * To run this script, edit the params and run
@@ -10,57 +8,27 @@ import { encodeFunctionData, parseAbi, getAddress } from "viem/utils";
  */
 async function manualUpgradeStakerNodeImplementation() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
+    if (
+      !process.env.MULTISIG_ADMIN_PUBLIC_KEY ||
+      !process.env.SIGNER_ADMIN_PUBLIC_KEY
+    )
       throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
     // ------------------------------------------------------------------------------------
     const implementationContractAddress = "0x";
-    const metadata = {
-      title: `Upgrade Staker Node Implementation to ${implementationContractAddress}`,
-      description:
-        "Proposal to upgrade the staker node implementation contract via manual proposal",
-    };
     // ------------------------------------------------------------------------------------
 
-    const contractAddress = STAKER_NODE_COORDINATOR_ADDRESS;
-    const abi = parseAbi(["function upgradeStakerNodeImplementation(address)"]);
-
-    const data = encodeFunctionData({
-      abi,
-      functionName: "upgradeStakerNodeImplementation",
-      args: [implementationContractAddress],
-    });
-    const metaTransactionData = {
-      to: getAddress(contractAddress),
-      value: "0",
-      data: data,
-      operation: OperationType.Call,
-    };
-
-    const safeTransaction = await protocolKitOwner.createTransaction({
-      transactions: [metaTransactionData],
-    });
-    const safeTxHash = await protocolKitOwner.getTransactionHash(
-      safeTransaction
-    );
-    const signature = await protocolKitOwner.signTransactionHash(safeTxHash);
-
-    await protocolKitOwner.proposeTransaction({
-      safeTransactionData: safeTransaction.data,
-      safeTxHash,
-      senderAddress: process.env.SIGNER_PUBLIC_KEY,
-      senderSignature: signature.data,
-      origin: JSON.stringify(metadata),
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await upgradeStakerNodeImplementation(implementationContractAddress);
 
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
-        limit: 1,
-      })
+      await apiKit.getPendingTransactions(
+        process.env.MULTISIG_ADMIN_PUBLIC_KEY,
+        {
+          limit: 1,
+        }
+      )
     ).results;
 
     if (pendingTransactions.length > 0) {

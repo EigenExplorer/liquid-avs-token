@@ -25,6 +25,8 @@ export async function stakeAssetsToNode(
   amounts: string[]
 ) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode";
     const sender = ADMIN;

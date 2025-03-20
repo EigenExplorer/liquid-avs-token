@@ -25,6 +25,8 @@ export type NodeAllocation = {
  */
 export async function stakeAssetsToNodes(allocations: NodeAllocation[]) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNodes";
     const sender = ADMIN;

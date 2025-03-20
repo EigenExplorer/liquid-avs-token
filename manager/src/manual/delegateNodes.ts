@@ -8,7 +8,10 @@ import { apiKit } from "../utils/safe";
  */
 async function manualDelegateNodes() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
+    if (
+      !process.env.MULTISIG_ADMIN_PUBLIC_KEY ||
+      !process.env.SIGNER_ADMIN_PUBLIC_KEY
+    )
       throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
@@ -37,9 +40,12 @@ async function manualDelegateNodes() {
     await delegateNodes(nodeIds, operators, signatures, salts);
 
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
-        limit: 1,
-      })
+      await apiKit.getPendingTransactions(
+        process.env.MULTISIG_ADMIN_PUBLIC_KEY,
+        {
+          limit: 1,
+        }
+      )
     ).results;
 
     console.log(

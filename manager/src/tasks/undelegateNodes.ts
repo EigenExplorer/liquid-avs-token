@@ -19,6 +19,8 @@ const execAsync = promisify(exec);
  */
 export async function undelegateNodes(nodeIds: string[]) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "LTM_UndelegateNodes.s.sol:UndelegateNodes";
     const sender = ADMIN;

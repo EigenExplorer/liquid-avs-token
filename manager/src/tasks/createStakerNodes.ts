@@ -19,6 +19,8 @@ const execAsync = promisify(exec);
  */
 export async function createStakerNodes(count: number) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "SNC_CreateStakerNodes.s.sol:CreateStakerNodes";
     const sender = ADMIN;
