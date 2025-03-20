@@ -23,12 +23,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+
+      - name: Clean and initialize minimal submodules
+        run: |
+          rm -rf lib
+
+          git submodule init
+          git submodule update
+
+          cd lib/eigenlayer-contracts
+          git checkout dev
+          cd ../..
+
+          forge install --no-commit
 
       - name: Run Forge build
         run: |

@@ -221,6 +221,7 @@ export async function getOutputData() {
       stakeNodeCoordinator: String(
         output.contractDeployments.proxy.stakerNodeCoordinator.address
       ),
+      roles: output.roles,
     };
   } catch (error) {
     console.log("Error: ", error);

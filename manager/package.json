@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "tsx watch --clear-screen=false ./src/index.ts",
+    "start": "tsx ./src/index.ts",
+    "test": "tsx ./src/test/local/index.ts",
     "create-staker-nodes": "tsx ./src/manual/createStakerNodes.ts",
     "delegate-nodes": "tsx ./src/manual/delegateNodes.ts",
     "stake-assets-to-nodes": "tsx ./src/manual/stakeAssetsToNodes.ts",
