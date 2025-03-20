@@ -1,4 +1,5 @@
 import { removeToken } from "../../tasks/system/removeToken";
+import { ADMIN } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
 
 /**
@@ -8,11 +9,7 @@ import { apiKit } from "../../utils/safe";
  */
 async function manualRemoveToken() {
   try {
-    if (
-      !process.env.MULTISIG_ADMIN_PUBLIC_KEY ||
-      !process.env.SIGNER_ADMIN_PUBLIC_KEY
-    )
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
@@ -23,12 +20,9 @@ async function manualRemoveToken() {
     await removeToken(tokenAddress);
 
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(
-        process.env.MULTISIG_ADMIN_PUBLIC_KEY,
-        {
-          limit: 1,
-        }
-      )
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
     ).results;
 
     if (pendingTransactions.length > 0) {

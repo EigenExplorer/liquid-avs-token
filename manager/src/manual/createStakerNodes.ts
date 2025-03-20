@@ -1,4 +1,5 @@
 import { createStakerNodes } from "../tasks/createStakerNodes";
+import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
 
 /**
@@ -8,11 +9,7 @@ import { apiKit } from "../utils/safe";
  */
 async function manualCreateStakerNodes() {
   try {
-    if (
-      !process.env.MULTISIG_ADMIN_PUBLIC_KEY ||
-      !process.env.SIGNER_ADMIN_PUBLIC_KEY
-    )
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
@@ -23,12 +20,9 @@ async function manualCreateStakerNodes() {
     await createStakerNodes(count);
 
     const pendingTransactions = (
-      await apiKit.getPendingTransactions(
-        process.env.MULTISIG_ADMIN_PUBLIC_KEY,
-        {
-          limit: count,
-        }
-      )
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: count,
+      })
     ).results;
 
     for (const [index, pendingTx] of pendingTransactions.entries()) {

@@ -4,9 +4,11 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   ADMIN,
+  DEPLOYMENT,
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
+  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -31,7 +33,8 @@ export async function delegateNodes(
 
     // Setup task params
     const task = "LTM_DelegateNodes.s.sol:DelegateNodes";
-    const sender = ADMIN;
+    const sender =
+      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
     const sig = "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])";
     const nodeIdsParam = `[${nodeIds.join(",")}]`;
     const operatorsParam = `[${operators.map((op) => `"${op}"`).join(",")}]`;

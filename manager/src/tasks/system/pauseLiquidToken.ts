@@ -2,8 +2,9 @@ import "dotenv/config";
 
 import { OperationType } from "@safe-global/types-kit";
 import { encodeFunctionData, parseAbi, getAddress } from "viem/utils";
-import { protocolKitOwnerPauser } from "../../utils/safe";
+import { apiKit, protocolKitOwnerPauser } from "../../utils/safe";
 import {
+  PAUSER,
   LIQUID_TOKEN_ADDRESS,
   proposeSafeTransaction,
 } from "../../utils/forge";
@@ -15,6 +16,8 @@ import {
  */
 export async function pauseLiquidToken() {
   try {
+    if (!PAUSER) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const contractAddress = LIQUID_TOKEN_ADDRESS;
     const metadata = {
@@ -38,8 +41,10 @@ export async function pauseLiquidToken() {
     };
 
     // Create transaction
+    const nonce = Number(await apiKit.getNextNonce(PAUSER));
     const safeTransaction = await protocolKitOwnerPauser.createTransaction({
       transactions: [metaTransactionData],
+      options: { nonce },
     });
 
     // Propose transactions to multisig

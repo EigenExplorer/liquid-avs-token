@@ -4,9 +4,11 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   ADMIN,
+  DEPLOYMENT,
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
+  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -29,7 +31,8 @@ export async function stakeAssetsToNodes(allocations: NodeAllocation[]) {
 
     // Setup task params
     const task = "LTM_StakeAssetsToNodes.s.sol:StakeAssetsToNodes";
-    const sender = ADMIN;
+    const sender =
+      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
     const sig = "run(string,(uint256,address[],uint256[])[])";
     const params = `'[${allocations
       .map(
