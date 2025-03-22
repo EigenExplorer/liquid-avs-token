@@ -1,1 +1,3 @@
+# Keep outputs/local directory structure but ignore content
 outputs/local/*
+!/outputs/local/.gitkeep
