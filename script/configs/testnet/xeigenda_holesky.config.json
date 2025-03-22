@@ -1,0 +1,45 @@
+{
+  "avsAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+  "contracts": {
+    "stakerNodeCoordinator": {
+      "init": {
+        "maxNodes": 10
+      }
+    },
+    "liquidToken": {
+      "init": {
+        "name": "EigenDA Liquid Avs Token",
+        "symbol": "xEIGEN"
+      }
+    }
+  },
+  "tokens": [
+    {
+      "addresses": {
+        "token": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
+        "strategy": "0x7d704507b76571a51d9cae8addabbfd0ba0e63d3"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 700000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
+        "strategy": "0x3a8fbdf9e77dfc25d09741f51d3e181b25d0c4e0"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 700000000000000000,
+        "decimals": 18
+      }
+    }
+  ],
+  "roles": {
+    "admin": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534",
+    "pauser": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
+    "priceUpdater": "0xfF41629BD7f10DAB1325271ffAD4b39b265b76cD"
+  }
+}

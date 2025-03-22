@@ -30,10 +30,19 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To setup a local node (on a separate terminal instance):
 // anvil --fork-url $RPC_URL
 
-/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployHolesky.s.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "holesky.json" "xeigenda_holesky.anvil.config.json" -vvvv
+/// @dev To run this deploy script for local Holesky deployment:
+// forge script script/DeployHolesky.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY -vvvv
+
+/// @dev To run for Holesky testnet with verification:
+// forge script script/DeployHolesky.sol:DeployHolesky --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --verify --etherscan-api-key $ETHERSCAN_API_KEY -vvvv
 contract DeployHolesky is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
+
+    // Holesky Chain ID
+    uint256 constant HOLESKY_CHAIN_ID = 17000;
+
+    // Local or Public deployment flag
+    bool public isLocalDeployment;
 
     // Structs for token deployment config
     struct TokenAddresses {
@@ -48,12 +57,12 @@ contract DeployHolesky is Script, Test {
     }
 
     struct TokenConfig {
-      TokenAddresses addresses;
-      TokenParams params;
+        TokenAddresses addresses;
+        TokenParams params;
     }
     
-    // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/holesky_deployment_data.json";
+    // Path to output file - always testnet for Holesky
+    string constant OUTPUT_PATH = "script/configs/testnet/testnet_deployment_data.json";
 
     // Network-level config
     address public strategyManager;
@@ -68,6 +77,7 @@ contract DeployHolesky is Script, Test {
     address public admin;
     address public pauser;
     address public priceUpdater;
+    address public strategyController;
     TokenConfig[] public tokens;
 
     // Contract instances
@@ -120,12 +130,36 @@ contract DeployHolesky is Script, Test {
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
-    function run(
-      string memory networkConfigFileName,
-      string memory deployConfigFileName
-    ) external {
-        // Load config files
-        loadConfig(networkConfigFileName, deployConfigFileName);
+    function run() external {
+        // Verify we're on Holesky or a fork of Holesky
+        uint256 chainId = block.chainid;
+        
+        // Determine if we're on a local fork or actual Holesky network
+        if (chainId == HOLESKY_CHAIN_ID) {
+            // Check if this is a local deployment
+            string memory deployment = vm.envOr("DEPLOYMENT", string(""));
+            isLocalDeployment = keccak256(bytes(deployment)) == keccak256(bytes("local"));
+            
+            if (isLocalDeployment) {
+                console.log("Running Holesky LOCAL fork deployment");
+            } else {
+                console.log("Running Holesky TESTNET deployment");
+            }
+        } else {
+            // If we're not on Holesky chain ID, assume local development with a different chainId
+            console.log("Warning: Not running on Holesky chain ID (17000). Current chain ID: %d", chainId);
+            console.log("Continuing as local development deployment");
+            isLocalDeployment = true;
+        }
+        
+        console.log("ChainID: %d", block.chainid);
+        
+        // Load Holesky config
+        if (isLocalDeployment) {
+            loadConfig("holesky.json", "xeigenda_holesky.anvil.config.json", "local");
+        } else {
+            loadConfig("holesky.json", "xeigenda_holesky.config.json", "testnet");
+        }
 
         // Core deployment
         vm.startBroadcast();
@@ -134,72 +168,148 @@ contract DeployHolesky is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+        deployPriceUpdaterEcosystem();
         transferOwnership();
 
         vm.stopBroadcast();
 
         // Post-deployment verification
+        console.log("\n=== Verifying Deployment ===");
         verifyDeployment();
         
         // Write deployment results
+        console.log("\n=== Writing Deployment Data ===");
         writeDeploymentOutput();
+        
+        console.log("\n=== Holesky Deployment Complete ===");
+        console.log("ProxyAdmin: %s", address(proxyAdmin));
+        console.log("LiquidToken: %s", address(liquidToken));
+        console.log("LiquidTokenManager: %s", address(liquidTokenManager));
+        console.log("TokenRegistryOracle: %s", address(tokenRegistryOracle));
+        console.log("StakerNodeCoordinator: %s", address(stakerNodeCoordinator));
     }
 
     function loadConfig(
-      string memory networkConfigFileName,
-      string memory deployConfigFileName
+        string memory networkConfigFileName,
+        string memory deployConfigFileName,
+        string memory configDir
     ) internal {
+        // Network config path is always in script/configs/
+        string memory networkConfigPath = string.concat("script/configs/", networkConfigFileName);
+        
+        // Deploy config path uses the provided configDir parameter
+        string memory deployConfigPath = string.concat("script/configs/", configDir, "/", deployConfigFileName);
+        
+        console.log("Loading network config from: %s", networkConfigPath);
+        console.log("Loading deploy config from: %s", deployConfigPath);
+        
         // Load network-specific config
-        string memory networkConfigPath = string(bytes(string.concat("script/configs/", networkConfigFileName)));
         string memory networkConfigData = vm.readFile(networkConfigPath);
-        require(stdJson.readUint(networkConfigData, ".network.chainId") == block.chainid, "Wrong network");
+        
+        // Skip chain ID check for local deployments (when using Anvil)
+        if (keccak256(bytes(configDir)) == keccak256(bytes("local"))) {
+            console.log("Local Anvil deployment detected, skipping chain ID check");
+        } else {
+            require(stdJson.readUint(networkConfigData, ".network.chainId") == block.chainid, "Wrong network");
+        }
 
         strategyManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.strategyManager");
         delegationManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.delegationManager");
+        console.log("Loaded EigenLayer addresses:");
+        console.log("  StrategyManager: %s", strategyManager);
+        console.log("  DelegationManager: %s", delegationManager);
 
         // Load deployment-specific config
-        string memory deployConfigPath = string(bytes(string.concat("script/configs/local/", deployConfigFileName)));
         string memory deployConfigData = vm.readFile(deployConfigPath);
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(deployConfigData, ".roles.priceUpdater");
+        
+        // Handle optional strategy controller - defaults to admin if not provided
+        if (vm.keyExists(deployConfigData, ".roles.strategyController")) {
+            strategyController = stdJson.readAddress(deployConfigData, ".roles.strategyController");
+        } else {
+            strategyController = admin;
+            console.log("Strategy controller not specified, defaulting to admin");
+        }
+        
         tokens = abi.decode(stdJson.parseRaw(deployConfigData, ".tokens"), (TokenConfig[]));
 
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(deployConfigData, ".contracts.stakerNodeCoordinator.init.maxNodes");
         LIQUID_TOKEN_NAME = stdJson.readString(deployConfigData, ".contracts.liquidToken.init.name");
         LIQUID_TOKEN_SYMBOL = stdJson.readString(deployConfigData, ".contracts.liquidToken.init.symbol");
+        
+        console.log("Loaded roles:");
+        console.log("  Admin: %s", admin);
+        console.log("  Pauser: %s", pauser);
+        console.log("  Price Updater: %s", priceUpdater);
+        console.log("  Strategy Controller: %s", strategyController);
+        
+        console.log("Loaded contract parameters:");
+        console.log("  AVS Address: %s", AVS_ADDRESS);
+        console.log("  Max Nodes: %d", STAKER_NODE_COORDINATOR_MAX_NODES);
+        console.log("  Token Name: %s", LIQUID_TOKEN_NAME);
+        console.log("  Token Symbol: %s", LIQUID_TOKEN_SYMBOL);
+        
+        console.log("Loaded %d tokens:", tokens.length);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            console.log("  Token %d:", i);
+            console.log("    Address: %s", tokens[i].addresses.token);
+            console.log("    Strategy: %s", tokens[i].addresses.strategy);
+            console.log("    Decimals: %d", tokens[i].params.decimals);
+            console.log("    Price Per Unit: %d", tokens[i].params.pricePerUnit);
+            console.log("    Volatility Threshold: %d", tokens[i].params.volatilityThreshold);
+        }
     }
 
     function deployInfrastructure() internal {
+        console.log("\n=== Deploying Infrastructure ===");
+        console.log("Deploying ProxyAdmin...");
         proxyAdminDeployBlock = block.number;
         proxyAdminDeployTimestamp = block.timestamp;
         proxyAdmin = new ProxyAdmin(msg.sender);
+        console.log("ProxyAdmin deployed at: %s", address(proxyAdmin));
     }
 
     function deployImplementations() internal {
+        console.log("\n=== Deploying Implementation Contracts ===");
+        
+        console.log("Deploying TokenRegistryOracle implementation...");
         tokenRegistryOracleImplDeployBlock = block.number;
         tokenRegistryOracleImplDeployTimestamp = block.timestamp;
         tokenRegistryOracleImpl = new TokenRegistryOracle();
+        console.log("TokenRegistryOracle implementation deployed at: %s", address(tokenRegistryOracleImpl));
         
+        console.log("Deploying LiquidToken implementation...");
         liquidTokenImplDeployBlock = block.number;
         liquidTokenImplDeployTimestamp = block.timestamp;
         liquidTokenImpl = new LiquidToken();
+        console.log("LiquidToken implementation deployed at: %s", address(liquidTokenImpl));
         
+        console.log("Deploying LiquidTokenManager implementation...");
         liquidTokenManagerImplDeployBlock = block.number;
         liquidTokenManagerImplDeployTimestamp = block.timestamp;
         liquidTokenManagerImpl = new LiquidTokenManager();
+        console.log("LiquidTokenManager implementation deployed at: %s", address(liquidTokenManagerImpl));
         
+        console.log("Deploying StakerNodeCoordinator implementation...");
         stakerNodeCoordinatorImplDeployBlock = block.number;
         stakerNodeCoordinatorImplDeployTimestamp = block.timestamp;
         stakerNodeCoordinatorImpl = new StakerNodeCoordinator();
+        console.log("StakerNodeCoordinator implementation deployed at: %s", address(stakerNodeCoordinatorImpl));
         
+        console.log("Deploying StakerNode implementation...");
         stakerNodeImplDeployBlock = block.number;
         stakerNodeImplDeployTimestamp = block.timestamp;
         stakerNodeImpl = new StakerNode();
+        console.log("StakerNode implementation deployed at: %s", address(stakerNodeImpl));
     }
 
     function deployProxies() internal {
+        console.log("\n=== Deploying Proxy Contracts ===");
+        
+        console.log("Deploying TokenRegistryOracle proxy...");
         tokenRegistryOracleProxyDeployBlock = block.number;
         tokenRegistryOracleProxyDeployTimestamp = block.timestamp;
         tokenRegistryOracle = TokenRegistryOracle(
@@ -209,7 +319,9 @@ contract DeployHolesky is Script, Test {
                 ""
             ))
         );
+        console.log("TokenRegistryOracle proxy deployed at: %s", address(tokenRegistryOracle));
 
+        console.log("Deploying LiquidTokenManager proxy...");
         liquidTokenManagerProxyDeployBlock = block.number;
         liquidTokenManagerProxyDeployTimestamp = block.timestamp;
         liquidTokenManager = LiquidTokenManager(
@@ -219,7 +331,9 @@ contract DeployHolesky is Script, Test {
                 ""
             ))
         );
+        console.log("LiquidTokenManager proxy deployed at: %s", address(liquidTokenManager));
 
+        console.log("Deploying StakerNodeCoordinator proxy...");
         stakerNodeCoordinatorProxyDeployBlock = block.number;
         stakerNodeCoordinatorProxyDeployTimestamp = block.timestamp;
         stakerNodeCoordinator = StakerNodeCoordinator(
@@ -229,7 +343,9 @@ contract DeployHolesky is Script, Test {
                 ""
             ))
         );
+        console.log("StakerNodeCoordinator proxy deployed at: %s", address(stakerNodeCoordinator));
 
+        console.log("Deploying LiquidToken proxy...");
         liquidTokenProxyDeployBlock = block.number;
         liquidTokenProxyDeployTimestamp = block.timestamp;
         liquidToken = LiquidToken(
@@ -239,9 +355,11 @@ contract DeployHolesky is Script, Test {
                 ""
             ))
         );
+        console.log("LiquidToken proxy deployed at: %s", address(liquidToken));
     }
 
     function initializeProxies() internal {
+        console.log("\n=== Initializing Contracts ===");
         _initializeTokenRegistryOracle();
         _initializeLiquidTokenManager();
         _initializeStakerNodeCoordinator();
@@ -249,6 +367,7 @@ contract DeployHolesky is Script, Test {
     }
 
     function _initializeTokenRegistryOracle() internal {
+        console.log("Initializing TokenRegistryOracle...");
         tokenRegistryOracleInitBlock = block.number;
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
@@ -261,6 +380,7 @@ contract DeployHolesky is Script, Test {
     }
 
     function _initializeLiquidTokenManager() internal {
+        console.log("Initializing LiquidTokenManager...");
         liquidTokenManagerInitBlock = block.number;
         liquidTokenManagerInitTimestamp = block.timestamp;
         IERC20[] memory assets = new IERC20[](tokens.length);
@@ -275,25 +395,28 @@ contract DeployHolesky is Script, Test {
                 pricePerUnit: uint256(tokens[i].params.pricePerUnit),
                 volatilityThreshold: uint256(tokens[i].params.volatilityThreshold)
             });
+            
+            console.log("  Token %d: %s, Strategy: %s", i, tokens[i].addresses.token, tokens[i].addresses.strategy);
         }
 
         liquidTokenManager.initialize(
-          ILiquidTokenManager.Init({
-              assets: assets,
-              tokenInfo: tokenInfo,
-              strategies: strategies,
-              liquidToken: liquidToken,
-              strategyManager: IStrategyManager(strategyManager),
-              delegationManager: IDelegationManager(delegationManager),
-              stakerNodeCoordinator: stakerNodeCoordinator,
-              initialOwner: admin,
-              strategyController: admin,
-              priceUpdater: address(tokenRegistryOracle)
-          })
+            ILiquidTokenManager.Init({
+                assets: assets,
+                tokenInfo: tokenInfo,
+                strategies: strategies,
+                liquidToken: liquidToken,
+                strategyManager: IStrategyManager(strategyManager),
+                delegationManager: IDelegationManager(delegationManager),
+                stakerNodeCoordinator: stakerNodeCoordinator,
+                initialOwner: admin,
+                strategyController: strategyController,
+                priceUpdater: address(tokenRegistryOracle)
+            })
         );
     }
 
     function _initializeStakerNodeCoordinator() internal {
+        console.log("Initializing StakerNodeCoordinator...");
         stakerNodeCoordinatorInitBlock = block.number;
         stakerNodeCoordinatorInitTimestamp = block.timestamp;
         stakerNodeCoordinator.initialize(
@@ -312,6 +435,7 @@ contract DeployHolesky is Script, Test {
     }
 
     function _initializeLiquidToken() internal {
+        console.log("Initializing LiquidToken...");
         liquidTokenInitBlock = block.number;
         liquidTokenInitTimestamp = block.timestamp;
         liquidToken.initialize(
@@ -324,8 +448,18 @@ contract DeployHolesky is Script, Test {
             })
         );
     }
+    
+    function deployPriceUpdaterEcosystem() internal {
+        console.log("\n=== Setting up Price Updater Ecosystem ===");
+        // Integrated price updater is already set up through tokenRegistryOracle
+        console.log("TokenRegistryOracle has been initialized as the price updater");
+        console.log("  Price updates will be managed by: %s", address(tokenRegistryOracle));
+        console.log("  Price data will flow to LiquidTokenManager: %s", address(liquidTokenManager));
+    }
 
     function transferOwnership() internal {
+        console.log("\n=== Transferring Ownership ===");
+        console.log("Transferring ProxyAdmin ownership to: %s", admin);
         proxyAdmin.transferOwnership(admin);
         require(proxyAdmin.owner() == admin, "Proxy admin ownership transfer failed");
     }
@@ -337,87 +471,119 @@ contract DeployHolesky is Script, Test {
     }
 
     function _verifyProxyImplementations() internal view {
-        // TODO: Make sure all proxy impl addresses are equal to actual impl addresses
+        console.log("\n=== Verifying Proxy Implementations ===");
+        
+        // Get implementation address through TransparentUpgradeableProxy's storage slot
+        address liquidTokenProxyImpl = _getImplementationFromProxy(address(liquidToken));
+        address liquidTokenManagerProxyImpl = _getImplementationFromProxy(address(liquidTokenManager));
+        address tokenRegistryOracleProxyImpl = _getImplementationFromProxy(address(tokenRegistryOracle));
+        address stakerNodeCoordinatorProxyImpl = _getImplementationFromProxy(address(stakerNodeCoordinator));
+        
+        // Verify implementations
+        bool liquidTokenImplMatch = liquidTokenProxyImpl == address(liquidTokenImpl);
+        console.log("LiquidToken implementation match: %s", liquidTokenImplMatch ? "Yes" : "No");
+        console.log("  Expected: %s", address(liquidTokenImpl));
+        console.log("  Actual:   %s", liquidTokenProxyImpl);
+        require(liquidTokenImplMatch, "LiquidToken proxy implementation mismatch");
+        
+        // Verify liquid token manager implementation
+        bool liquidTokenManagerImplMatch = liquidTokenManagerProxyImpl == address(liquidTokenManagerImpl);
+        console.log("LiquidTokenManager implementation match: %s", liquidTokenManagerImplMatch ? "Yes" : "No");
+        console.log("  Expected: %s", address(liquidTokenManagerImpl));
+        console.log("  Actual:   %s", liquidTokenManagerProxyImpl);
+        require(liquidTokenManagerImplMatch, "LiquidTokenManager proxy implementation mismatch");
+        
+        // Verify token registry oracle implementation
+        bool tokenRegistryOracleImplMatch = tokenRegistryOracleProxyImpl == address(tokenRegistryOracleImpl);
+        console.log("TokenRegistryOracle implementation match: %s", tokenRegistryOracleImplMatch ? "Yes" : "No");
+        console.log("  Expected: %s", address(tokenRegistryOracleImpl));
+        console.log("  Actual:   %s", tokenRegistryOracleProxyImpl);
+        require(tokenRegistryOracleImplMatch, "TokenRegistryOracle proxy implementation mismatch");
+        
+        // Verify staker node coordinator implementation
+        bool stakerNodeCoordinatorImplMatch = stakerNodeCoordinatorProxyImpl == address(stakerNodeCoordinatorImpl);
+        console.log("StakerNodeCoordinator implementation match: %s", stakerNodeCoordinatorImplMatch ? "Yes" : "No");
+        console.log("  Expected: %s", address(stakerNodeCoordinatorImpl));
+        console.log("  Actual:   %s", stakerNodeCoordinatorProxyImpl);
+        require(stakerNodeCoordinatorImplMatch, "StakerNodeCoordinator proxy implementation mismatch");
     }
 
     function _verifyContractConnections() internal view {
+        console.log("\n=== Verifying Contract Connections ===");
+        
         // LiquidToken
-        require(
-            address(liquidToken.liquidTokenManager()) == address(liquidTokenManager),
-            "LiquidToken: wrong liquidTokenManager"
-        );
+        bool liquidTokenManagerCheck = address(liquidToken.liquidTokenManager()) == address(liquidTokenManager);
+        console.log("LiquidToken -> LiquidTokenManager: %s", liquidTokenManagerCheck ? "Valid" : "Invalid");
+        require(liquidTokenManagerCheck, "LiquidToken: wrong liquidTokenManager");
 
         // LiquidTokenManager
-        require(
-            address(liquidTokenManager.liquidToken()) == address(liquidToken),
-            "LiquidTokenManager: wrong liquidToken"
-        );
-        require(
-            address(liquidTokenManager.strategyManager()) == address(strategyManager),
-            "LiquidTokenManager: wrong strategyManager"
-        );
-        require(
-            address(liquidTokenManager.delegationManager()) == address(delegationManager),
-            "LiquidTokenManager: wrong delegationManager"
-        );
-        require(
-            address(liquidTokenManager.stakerNodeCoordinator()) == address(stakerNodeCoordinator),
-            "LiquidTokenManager: wrong stakerNodeCoordinator"
-        );
+        bool liquidTokenCheck = address(liquidTokenManager.liquidToken()) == address(liquidToken);
+        console.log("LiquidTokenManager -> LiquidToken: %s", liquidTokenCheck ? "Valid" : "Invalid");
+        require(liquidTokenCheck, "LiquidTokenManager: wrong liquidToken");
+        
+        bool strategyManagerCheck = address(liquidTokenManager.strategyManager()) == address(strategyManager);
+        console.log("LiquidTokenManager -> StrategyManager: %s", strategyManagerCheck ? "Valid" : "Invalid");
+        require(strategyManagerCheck, "LiquidTokenManager: wrong strategyManager");
+        
+        bool delegationManagerCheck = address(liquidTokenManager.delegationManager()) == address(delegationManager);
+        console.log("LiquidTokenManager -> DelegationManager: %s", delegationManagerCheck ? "Valid" : "Invalid");
+        require(delegationManagerCheck, "LiquidTokenManager: wrong delegationManager");
+        
+        bool stakerNodeCoordinatorCheck = address(liquidTokenManager.stakerNodeCoordinator()) == address(stakerNodeCoordinator);
+        console.log("LiquidTokenManager -> StakerNodeCoordinator: %s", stakerNodeCoordinatorCheck ? "Valid" : "Invalid");
+        require(stakerNodeCoordinatorCheck, "LiquidTokenManager: wrong stakerNodeCoordinator");
 
         // StakerNodeCoordinator
-        require(
-            address(stakerNodeCoordinator.liquidTokenManager()) == address(liquidTokenManager),
-            "StakerNodeCoordinator: wrong liquidTokenManager"
-        );
-        require(
-            address(stakerNodeCoordinator.strategyManager()) == address(strategyManager),
-            "StakerNodeCoordinator: wrong strategyManager"
-        );
-        require(
-            address(stakerNodeCoordinator.delegationManager()) == address(delegationManager),
-            "StakerNodeCoordinator: wrong delegationManager"
-        );
-        require(
-            address(stakerNodeCoordinator.upgradeableBeacon().implementation()) == address(stakerNodeImpl),
-            "StakerNodeCoordinator: wrong stakerNodeImplementation"
-        );
+        bool liquidTokenManagerCheckFromCoordinator = address(stakerNodeCoordinator.liquidTokenManager()) == address(liquidTokenManager);
+        console.log("StakerNodeCoordinator -> LiquidTokenManager: %s", liquidTokenManagerCheckFromCoordinator ? "Valid" : "Invalid");
+        require(liquidTokenManagerCheckFromCoordinator, "StakerNodeCoordinator: wrong liquidTokenManager");
+        
+        bool strategyManagerCheckFromCoordinator = address(stakerNodeCoordinator.strategyManager()) == address(strategyManager);
+        console.log("StakerNodeCoordinator -> StrategyManager: %s", strategyManagerCheckFromCoordinator ? "Valid" : "Invalid");
+        require(strategyManagerCheckFromCoordinator, "StakerNodeCoordinator: wrong strategyManager");
+        
+        bool delegationManagerCheckFromCoordinator = address(stakerNodeCoordinator.delegationManager()) == address(delegationManager);
+        console.log("StakerNodeCoordinator -> DelegationManager: %s", delegationManagerCheckFromCoordinator ? "Valid" : "Invalid");
+        require(delegationManagerCheckFromCoordinator, "StakerNodeCoordinator: wrong delegationManager");
+        
+        bool stakerNodeImplCheck = address(stakerNodeCoordinator.upgradeableBeacon().implementation()) == address(stakerNodeImpl);
+        console.log("StakerNodeCoordinator -> StakerNodeImpl: %s", stakerNodeImplCheck ? "Valid" : "Invalid");
+        require(stakerNodeImplCheck, "StakerNodeCoordinator: wrong stakerNodeImplementation");
 
         // TokenRegistryOracle
-        require(
-            address(tokenRegistryOracle.liquidTokenManager()) == address(liquidTokenManager),
-            "TokenRegistryOracle: wrong liquidTokenManager"
-        );
+        bool liquidTokenManagerCheckFromOracle = address(tokenRegistryOracle.liquidTokenManager()) == address(liquidTokenManager);
+        console.log("TokenRegistryOracle -> LiquidTokenManager: %s", liquidTokenManagerCheckFromOracle ? "Valid" : "Invalid");
+        require(liquidTokenManagerCheckFromOracle, "TokenRegistryOracle: wrong liquidTokenManager");
 
         // Assets and strategies
         IERC20[] memory registeredTokens = liquidTokenManager.getSupportedTokens();
-        require(
-            registeredTokens.length == tokens.length,
-            "LiquidTokenManager: wrong number of registered tokens"
-        );
+        bool tokenCountMatch = registeredTokens.length == tokens.length;
+        console.log("Token count match: %s (%d registered, %d expected)", tokenCountMatch ? "Yes" : "No", registeredTokens.length, tokens.length);
+        require(tokenCountMatch, "LiquidTokenManager: wrong number of registered tokens");
 
-        // Verify token and strategy info matches deployment config
+        // Verify each token and its strategy
+        console.log("\nVerifying individual token configurations:");
         for (uint256 i = 0; i < tokens.length; i++) {
             IERC20 configToken = IERC20(tokens[i].addresses.token);
             ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(configToken);
-            require(
-                tokenInfo.decimals == tokens[i].params.decimals,
-                "LiquidTokenManager: wrong token decimals"
-            );
-            require(
-                tokenInfo.pricePerUnit == tokens[i].params.pricePerUnit,
-                "LiquidTokenManager: wrong token price"
-            );
-            require(
-                tokenInfo.volatilityThreshold == tokens[i].params.volatilityThreshold,
-                "LiquidTokenManager: wrong volatility threshold"
-            );
+            
+            bool decimalsMatch = tokenInfo.decimals == uint8(tokens[i].params.decimals);
+            bool priceMatch = tokenInfo.pricePerUnit == tokens[i].params.pricePerUnit;
+            bool thresholdMatch = tokenInfo.volatilityThreshold == tokens[i].params.volatilityThreshold;
+            
+            console.log("Token %d (%s):", i, tokens[i].addresses.token);
+            console.log("  Decimals match: %s", decimalsMatch ? "Yes" : "No");
+            console.log("  Price match: %s", priceMatch ? "Yes" : "No");
+            console.log("  Threshold match: %s", thresholdMatch ? "Yes" : "No");
+            
+            require(decimalsMatch, "LiquidTokenManager: wrong token decimals");
+            require(priceMatch, "LiquidTokenManager: wrong token price");
+            require(thresholdMatch, "LiquidTokenManager: wrong volatility threshold");
 
             IStrategy registeredStrategy = liquidTokenManager.getTokenStrategy(configToken);
-            require(
-                address(registeredStrategy) == tokens[i].addresses.strategy,
-                "LiquidTokenManager: wrong strategy address"
-            );
+            bool strategyMatch = address(registeredStrategy) == tokens[i].addresses.strategy;
+            console.log("  Strategy match: %s", strategyMatch ? "Yes" : "No");
+            require(strategyMatch, "LiquidTokenManager: wrong strategy address");
 
             // Verify token is in supported tokens list
             bool tokenFound = false;
@@ -427,12 +593,81 @@ contract DeployHolesky is Script, Test {
                     break;
                 }
             }
+            console.log("  Token in supported list: %s", tokenFound ? "Yes" : "No");
             require(tokenFound, "LiquidTokenManager: token not in supported list");
         }
     }
 
     function _verifyRoles() internal view {
-        // TODO: Verify all contracts have correct role settings
+        console.log("\n=== Verifying Role Assignments ===");
+        
+        // Default admin role constant
+        bytes32 adminRole = 0x00;
+        
+        // LiquidToken roles
+        console.log("\nLiquidToken roles:");
+        bool hasLTAdminRole = liquidToken.hasRole(adminRole, admin);
+        bool hasLTPauserRole = liquidToken.hasRole(liquidToken.PAUSER_ROLE(), pauser);
+        
+        console.log("  Admin role assigned to %s: %s", admin, hasLTAdminRole ? "Yes" : "No");
+        console.log("  Pauser role assigned to %s: %s", pauser, hasLTPauserRole ? "Yes" : "No");
+        
+        require(hasLTAdminRole, "Admin role not assigned in LiquidToken");
+        require(hasLTPauserRole, "Pauser role not assigned in LiquidToken");
+        
+        // LiquidTokenManager roles
+        console.log("\nLiquidTokenManager roles:");
+        bool hasLTMAdminRole = liquidTokenManager.hasRole(adminRole, admin);
+        bool hasLTMStrategyControllerRole = liquidTokenManager.hasRole(
+            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), 
+            strategyController
+        );
+        bool hasLTMPriceUpdaterRole = liquidTokenManager.hasRole(
+            liquidTokenManager.PRICE_UPDATER_ROLE(), 
+            address(tokenRegistryOracle)
+        );
+        
+        console.log("  Admin role assigned to %s: %s", admin, hasLTMAdminRole ? "Yes" : "No");
+        console.log("  Strategy Controller role assigned to %s: %s", strategyController, hasLTMStrategyControllerRole ? "Yes" : "No");
+        console.log("  Price Updater role assigned to %s: %s", address(tokenRegistryOracle), hasLTMPriceUpdaterRole ? "Yes" : "No");
+        
+        require(hasLTMAdminRole, "Admin role not assigned in LiquidTokenManager");
+        require(hasLTMStrategyControllerRole, "Strategy Controller role not assigned in LiquidTokenManager");
+        require(hasLTMPriceUpdaterRole, "Price Updater role not assigned in LiquidTokenManager");
+        
+        // StakerNodeCoordinator roles
+        console.log("\nStakerNodeCoordinator roles:");
+        bool hasSNCAdminRole = stakerNodeCoordinator.hasRole(adminRole, admin);
+        bool hasSNCCreatorRole = stakerNodeCoordinator.hasRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), 
+            admin
+        );
+        bool hasSNCDelegatorRole = stakerNodeCoordinator.hasRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), 
+            address(liquidTokenManager)
+        );
+        
+        console.log("  Admin role assigned to %s: %s", admin, hasSNCAdminRole ? "Yes" : "No");
+        console.log("  Staker Node Creator role assigned to %s: %s", admin, hasSNCCreatorRole ? "Yes" : "No");
+        console.log("  Staker Nodes Delegator role assigned to %s: %s", address(liquidTokenManager), hasSNCDelegatorRole ? "Yes" : "No");
+        
+        require(hasSNCAdminRole, "Admin role not assigned in StakerNodeCoordinator");
+        require(hasSNCCreatorRole, "Staker Node Creator role not assigned in StakerNodeCoordinator");
+        require(hasSNCDelegatorRole, "Staker Nodes Delegator role not assigned in StakerNodeCoordinator");
+        
+        // TokenRegistryOracle roles
+        console.log("\nTokenRegistryOracle roles:");
+        bool hasTROAdminRole = tokenRegistryOracle.hasRole(adminRole, admin);
+        bool hasTRORateUpdaterRole = tokenRegistryOracle.hasRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(), 
+            priceUpdater
+        );
+        
+        console.log("  Admin role assigned to %s: %s", admin, hasTROAdminRole ? "Yes" : "No");
+        console.log("  Rate Updater role assigned to %s: %s", priceUpdater, hasTRORateUpdaterRole ? "Yes" : "No");
+        
+        require(hasTROAdminRole, "Admin role not assigned in TokenRegistryOracle");
+        require(hasTRORateUpdaterRole, "Rate Updater role not assigned in TokenRegistryOracle");
     }
 
     function writeDeploymentOutput() internal {
@@ -445,7 +680,7 @@ contract DeployHolesky is Script, Test {
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
         vm.serializeUint(parent_object, "chainId", block.chainid);
-        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); // Adjust as needed
+        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES);
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
         vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); // Converting to milliseconds
         
@@ -454,6 +689,12 @@ contract DeployHolesky is Script, Test {
         
         // Implementation contracts
         string memory implementation = "implementation";
+        
+        // LiquidToken implementation
+        string memory liquidTokenImpl_obj = "liquidToken";
+        vm.serializeAddress(liquidTokenImpl_obj, "address", address(liquidTokenImpl));
+        vm.serializeUint(liquidTokenImpl_obj, "block", liquidTokenImplDeployBlock);
+        string memory liquidTokenImpl_output = vm.serializeUint(liquidTokenImpl_obj, "timestamp", liquidTokenImplDeployTimestamp * 1000);
         
         // LiquidTokenManager implementation
         string memory liquidTokenManagerImpl_obj = "liquidTokenManager";
@@ -480,6 +721,7 @@ contract DeployHolesky is Script, Test {
         string memory tokenRegistryOracleImpl_output = vm.serializeUint(tokenRegistryOracleImpl_obj, "timestamp", tokenRegistryOracleImplDeployTimestamp * 1000);
         
         // Combine all implementation objects
+        vm.serializeString(implementation, "liquidToken", liquidTokenImpl_output);
         vm.serializeString(implementation, "liquidTokenManager", liquidTokenManagerImpl_output);
         vm.serializeString(implementation, "stakerNodeCoordinator", stakerNodeCoordinatorImpl_output);
         vm.serializeString(implementation, "stakerNode", stakerNodeImpl_output);
@@ -487,6 +729,12 @@ contract DeployHolesky is Script, Test {
         
         // Proxy contracts
         string memory proxy = "proxy";
+        
+        // LiquidToken proxy
+        string memory liquidToken_obj = "liquidToken";
+        vm.serializeAddress(liquidToken_obj, "address", address(liquidToken));
+        vm.serializeUint(liquidToken_obj, "block", liquidTokenProxyDeployBlock);
+        string memory liquidToken_output = vm.serializeUint(liquidToken_obj, "timestamp", liquidTokenProxyDeployTimestamp * 1000);
         
         // LiquidTokenManager proxy
         string memory liquidTokenManager_obj = "liquidTokenManager";
@@ -507,6 +755,7 @@ contract DeployHolesky is Script, Test {
         string memory tokenRegistryOracle_output = vm.serializeUint(tokenRegistryOracle_obj, "timestamp", tokenRegistryOracleProxyDeployTimestamp * 1000);
         
         // Combine all proxy objects
+        vm.serializeString(proxy, "liquidToken", liquidToken_output);
         vm.serializeString(proxy, "liquidTokenManager", liquidTokenManager_output);
         vm.serializeString(proxy, "stakerNodeCoordinator", stakerNodeCoordinator_output);
         string memory proxy_output = vm.serializeString(proxy, "tokenRegistryOracle", tokenRegistryOracle_output);
@@ -515,12 +764,25 @@ contract DeployHolesky is Script, Test {
         vm.serializeString(contractDeployments, "implementation", implementation_output);
         string memory contractDeployments_output = vm.serializeString(contractDeployments, "proxy", proxy_output);
         
+        // Initialization timestamps
+        string memory initialization = "initialization";
+        vm.serializeUint(initialization, "liquidTokenManagerBlock", liquidTokenManagerInitBlock);
+        vm.serializeUint(initialization, "liquidTokenManagerTimestamp", liquidTokenManagerInitTimestamp * 1000);
+        vm.serializeUint(initialization, "stakerNodeCoordinatorBlock", stakerNodeCoordinatorInitBlock);
+        vm.serializeUint(initialization, "stakerNodeCoordinatorTimestamp", stakerNodeCoordinatorInitTimestamp * 1000);
+        vm.serializeUint(initialization, "tokenRegistryOracleBlock", tokenRegistryOracleInitBlock);
+        vm.serializeUint(initialization, "tokenRegistryOracleTimestamp", tokenRegistryOracleInitTimestamp * 1000);
+        vm.serializeUint(initialization, "liquidTokenBlock", liquidTokenInitBlock);
+        string memory initialization_output = vm.serializeUint(initialization, "liquidTokenTimestamp", liquidTokenInitTimestamp * 1000);
+        
         // Roles section
         string memory roles = "roles";
-        vm.serializeAddress(roles, "deployer", address(proxyAdmin));
+        vm.serializeAddress(roles, "deployer", msg.sender);
+        vm.serializeAddress(roles, "proxyAdmin", address(proxyAdmin));
         vm.serializeAddress(roles, "admin", admin);
         vm.serializeAddress(roles, "pauser", pauser);
-        string memory roles_output = vm.serializeAddress(roles, "priceUpdater", priceUpdater);
+        vm.serializeAddress(roles, "priceUpdater", priceUpdater);
+        string memory roles_output = vm.serializeAddress(roles, "strategyController", strategyController);
         
         // Tokens section
         string memory tokens_array = "tokens";
@@ -530,31 +792,37 @@ contract DeployHolesky is Script, Test {
             // Create an object for each token
             string memory token_obj = string.concat("token", vm.toString(i));
             vm.serializeAddress(token_obj, "address", tokens[i].addresses.token);
-            string memory token_output = vm.serializeAddress(token_obj, "strategy", tokens[i].addresses.strategy);
+            vm.serializeAddress(token_obj, "strategy", tokens[i].addresses.strategy);
+            vm.serializeUint(token_obj, "decimals", tokens[i].params.decimals);
+            vm.serializeUint(token_obj, "pricePerUnit", tokens[i].params.pricePerUnit);
+            string memory token_output = vm.serializeUint(token_obj, "volatilityThreshold", tokens[i].params.volatilityThreshold);
             
-            // Add token object to the array using vm.serializeString
+            // Add token object to the array
             if (i < tokens.length - 1) {
                 vm.serializeString(tokens_array, vm.toString(i), token_output);
+            } else {
+                tokens_array = vm.serializeString(tokens_array, vm.toString(i), token_output);
             }
-        }
-        
-        // Get the complete tokens array (with the last element if there are any tokens)
-        string memory tokens_array_output;
-        if (tokens.length == 0) {
-            tokens_array_output = "[]";
-        } else {
-            string memory lastTokenObj = string.concat("token", vm.toString(tokens.length - 1));
-            vm.serializeAddress(lastTokenObj, "address", tokens[tokens.length - 1].addresses.token);
-            string memory lastTokenOutput = vm.serializeAddress(lastTokenObj, "strategy", tokens[tokens.length - 1].addresses.strategy);
-            tokens_array_output = vm.serializeString(tokens_array, vm.toString(tokens.length - 1), lastTokenOutput);
         }
         
         // Combine all sections into the parent object
         vm.serializeString(parent_object, "contractDeployments", contractDeployments_output);
+        vm.serializeString(parent_object, "initialization", initialization_output);
         vm.serializeString(parent_object, "roles", roles_output);
-        string memory finalJson = vm.serializeString(parent_object, "tokens", tokens_array_output);
+        string memory finalJson = vm.serializeString(parent_object, "tokens", tokens_array);
         
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
+        console.log("Deployment data written to: %s", OUTPUT_PATH);
+    }
+
+    // Helper function to get implementation from proxy
+    function _getImplementationFromProxy(address proxy) internal view returns (address) {
+        // Implementation slot for TransparentUpgradeableProxy (EIP-1967)
+        bytes32 implementationSlot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+        
+        // Use VM cheatcode to read storage at the implementation slot
+        bytes32 data = vm.load(proxy, implementationSlot);
+        return address(uint160(uint256(data)));
     }
 }
