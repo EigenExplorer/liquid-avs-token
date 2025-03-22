@@ -1,4 +1,5 @@
 import { undelegateNodes } from "../tasks/undelegateNodes";
+import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
 
 /**
@@ -8,8 +9,7 @@ import { apiKit } from "../utils/safe";
  */
 async function manualUndelegateNodes() {
   try {
-    if (!process.env.MULTISIG_PUBLIC_KEY || !process.env.SIGNER_PUBLIC_KEY)
-      throw new Error("Env vars not set correctly.");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
 
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
@@ -20,7 +20,7 @@ async function manualUndelegateNodes() {
     await undelegateNodes(nodeIds);
 
     const pendingTx = (
-      await apiKit.getPendingTransactions(process.env.MULTISIG_PUBLIC_KEY, {
+      await apiKit.getPendingTransactions(ADMIN, {
         limit: 1,
       })
     ).results;

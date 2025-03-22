@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "tsx watch --clear-screen=false ./src/index.ts",
+    "start": "tsx ./src/index.ts",
+    "test": "tsx ./src/test/local/index.ts",
     "create-staker-nodes": "tsx ./src/manual/createStakerNodes.ts",
     "delegate-nodes": "tsx ./src/manual/delegateNodes.ts",
     "stake-assets-to-nodes": "tsx ./src/manual/stakeAssetsToNodes.ts",
     "stake-assets-to-node": "tsx ./src/manual/stakeAssetsToNode.ts",
-    "undelegate-nodes": "tsx ./src/manual/undelegateNodes.ts"
+    "undelegate-nodes": "tsx ./src/manual/undelegateNodes.ts",
+    "test": "tsx ./src/test/local/index.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.2",

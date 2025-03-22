@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -830,7 +830,7 @@ contract LiquidTokenTest is BaseTest {
         bytes32 requestIdUser1 = liquidToken.getUserWithdrawalRequests(user1)[
             0
         ];
-        vm.warp(block.timestamp + 15 days);
+        vm.warp(block.timestamp + liquidToken.WITHDRAWAL_DELAY());
         liquidToken.fulfillWithdrawal(requestIdUser1);
         
         // Check balances for User1
@@ -860,7 +860,7 @@ contract LiquidTokenTest is BaseTest {
         bytes32 requestIdUser2 = liquidToken.getUserWithdrawalRequests(user2)[
             0
         ];
-        vm.warp(block.timestamp + 15 days);
+        vm.warp(block.timestamp + liquidToken.WITHDRAWAL_DELAY());
         liquidToken.fulfillWithdrawal(requestIdUser2);
 
         // Check balances for User2

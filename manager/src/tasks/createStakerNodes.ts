@@ -4,9 +4,11 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   ADMIN,
+  DEPLOYMENT,
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
+  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -19,9 +21,12 @@ const execAsync = promisify(exec);
  */
 export async function createStakerNodes(count: number) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "SNC_CreateStakerNodes.s.sol:CreateStakerNodes";
-    const sender = ADMIN;
+    const sender =
+      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
     const sig = "run(string,uint256)";
     const params = `${count}`;
 

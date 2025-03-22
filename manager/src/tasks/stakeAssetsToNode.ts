@@ -4,9 +4,11 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   ADMIN,
+  DEPLOYMENT,
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
+  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -25,9 +27,12 @@ export async function stakeAssetsToNode(
   amounts: string[]
 ) {
   try {
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
     // Setup task params
     const task = "LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode";
-    const sender = ADMIN;
+    const sender =
+      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
     const sig = "run(string,uint256,address[],uint256[])";
     const assetsParam = `[${assets.map((op) => `"${op}"`).join(",")}]`;
     const amountsParam = `[${amounts.join(",")}]`;
