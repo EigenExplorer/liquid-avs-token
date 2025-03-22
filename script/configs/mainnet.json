@@ -4,7 +4,8 @@
     "chainId": 1,
     "eigenLayer": {
       "strategyManager": "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
-      "delegationManager": "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A"
+      "delegationManager": "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+      "slasher": "0xD92145c07f8Ed1D392c1B88017934E301CC1c3Cd"
     }
   },
   "deployment": {

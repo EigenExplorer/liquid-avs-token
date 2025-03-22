@@ -23,23 +23,22 @@ import {ILiquidTokenManager} from "../../../src/interfaces/ILiquidTokenManager.s
 import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
-
 /// @dev To load env file:
 // source .env
 
 /// @dev To setup a local node (on a separate terminal instance):
 // anvil --fork-url $RPC_URL
 
-/// @dev To run this deploy script for local Holesky deployment:
-// forge script script/DeployHolesky.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY -vvvv
+/// @dev To run this deploy script for local Mainnet deployment:
+// forge script script/DeployMainnet.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY -vvvv
 
-/// @dev To run for Holesky testnet with verification:
-// forge script script/DeployHolesky.sol:DeployHolesky --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --verify --etherscan-api-key $ETHERSCAN_API_KEY -vvvv
-contract DeployHolesky is Script, Test {
+/// @dev To run for Mainnet with verification:
+// forge script script/DeployMainnet.sol:DeployMainnet --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --verify --etherscan-api-key $ETHERSCAN_API_KEY -vvvv
+contract DeployMainnet is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
-    // Holesky Chain ID
-    uint256 constant HOLESKY_CHAIN_ID = 17000;
+    // Mainnet Chain ID
+    uint256 constant MAINNET_CHAIN_ID = 1;
 
     // Local or Public deployment flag
     bool public isLocalDeployment;
@@ -61,12 +60,13 @@ contract DeployHolesky is Script, Test {
         TokenParams params;
     }
     
-    // Path to output file - always testnet for Holesky
-    string constant OUTPUT_PATH = "script/configs/testnet/testnet_deployment_data.json";
+    // Path to output file - always mainnet for Ethereum mainnet
+    string constant OUTPUT_PATH = "script/configs/mainnet/mainnet_deployment_data.json";
 
     // Network-level config
     address public strategyManager;
     address public delegationManager;
+    address public slasher;
 
     // Deployment-level config
     address public AVS_ADDRESS;
@@ -131,34 +131,35 @@ contract DeployHolesky is Script, Test {
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
     function run() external {
-        // Verify we're on Holesky or a fork of Holesky
+        // Verify we're on Mainnet or a fork of Mainnet
         uint256 chainId = block.chainid;
         
-        // Determine if we're on a local fork or actual Holesky network
-        if (chainId == HOLESKY_CHAIN_ID) {
+        // Determine if we're on a local fork or actual Mainnet network
+        if (chainId == MAINNET_CHAIN_ID) {
             // Check if this is a local deployment
             string memory deployment = vm.envOr("DEPLOYMENT", string(""));
             isLocalDeployment = keccak256(bytes(deployment)) == keccak256(bytes("local"));
             
             if (isLocalDeployment) {
-                console.log("Running Holesky LOCAL fork deployment");
+                console.log("Running Mainnet LOCAL fork deployment");
             } else {
-                console.log("Running Holesky TESTNET deployment");
+                console.log("Running Ethereum MAINNET production deployment");
+                console.log(" WARNING: Deploying to REAL Ethereum mainnet! ");
             }
         } else {
-            // If we're not on Holesky chain ID, assume local development with a different chainId
-            console.log("Warning: Not running on Holesky chain ID (17000). Current chain ID: %d", chainId);
+            // If we're not on Mainnet chain ID, assume local development with a different chainId
+            console.log("Warning: Not running on Mainnet chain ID (1). Current chain ID: %d", chainId);
             console.log("Continuing as local development deployment");
             isLocalDeployment = true;
         }
         
         console.log("ChainID: %d", block.chainid);
         
-        // Load Holesky config
+        // Load Mainnet config
         if (isLocalDeployment) {
-            loadConfig("holesky.json", "xeigenda_holesky.anvil.config.json", "local");
+            loadConfig("mainnet.json", "xeigenda_mainnet.anvil.config.json", "local");
         } else {
-            loadConfig("holesky.json", "xeigenda_holesky.config.json", "testnet");
+            loadConfig("mainnet.json", "xeigenda_mainnet.config.json", "mainnet");
         }
 
         // Core deployment
@@ -181,7 +182,7 @@ contract DeployHolesky is Script, Test {
         console.log("\n=== Writing Deployment Data ===");
         writeDeploymentOutput();
         
-        console.log("\n=== Holesky Deployment Complete ===");
+        console.log("\n=== Mainnet Deployment Complete ===");
         console.log("ProxyAdmin: %s", address(proxyAdmin));
         console.log("LiquidToken: %s", address(liquidToken));
         console.log("LiquidTokenManager: %s", address(liquidTokenManager));
@@ -215,9 +216,12 @@ contract DeployHolesky is Script, Test {
 
         strategyManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.strategyManager");
         delegationManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.delegationManager");
+        slasher = stdJson.readAddress(networkConfigData, ".network.eigenLayer.slasher");
+        
         console.log("Loaded EigenLayer addresses:");
         console.log("  StrategyManager: %s", strategyManager);
         console.log("  DelegationManager: %s", delegationManager);
+        console.log("  Slasher: %s", slasher);
 
         // Load deployment-specific config
         string memory deployConfigData = vm.readFile(deployConfigPath);
@@ -306,7 +310,7 @@ contract DeployHolesky is Script, Test {
         console.log("StakerNode implementation deployed at: %s", address(stakerNodeImpl));
     }
 
-    function deployProxies() internal {
+  function deployProxies() internal {
         console.log("\n=== Deploying Proxy Contracts ===");
         
         console.log("Deploying TokenRegistryOracle proxy...");
