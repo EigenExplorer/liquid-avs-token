@@ -37,3 +37,745 @@
 {"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-18T22:55:36.263Z"}
 {"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-18T22:55:36.275Z"}
 {"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-18T22:55:36.264Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:32:22.026Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:32:22.028Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:22.028Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:22.028Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:22.028Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:22.029Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:22.029Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:22.029Z"}
+{"level":"error","message":"Gas estimation failed: PrivateKeyLengthError: Private key must be 32 bytes.","timestamp":"2025-03-23T21:32:22.033Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:32:22.034Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:32:22.035Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:32:22.050Z"}
+{"code":701,"level":"error","message":"Error processing config.json: Private key must be 32 bytes.","name":"PrivateKeyLengthError","stack":"PrivateKeyLengthError: Private key must be 32 bytes.\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:87:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:32:22.051Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:32:22.083Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:32:52.057Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:52.059Z"}
+{"level":"error","message":"Gas estimation failed: PrivateKeyLengthError: Private key must be 32 bytes.","timestamp":"2025-03-23T21:32:52.064Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:32:52.065Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:32:52.076Z"}
+{"code":701,"level":"error","message":"Error processing config.json: Private key must be 32 bytes.","name":"PrivateKeyLengthError","stack":"PrivateKeyLengthError: Private key must be 32 bytes.\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:87:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:32:52.077Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:32:52.090Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:33:30.827Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:33:30.829Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:30.830Z"}
+{"level":"error","message":"Gas estimation failed: InvalidPrivateKeyError: Invalid Private Key, Not a valid string or uint8Array","timestamp":"2025-03-23T21:33:30.837Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:33:30.838Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:33:30.839Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:33:30.853Z"}
+{"code":702,"level":"error","message":"Error processing config.json: Invalid Private Key, Not a valid string or uint8Array","name":"InvalidPrivateKeyError","stack":"InvalidPrivateKeyError: Invalid Private Key, Not a valid string or uint8Array\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:93:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:33:30.854Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:33:30.867Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:33:46.773Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:33:46.775Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:46.775Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:46.775Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:46.775Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:46.776Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:46.776Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:46.776Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:33:46.807Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:33:46.807Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:33:46.807Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:33:46.809Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:33:46.810Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:33:46.811Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:33:46.812Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:33:46.813Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:33:46.813Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:33:46.825Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:34:06.261Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:34:06.263Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:34:06.264Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:34:06.296Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:34:06.296Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:34:06.296Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:34:06.298Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:34:06.299Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:34:06.301Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:34:06.301Z"}
+{"level":"error","message":"Failed to load contracts: abis.filter is not a function","stack":"TypeError: abis.filter is not a function\n    at ContractBuilder._parseAndSetJsonInterface (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:615:35)\n    at new Contract (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:314:14)\n    at new ContractBuilder (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/web3.js:142:17)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:607:30\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"error","message":"Error processing config.json: abis.filter is not a function","stack":"TypeError: abis.filter is not a function\n    at ContractBuilder._parseAndSetJsonInterface (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:615:35)\n    at new Contract (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:314:14)\n    at new ContractBuilder (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/web3.js:142:17)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:607:30\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:34:06.302Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:34:06.314Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:37:50.928Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:37:50.930Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:37:50.960Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:37:50.960Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:37:50.960Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:37:50.962Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:37:50.963Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:37:50.965Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:37:50.965Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:37:50.974Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:37:50.974Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:37:50.974Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:37:50.975Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:37:50.987Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:40:55.480Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:40:55.482Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:40:55.482Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:40:55.482Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:40:55.482Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:40:55.483Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:40:55.483Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:40:55.483Z"}
+{"level":"error","message":"Gas estimation failed: PrivateKeyLengthError: Private key must be 32 bytes.","timestamp":"2025-03-23T21:40:55.487Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:40:55.488Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:40:55.499Z"}
+{"code":701,"level":"error","message":"Error processing config.json: Private key must be 32 bytes.","name":"PrivateKeyLengthError","stack":"PrivateKeyLengthError: Private key must be 32 bytes.\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:87:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:40:55.500Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:40:55.513Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:42:07.247Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:42:07.249Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:42:07.249Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:42:07.250Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:42:07.250Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:42:07.250Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:42:07.250Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:42:07.250Z"}
+{"level":"error","message":"Gas estimation failed: PrivateKeyLengthError: Private key must be 32 bytes.","timestamp":"2025-03-23T21:42:07.255Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:42:07.256Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:42:07.256Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:42:07.257Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:42:07.271Z"}
+{"code":701,"level":"error","message":"Error processing config.json: Private key must be 32 bytes.","name":"PrivateKeyLengthError","stack":"PrivateKeyLengthError: Private key must be 32 bytes.\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:87:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:42:07.271Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:42:07.271Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:42:07.271Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:42:07.272Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:42:07.284Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:43:19.203Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:43:19.205Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:43:19.205Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:43:19.205Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:43:19.205Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:43:19.205Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:43:19.206Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:43:19.206Z"}
+{"level":"error","message":"Gas estimation failed: PrivateKeyLengthError: Private key must be 32 bytes.","timestamp":"2025-03-23T21:43:19.210Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:43:19.211Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:43:19.223Z"}
+{"code":701,"level":"error","message":"Error processing config.json: Private key must be 32 bytes.","name":"PrivateKeyLengthError","stack":"PrivateKeyLengthError: Private key must be 32 bytes.\n    at parseAndValidatePrivateKey (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:87:15)\n    at privateKeyToAccount (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-accounts/lib/commonjs/account.js:629:73)\n    at Object.privateKeyToAccountWithContext [as privateKeyToAccount] (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3/lib/commonjs/accounts.js:47:69)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:600:43\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:43:19.223Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:43:19.224Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:43:19.236Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:44:10.144Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:44:10.146Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:44:10.146Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:44:10.146Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:44:10.147Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:44:10.147Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:44:10.147Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:44:10.147Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:44:10.177Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:44:10.177Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:44:10.177Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:44:10.179Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:44:10.180Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:44:10.180Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:44:10.180Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:44:10.180Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:44:10.182Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:44:10.182Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:44:10.185Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:44:10.186Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T21:45:00.000Z","timestamp":"2025-03-23T21:44:10.198Z"}
+{"level":"info","message":"Scheduled job triggered at 2025-03-23T21:45:00.006Z","timestamp":"2025-03-23T21:45:00.006Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:45:00.006Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:45:00.007Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:45:00.008Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:45:00.009Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:45:00.009Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:45:00.012Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:45:00.013Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:45:00.017Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:45:00.017Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:45:00.017Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:46:13.956Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:46:13.957Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:46:13.958Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:46:13.989Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:46:13.989Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:46:13.989Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:46:13.991Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:46:13.992Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:46:13.993Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:46:13.994Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:46:13.997Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:46:13.997Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T22:00:00.000Z","timestamp":"2025-03-23T21:46:14.009Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:47:13.025Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:47:13.027Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:47:13.028Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:47:13.059Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:47:13.059Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:47:13.059Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:47:13.060Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:47:13.060Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:47:13.061Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:47:13.063Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:47:13.063Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:47:13.066Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:47:13.067Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T22:00:00.000Z","timestamp":"2025-03-23T21:47:13.079Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:48:58.717Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:48:58.718Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:48:58.719Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:48:58.720Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:48:58.720Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:48:58.750Z"}
+{"level":"info","message":"Found configuration for tokens: steth, reth","timestamp":"2025-03-23T21:48:58.751Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:48:58.751Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:48:58.752Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:48:58.752Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:48:58.752Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:48:58.752Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:48:58.752Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Loaded 1 configurations from deployment data","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:48:58.753Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:52:45.186Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:52:45.187Z"}
+{"level":"warn","message":"Deployment data not found at /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T21:52:45.188Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:52:45.219Z"}
+{"level":"info","message":"Found configuration for tokens: STETH, RETH","timestamp":"2025-03-23T21:52:45.219Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:52:45.219Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:52:45.221Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:52:45.221Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:52:45.221Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:52:45.221Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:52:45.221Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"warn","message":"Deployment data not found at /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"Found 1 configuration files","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"Processing config file: config.json","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:52:45.222Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:52:45.224Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:52:45.224Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:52:45.228Z"}
+{"code":205,"level":"error","message":"Error processing config.json: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:52:45.228Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:52:45.228Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:52:45.228Z"}
+{"level":"warn","message":"Deployment data not found at /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T21:52:45.228Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:52:45.228Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T22:00:00.000Z","timestamp":"2025-03-23T21:52:45.241Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:53:33.808Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:53:33.809Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:53:33.810Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:53:33.811Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:53:33.811Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:53:33.843Z"}
+{"level":"info","message":"Found configuration for tokens: steth, reth","timestamp":"2025-03-23T21:53:33.843Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:53:33.843Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:53:33.845Z"}
+{"level":"info","message":"Loaded 1 configurations from deployment data","timestamp":"2025-03-23T21:53:33.846Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:53:33.846Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:53:58.205Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:53:58.206Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:58.207Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:53:58.207Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:53:58.207Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:53:58.207Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:53:58.207Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:53:58.208Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:53:58.208Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:53:58.208Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:53:58.208Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:53:58.240Z"}
+{"level":"info","message":"Found configuration for tokens: steth, reth","timestamp":"2025-03-23T21:53:58.240Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:53:58.240Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:58.242Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Loaded 1 configurations from deployment data","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:53:58.243Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:54:29.834Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:54:29.836Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:54:29.837Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:54:29.837Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:54:29.837Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:54:29.837Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:54:29.867Z"}
+{"level":"info","message":"Found configuration for tokens: steth, reth","timestamp":"2025-03-23T21:54:29.867Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:54:29.867Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:54:29.869Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Mapped token steth at address 0xae7ab9...","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Mapped token reth at address 0xae7873...","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Created config with 2 tokens","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Successfully created 1 LAT configurations","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Loaded 1 configurations from deployment data","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"\n=== Processing LAT 0xDB8cFf... ===","timestamp":"2025-03-23T21:54:29.870Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:54:29.872Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:54:29.872Z"}
+{"code":205,"level":"error","message":"Failed to load contracts: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError","props":{"internalErr":{"code":205,"message":"Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.","name":"AbiError"}},"stack":"AbiError: Parameter decoding error: Returned values aren't valid, did it run Out of Gas? You might also see this error if you are not using the correct ABI for the contract you are retrieving data from, requesting data from a block number that does not exist, or querying a node which is not fully synced.\n    at decodeParametersWith (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:103:15)\n    at decodeParameters (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/parameters_api.js:213:75)\n    at decodeFunctionReturn (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-abi/lib/commonjs/api/functions_api.js:256:61)\n    at ContractBuilder.<anonymous> (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:782:64)\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/node_modules/web3-eth-contract/lib/commonjs/contract.js:21:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-03-23T21:54:29.875Z"}
+{"level":"info","message":"Successfully loaded token mappings","timestamp":"2025-03-23T21:56:47.390Z"}
+{"level":"info","message":"\n=== Gas Requirement Estimates ===","timestamp":"2025-03-23T21:56:47.392Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:56:47.393Z"}
+{"level":"info","message":"Current wallet balance: 10000 ETH","timestamp":"2025-03-23T21:56:47.424Z"}
+{"level":"info","message":"Found configuration for tokens: TKA","timestamp":"2025-03-23T21:56:47.424Z"}
+{"level":"info","message":"Found configuration for tokens: TKB","timestamp":"2025-03-23T21:56:47.424Z"}
+{"level":"info","message":"Total tokens to be updated: 2","timestamp":"2025-03-23T21:56:47.424Z"}
+{"level":"info","message":"No historical data available. Using conservative estimates:","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"  Estimated gas per token: 100000","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"  Current gas price: 2 gwei","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"  Estimated gas for all 2 tokens: 200000","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"  Estimated ETH required: 0.0004 ETH","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"  Current balance can support approximately 25000000 complete update cycles","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"=== End of Gas Estimate ===\n","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:56:47.426Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Found 2 configuration files","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Processing config file: config1.json","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"\n=== Processing LAT 0x8B42A9... ===","timestamp":"2025-03-23T21:56:47.427Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:56:47.429Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:56:47.429Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:56:47.430Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config1.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:56:47.430Z"}
+{"level":"info","message":"Processing config file: config2.json","timestamp":"2025-03-23T21:56:47.430Z"}
+{"level":"info","message":"\n=== Processing LAT 0x167927... ===","timestamp":"2025-03-23T21:56:47.430Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T21:56:47.431Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:56:47.431Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config2.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Setting up scheduled price updates","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Scheduling updates with cron expression: */15 * * * * (every 15 minutes)","timestamp":"2025-03-23T21:56:47.431Z"}
+{"level":"info","message":"Next scheduled update: 2025-03-23T22:00:00.000Z","timestamp":"2025-03-23T21:56:47.442Z"}
+{"level":"info","message":"Scheduled job triggered at 2025-03-23T22:00:00.011Z","timestamp":"2025-03-23T22:00:00.011Z"}
+{"level":"info","message":"Scheduled job triggered at 2025-03-23T22:00:00.014Z","timestamp":"2025-03-23T22:00:00.014Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"warn","message":"Deployment data not found at /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/mainnet_deployment_data.json","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"info","message":"Found 2 configuration files","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"info","message":"Processing config file: config1.json","timestamp":"2025-03-23T22:00:00.012Z"}
+{"level":"info","message":"\n=== Processing LAT 0x8B42A9... ===","timestamp":"2025-03-23T22:00:00.013Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T22:00:00.036Z"}
+{"level":"info","message":"Starting price oracle update process","timestamp":"2025-03-23T22:00:00.015Z"}
+{"level":"info","message":"Checking for deployment data at ../script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T22:00:00.015Z"}
+{"level":"info","message":"Successfully loaded deployment data from /Users/parsabahmani/Desktop/liquid-avs-token/script/outputs/local/local_deployment_data.json","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"Processing data using contractDeployments structure","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"Found oracle address: 0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"Found manager address: 0x50EEf481cae4250d252Ae577A09bF514f224C6C4","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"Found 2 tokens in deployment data","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"warn","message":"No valid LAT configurations found in deployment data","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"No deployment data found, checking config directory","timestamp":"2025-03-23T22:00:00.016Z"}
+{"level":"info","message":"Found 2 configuration files","timestamp":"2025-03-23T22:00:00.017Z"}
+{"level":"info","message":"Processing config file: config1.json","timestamp":"2025-03-23T22:00:00.017Z"}
+{"level":"info","message":"\n=== Processing LAT 0x8B42A9... ===","timestamp":"2025-03-23T22:00:00.017Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T22:00:00.039Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T22:00:00.038Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:616:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.038Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config1.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:616:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.038Z"}
+{"level":"info","message":"Processing config file: config2.json","timestamp":"2025-03-23T22:00:00.038Z"}
+{"level":"info","message":"\n=== Processing LAT 0x167927... ===","timestamp":"2025-03-23T22:00:00.038Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T22:00:00.043Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T22:00:00.043Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:616:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.044Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config2.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:616:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.044Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T22:00:00.044Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T22:00:00.039Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.040Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config1.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.041Z"}
+{"level":"info","message":"Processing config file: config2.json","timestamp":"2025-03-23T22:00:00.041Z"}
+{"level":"info","message":"\n=== Processing LAT 0x167927... ===","timestamp":"2025-03-23T22:00:00.041Z"}
+{"level":"info","message":"Connected to blockchain at http://localhost:8545","timestamp":"2025-03-23T22:00:00.044Z"}
+{"level":"info","message":"Using account: 0xf39Fd6...","timestamp":"2025-03-23T22:00:00.045Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Failed to load contracts: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.045Z"}
+{"code":"ENOENT","errno":-2,"level":"error","message":"Error processing config2.json: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'","path":"/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json","stack":"Error: ENOENT: no such file or directory, open '/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/ABIs/oracleABI.json'\n    at Object.readFileSync (node:fs:443:20)\n    at /Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:606:55\n    at Generator.next (<anonymous>)\n    at fulfilled (/Users/parsabahmani/Desktop/liquid-avs-token/price-updater/dist/src/index.js:5:58)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"open","timestamp":"2025-03-23T22:00:00.045Z"}
+{"level":"info","message":"Price oracle update from config files completed","timestamp":"2025-03-23T22:00:00.045Z"}

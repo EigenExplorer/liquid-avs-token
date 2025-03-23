@@ -1,5 +1,7 @@
 # Compiler files
 cache/
+!/cache/abis/
+!/cache/abis/**
 out/
 
 # Ignores development broadcast logs
@@ -14,3 +16,6 @@ broadcast/*
 # Allow deployment output files to be committed
 !/script/outputs
 !/script/outputs/**
+
+# Ignore GitHub push script
+script/github_push.sh

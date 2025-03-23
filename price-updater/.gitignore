@@ -2,3 +2,8 @@
 !.env.example
 node_modules
 dist
+
+# Log files
+*.log
+combined.log
+error.log

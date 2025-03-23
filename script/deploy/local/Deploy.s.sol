@@ -685,6 +685,9 @@ contract DeployMainnet is Script, Test {
         // Top level properties
         vm.serializeAddress(parent_object, "proxyAddress", address(liquidToken));
         vm.serializeAddress(parent_object, "implementationAddress", address(liquidTokenImpl));
+        
+        // Save contract ABIs with contract names
+        saveContractABIs();
         vm.serializeString(parent_object, "name", LIQUID_TOKEN_NAME);
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
@@ -839,6 +842,50 @@ contract DeployMainnet is Script, Test {
      * @notice Pushes deployment data to GitHub repository
      * @dev This function is called after verification to push deployment data to GitHub
      */
+    /**
+     * @dev Extracts and saves contract ABIs with the same names as the contracts
+     */
+    function saveContractABIs() internal {
+        console.log("\n=== Saving Contract ABIs ===");
+        string memory abiDir = "cache/abis";
+        
+        // Create the directory if it doesn't exist
+        string[] memory mkdirCommand = new string[](3);
+        mkdirCommand[0] = "mkdir";
+        mkdirCommand[1] = "-p";
+        mkdirCommand[2] = abiDir;
+        vm.ffi(mkdirCommand);
+        
+        // Save ABIs for main contracts
+        _saveContractABI("LiquidToken", address(liquidToken), abiDir);
+        _saveContractABI("LiquidTokenManager", address(liquidTokenManager), abiDir);
+        _saveContractABI("TokenRegistryOracle", address(tokenRegistryOracle), abiDir);
+        _saveContractABI("StakerNodeCoordinator", address(stakerNodeCoordinator), abiDir);
+        _saveContractABI("ProxyAdmin", address(proxyAdmin), abiDir);
+        
+        console.log("Contract ABIs saved to %s", abiDir);
+    }
+    
+    /**
+     * @dev Helper function to save a contract's ABI to a file
+     * @param contractName The name of the contract
+     * @param contractAddress The address of the contract
+     * @param abiDir The directory to save the ABI in
+     */
+    function _saveContractABI(string memory contractName, address contractAddress, string memory abiDir) internal {
+        string memory filePath = string.concat(abiDir, "/", contractName, ".json");
+        string memory artifactPath = string.concat("out/", contractName, ".sol/", contractName, ".json");
+        
+        // Check if the artifact file exists
+        try vm.readFile(artifactPath) returns (string memory artifactJson) {
+            // Extract the ABI from the artifact JSON
+            vm.writeFile(filePath, artifactJson);
+            console.log("  Saved ABI for %s", contractName);
+        } catch {
+            console.log("  Could not find artifact for %s at %s", contractName, artifactPath);
+        }
+    }
+
     function pushToGitHub() internal {
         // Check if GitHub integration is enabled
         bool enableGitHubIntegration = vm.envOr("ENABLE_GITHUB_INTEGRATION", false);
