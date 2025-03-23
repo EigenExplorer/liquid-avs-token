@@ -1,0 +1,96 @@
+{
+  "avsAddress": "0x870679E138bCdf293b7Ff14dD44b70FC97e12fc0",
+  "chainId": 31337,
+  "contractDeployments": {
+    "implementation": {
+      "liquidToken": {
+        "address": "0x34A1D3fff3958843C43aD80F30b94c510645C316",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "liquidTokenManager": {
+        "address": "0x90193C961A926261B756D1E5bb255e67ff9498A1",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "stakerNode": {
+        "address": "0xBb2180ebd78ce97360503434eD37fcf4a1Df61c3",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "stakerNodeCoordinator": {
+        "address": "0xA8452Ec99ce0C64f20701dB7dD3abDb607c00496",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "tokenRegistryOracle": {
+        "address": "0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496",
+        "block": 0,
+        "timestamp": 1742713340000
+      }
+    },
+    "proxy": {
+      "liquidToken": {
+        "address": "0xDEb1E9a6Be7Baf84208BB6E10aC9F9bbE1D70809",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "liquidTokenManager": {
+        "address": "0x50EEf481cae4250d252Ae577A09bF514f224C6C4",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "stakerNodeCoordinator": {
+        "address": "0x62c20Aa1e0272312BC100b4e23B4DC1Ed96dD7D1",
+        "block": 0,
+        "timestamp": 1742713340000
+      },
+      "tokenRegistryOracle": {
+        "address": "0xDB8cFf278adCCF9E9b5da745B44E754fC4EE3C76",
+        "block": 0,
+        "timestamp": 1742713340000
+      }
+    }
+  },
+  "deploymentBlock": 0,
+  "deploymentTimestamp": 1742713340000,
+  "implementationAddress": "0x34A1D3fff3958843C43aD80F30b94c510645C316",
+  "initialization": {
+    "liquidTokenBlock": 0,
+    "liquidTokenManagerBlock": 0,
+    "liquidTokenManagerTimestamp": 1742713340000,
+    "liquidTokenTimestamp": 1742713340000,
+    "stakerNodeCoordinatorBlock": 0,
+    "stakerNodeCoordinatorTimestamp": 1742713340000,
+    "tokenRegistryOracleBlock": 0,
+    "tokenRegistryOracleTimestamp": 1742713340000
+  },
+  "maxNodes": 10,
+  "name": "EigenDA Liquid Avs Token",
+  "proxyAddress": "0xDEb1E9a6Be7Baf84208BB6E10aC9F9bbE1D70809",
+  "roles": {
+    "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "deployer": "0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38",
+    "pauser": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "priceUpdater": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "proxyAdmin": "0x5b73C5498c1E3b4dbA84de0F1833c4a029d90519",
+    "strategyController": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "symbol": "xEIGEN",
+  "tokens": {
+    "0": {
+      "address": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+      "decimals": 18,
+      "pricePerUnit": 1000000000000000000,
+      "strategy": "0x93c4b944D05dfe6df7645A86cd2206016c51564D",
+      "volatilityThreshold": 700000000000000000
+    },
+    "1": {
+      "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+      "decimals": 18,
+      "pricePerUnit": 1000000000000000000,
+      "strategy": "0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2",
+      "volatilityThreshold": 700000000000000000
+    }
+  }
+}
