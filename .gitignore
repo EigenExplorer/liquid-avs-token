@@ -10,3 +10,7 @@ broadcast/*
 
 # Dotenv file
 .env
+
+# Allow deployment output files to be committed
+!/script/outputs
+!/script/outputs/**

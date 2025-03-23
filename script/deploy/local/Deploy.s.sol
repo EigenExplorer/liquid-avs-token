@@ -192,6 +192,9 @@ contract DeployMainnet is Script, Test {
         console.log("\n=== Writing Deployment Data ===");
         writeDeploymentOutput();
         
+        // Push deployment data to GitHub
+        pushToGitHub();
+        
         console.log("\n=== Mainnet Deployment Complete ===");
         console.log("ProxyAdmin: %s", address(proxyAdmin));
         console.log("LiquidToken: %s", address(liquidToken));
@@ -830,5 +833,104 @@ contract DeployMainnet is Script, Test {
         // Use VM cheatcode to read storage at the implementation slot
         bytes32 data = vm.load(proxy, implementationSlot);
         return address(uint160(uint256(data)));
+    }
+    
+    /**
+     * @notice Pushes deployment data to GitHub repository
+     * @dev This function is called after verification to push deployment data to GitHub
+     */
+    function pushToGitHub() internal {
+        // Check if GitHub integration is enabled
+        bool enableGitHubIntegration = vm.envOr("ENABLE_GITHUB_INTEGRATION", false);
+        if (!enableGitHubIntegration) {
+            console.log("GitHub integration not enabled. Set ENABLE_GITHUB_INTEGRATION=true to enable.");
+            return;
+        }
+        
+        // Get GitHub configuration from environment variables
+        string memory githubToken = vm.envString("GITHUB_TOKEN");
+        string memory githubRepo = vm.envString("GITHUB_REPO");
+        string memory githubBranch = vm.envOr("GITHUB_BRANCH", string("lat-deployments-test"));
+        
+        console.log("\n=== Pushing Deployment Data to GitHub ===");
+        console.log("Repository: %s", githubRepo);
+        console.log("Branch: %s", githubBranch);
+        
+        // Read the deployment data from the output file
+        string memory deploymentData = vm.readFile(OUTPUT_PATH);
+        
+        // Generate the path in the repository (same as local path)
+        string memory network = vm.envOr("NETWORK", string("local"));
+        string memory githubPath = string.concat("script/outputs/", network, "/", network, "_deployment_data.json");
+        
+        // Construct the GitHub API URL
+        string memory apiUrl = string.concat(
+            "https://api.github.com/repos/", 
+            githubRepo, 
+            "/contents/", 
+            githubPath
+        );
+        
+        // Prepare the curl command
+        string[] memory curlCommand = new string[](11);
+        curlCommand[0] = "curl";
+        curlCommand[1] = "-X";
+        curlCommand[2] = "PUT";
+        curlCommand[3] = apiUrl;
+        curlCommand[4] = "-H";
+        curlCommand[5] = string.concat("Authorization: token ", githubToken);
+        curlCommand[6] = "-H";
+        curlCommand[7] = "Accept: application/vnd.github.v3+json";
+        curlCommand[8] = "-d";
+        
+        // For GitHub API, we need to encode the content in base64
+        // Since we can't use vm.encodeBase64 directly, we'll use a simpler approach
+        // that works for our JSON deployment data
+        
+        // First, let's create a shell script to handle the base64 encoding and GitHub API call
+        string memory scriptPath = "script/github_push.sh";
+        string memory scriptContent = string.concat(
+            "#!/bin/bash\n",
+            "# This script pushes deployment data to GitHub\n",
+            "GITHUB_TOKEN=\"", githubToken, "\"\n",
+            "GITHUB_REPO=\"", githubRepo, "\"\n",
+            "GITHUB_BRANCH=\"", githubBranch, "\"\n",
+            "GITHUB_PATH=\"script/outputs/", network, "/", network, "_deployment_data.json\"\n",
+            "DEPLOYMENT_DATA_PATH=\"", OUTPUT_PATH, "\"\n\n",
+            "# Encode the content to base64\n",
+            "CONTENT=$(base64 -i $DEPLOYMENT_DATA_PATH)\n\n",
+            "# Create the request body\n",
+            "REQUEST_BODY=\"{\\\"message\\\":\\\"Update deployment data for ", network, "\\\",\\\"branch\\\":\\\"$GITHUB_BRANCH\\\",\\\"content\\\":\\\"$CONTENT\\\"}\"\n\n",
+            "# Make the API call\n",
+            "curl -X PUT \"https://api.github.com/repos/$GITHUB_REPO/contents/$GITHUB_PATH\" ",
+            "-H \"Authorization: token $GITHUB_TOKEN\" ",
+            "-H \"Accept: application/vnd.github.v3+json\" ",
+            "-d \"$REQUEST_BODY\" ",
+            "--silent"
+        );
+        
+        // Write the script to a file
+        vm.writeFile(scriptPath, scriptContent);
+        
+        // Make the script executable
+        string[] memory chmodCommand = new string[](3);
+        chmodCommand[0] = "chmod";
+        chmodCommand[1] = "+x";
+        chmodCommand[2] = scriptPath;
+        vm.ffi(chmodCommand);
+        
+        // Execute the script
+        string[] memory execCommand = new string[](1);
+        execCommand[0] = scriptPath;
+        bytes memory result = vm.ffi(execCommand);
+        
+        // Check if the script executed successfully
+        if (result.length > 0) {
+            console.log("Successfully pushed deployment data to GitHub");
+            console.log("Path: script/outputs/%s/%s_deployment_data.json", network, network);
+        } else {
+            console.log("Failed to push deployment data to GitHub");
+            console.log("Check your GitHub token and repository settings");
+        }
     }
 }
