@@ -7,9 +7,9 @@ import {
 } from "@safe-global/types-kit";
 import { apiKit, protocolKitOwnerAdmin, protocolKitOwnerPauser } from "./safe";
 import { fileURLToPath } from "node:url";
+import { getAddress } from "viem/utils";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getAddress } from "viem/utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,7 +42,7 @@ export function forgeCommand(
   sig: string,
   params: string
 ): string {
-  return `forge script ../script/tasks/${task} --rpc-url ${getRpcUrl()} --json --sender ${sender} --sig '${sig}' -- ${getConfigFile()} ${params} -vvvv`;
+  return `forge script ../script/tasks/${task} --rpc-url ${getRpcUrl()} --json --sender ${sender} --sig '${sig}' -- ${getOutputFile()} ${params} -vvvv`;
 }
 
 /**
@@ -184,12 +184,12 @@ export function getRpcUrl(): string {
 }
 
 /**
- * Returns the input config used to create the deployment
+ * Returns the output file from the deployment
  * Defaults to mainnet if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
  *
  * @returns
  */
-export function getConfigFile(): string {
+export function getOutputFile(): string {
   if (NETWORK === "mainnet") {
     if (DEPLOYMENT === "local") return "/local/mainnet_deployment_data.json";
     return "/mainnet/deployment_data.json";
@@ -208,7 +208,7 @@ export async function getOutputData() {
   try {
     const output = await JSON.parse(
       await fs.readFile(
-        path.resolve(__dirname, `../../../script/outputs${getConfigFile()}`),
+        path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`),
         "utf8"
       )
     );
