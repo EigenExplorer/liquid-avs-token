@@ -65,8 +65,23 @@ contract DeployScript is Script, Test {
         TokenParams params;
     }
     
-    // Path to output file - always mainnet for Ethereum mainnet
-    string constant OUTPUT_PATH = "script/outputs/local/local_deployment_data.json";
+    // Path to output file - dynamic based on network
+    string OUTPUT_PATH;
+    
+    function getOutputPath() internal returns (string memory) {
+        string memory network = vm.envOr("NETWORK", string("local"));
+        if (keccak256(bytes(network)) == keccak256(bytes("local"))) {
+            return "script/outputs/local/local_deployment_data.json";
+        } else if (keccak256(bytes(network)) == keccak256(bytes("holesky")) || 
+                   keccak256(bytes(network)) == keccak256(bytes("sepolia"))) {
+            return "script/outputs/testnet/testnet_deployment_data.json";
+        } else if (keccak256(bytes(network)) == keccak256(bytes("mainnet"))) {
+            return "script/outputs/mainnet/mainnet_deployment_data.json";
+        } else {
+            // Default fallback
+            return string.concat("script/outputs/", network, "/", network, "_deployment_data.json");
+        }
+    }
 
     // Network-level config
     address public strategyManager;
@@ -685,6 +700,9 @@ contract DeployScript is Script, Test {
     }
 
     function writeDeploymentOutput() internal {
+        // Initialize OUTPUT_PATH based on the network
+        OUTPUT_PATH = getOutputPath();
+        
         string memory parent_object = "parent";
         
         // Top level properties
