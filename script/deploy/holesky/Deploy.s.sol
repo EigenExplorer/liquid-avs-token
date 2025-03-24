@@ -27,12 +27,9 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To load env file:
 // source .env
 
-/// @dev To setup a local node (on a separate terminal instance):
-// anvil --fork-url $RPC_URL
-
 /// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployHolesky.s.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "holesky.json" "xeigenda_holesky.anvil.config.json" -vvvv
-contract DeployHolesky is Script, Test {
+// forge script script/deploy/holesky/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
+contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     // Structs for token deployment config
@@ -53,7 +50,7 @@ contract DeployHolesky is Script, Test {
     }
     
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/holesky_deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
 
     // Network-level config
     address public strategyManager;
@@ -121,11 +118,10 @@ contract DeployHolesky is Script, Test {
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
     function run(
-      string memory networkConfigFileName,
       string memory deployConfigFileName
     ) external {
         // Load config files
-        loadConfig(networkConfigFileName, deployConfigFileName);
+        loadConfig(deployConfigFileName);
 
         // Core deployment
         vm.startBroadcast();
@@ -146,11 +142,10 @@ contract DeployHolesky is Script, Test {
     }
 
     function loadConfig(
-      string memory networkConfigFileName,
       string memory deployConfigFileName
     ) internal {
         // Load network-specific config
-        string memory networkConfigPath = string(bytes(string.concat("script/configs/", networkConfigFileName)));
+        string memory networkConfigPath = "script/configs/holesky.json";
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(stdJson.readUint(networkConfigData, ".network.chainId") == block.chainid, "Wrong network");
 
@@ -158,7 +153,7 @@ contract DeployHolesky is Script, Test {
         delegationManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.delegationManager");
 
         // Load deployment-specific config
-        string memory deployConfigPath = string(bytes(string.concat("script/configs/local/", deployConfigFileName)));
+        string memory deployConfigPath = string(bytes(string.concat("script/configs/holesky/", deployConfigFileName)));
         string memory deployConfigData = vm.readFile(deployConfigPath);
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
