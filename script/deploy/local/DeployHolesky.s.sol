@@ -53,7 +53,8 @@ contract DeployHolesky is Script, Test {
     }
     
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/holesky_deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/local/deployment_data.json";
+    string constant ABI_DIR_PATH = "script/outputs/local/abi";
 
     // Network-level config
     address public strategyManager;
@@ -584,10 +585,45 @@ contract DeployHolesky is Script, Test {
         
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
+
+        // Save contract ABIs with contract names
+        _saveContractABIs();
     }
 
     // --- Helper functions ---
+    /**
+     * @dev Returns implementation address for a given proxy
+     *
+     */
     function _getImplementationFromProxy(address proxy) internal view returns (address) {
         return address(uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc))));
+    }
+
+    /**
+     * @dev Extracts and saves contract ABIs with the same names as the contracts
+     */
+    function _saveContractABIs() internal {        
+        _saveContractABI("LiquidToken", address(liquidToken), ABI_DIR_PATH);
+        _saveContractABI("LiquidTokenManager", address(liquidTokenManager), ABI_DIR_PATH);
+        _saveContractABI("TokenRegistryOracle", address(tokenRegistryOracle), ABI_DIR_PATH);
+        _saveContractABI("StakerNodeCoordinator", address(stakerNodeCoordinator), ABI_DIR_PATH);
+        _saveContractABI("StakerNode", address(0), ABI_DIR_PATH);
+    }
+    
+    /**
+     * @dev Saves a contract's ABI to a file
+     * @param contractName The name of the contract
+     * @param contractAddress The address of the contract
+     * @param abiDir The directory to save the ABI in
+     */
+    function _saveContractABI(string memory contractName, address contractAddress, string memory abiDir) internal {
+        string memory filePath = string.concat(abiDir, "/", contractName, ".json");
+        string memory artifactPath = string.concat("out/", contractName, ".sol/", contractName, ".json");
+        
+        try vm.readFile(artifactPath) returns (string memory artifactJson) {
+            vm.writeFile(filePath, artifactJson);
+        } catch {
+            console.log("  Could not find artifact for %s at %s", contractName, artifactPath);
+        }
     }
 }
