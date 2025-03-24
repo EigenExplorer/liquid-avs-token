@@ -70,9 +70,6 @@ export async function fetchLatestDeploymentData() {
 
         const outputResponse = await fetch(outputFileUrl, { headers });
         if (!outputResponse.ok) {
-          console.log(
-            `Could not fetch output.json for ${dir.name}: ${outputResponse.status}`
-          );
           continue;
         }
 
@@ -88,10 +85,6 @@ export async function fetchLatestDeploymentData() {
             timestamp: deploymentData.deploymentTimestamp,
             data: deploymentData,
           });
-        } else {
-          console.log(
-            `No deploymentTimestamp found in output.json for ${dir.name}`
-          );
         }
       } catch (error) {
         console.log(`Error processing output.json for ${dir.name}:`, error);
@@ -107,11 +100,6 @@ export async function fetchLatestDeploymentData() {
     // Get the latest deployment based on timestamp
     versionsWithTimestamps.sort((a, b) => b.timestamp - a.timestamp);
     const latestVersion = versionsWithTimestamps[0];
-    console.log(
-      `Found latest deployment version: ${
-        latestVersion.name
-      } (timestamp: ${new Date(latestVersion.timestamp).toISOString()})`
-    );
     const deploymentData = latestVersion.data;
 
     await fs.mkdir(path.dirname(DEPLOYMENT_DATA_PATH), { recursive: true });

@@ -1,4 +1,5 @@
 import {
+  type PrivateKeyAccount,
   type PublicClient,
   type WalletClient,
   createPublicClient,
@@ -60,17 +61,10 @@ export function getViemClient(n?: Chain) {
  * @param privateKeyEnvVar
  * @returns
  */
-export function getWalletClient(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
+export function getWalletClient(account: PrivateKeyAccount, n?: Chain) {
   if (n) {
     network = n;
   }
-
-  const privateKey = process.env[privateKeyEnvVar];
-  if (!privateKey) {
-    throw new Error(`Environment variable ${privateKeyEnvVar} not set`);
-  }
-
-  const account = privateKeyToAccount(privateKey as `0x${string}`);
 
   walletViemClient = createWalletClient({
     account,
@@ -81,26 +75,6 @@ export function getWalletClient(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
   });
 
   return walletViemClient;
-}
-
-/**
- * Get account from a given private key
- *
- * @param privateKeyEnvVar
- * @param n
- * @returns
- */
-export function getAccount(privateKeyEnvVar = "PRIVATE_KEY", n?: Chain) {
-  if (n) {
-    network = n;
-  }
-
-  const privateKey = process.env[privateKeyEnvVar];
-  if (!privateKey) {
-    throw new Error(`Environment variable ${privateKeyEnvVar} not set`);
-  }
-
-  return privateKeyToAccount(privateKey as `0x${string}`);
 }
 
 // Keep the existing deprecated code for backward compatibility

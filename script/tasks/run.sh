@@ -101,7 +101,7 @@ forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" \
     -- $OUTPUT_FILE "[$NODE_IDS]" $OPERATORS "[]" "[]"
 
-# Update prices of stETH and rETH individually
+# Update prices of stETH and rETH individually using TRO_UpdateRate task
 TOKEN_REGISTRY_ORACLE=$(jq -r '.contractDeployments.proxy.tokenRegistryOracle.address' $OUTPUT_PATH)
 STETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_INITIAL_PRICE_CLEAN=$(echo $STETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
@@ -109,10 +109,23 @@ STETH_INITIAL_PRICE_ETH=$(cast --from-wei $STETH_INITIAL_PRICE_CLEAN)
 RETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
 RETH_INITIAL_PRICE_CLEAN=$(echo $RETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 RETH_INITIAL_PRICE_ETH=$(cast --from-wei $RETH_INITIAL_PRICE_CLEAN)
+
+# Update stETH price
 NEW_STETH_PRICE="1020000000000000000"
-cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $STETH_TOKEN $NEW_STETH_PRICE
+forge script --via-ir script/tasks/TRO_UpdateRate.s.sol:UpdateRate \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $PRICE_UPDATER_PRIVATE_KEY \
+    --sig "run(string,address,uint256)" \
+    -- $OUTPUT_FILE $STETH_TOKEN $NEW_STETH_PRICE
+
+# Update rETH price
 NEW_RETH_PRICE="1070000000000000000"
-cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "updateRate(address,uint256)" $RETH_TOKEN $NEW_RETH_PRICE
+forge script --via-ir script/tasks/TRO_UpdateRate.s.sol:UpdateRate \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $PRICE_UPDATER_PRIVATE_KEY \
+    --sig "run(string,address,uint256)" \
+    -- $OUTPUT_FILE $RETH_TOKEN $NEW_RETH_PRICE
+
 STETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_UPDATED_PRICE_1_CLEAN=$(echo $STETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 STETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_1_CLEAN)
@@ -123,7 +136,12 @@ RETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_1_CLEAN)
 # Update prices of stETH and rETH in a single transaction
 NEW_STETH_PRICE_2="1030000000000000000"
 NEW_RETH_PRICE_2="1080000000000000000"
-cast send $TOKEN_REGISTRY_ORACLE --private-key $PRICE_UPDATER_PRIVATE_KEY "batchUpdateRates(address[],uint256[])" "[$STETH_TOKEN,$RETH_TOKEN]" "[$NEW_STETH_PRICE_2,$NEW_RETH_PRICE_2]"
+forge script --via-ir script/tasks/TRO_BatchUpdateRates.s.sol:BatchUpdateRates \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $PRICE_UPDATER_PRIVATE_KEY \
+    --sig "run(string,address[],uint256[])" \
+    -- $OUTPUT_FILE "[$STETH_TOKEN,$RETH_TOKEN]" "[$NEW_STETH_PRICE_2,$NEW_RETH_PRICE_2]"
+
 STETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
 STETH_UPDATED_PRICE_2_CLEAN=$(echo $STETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
 STETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_2_CLEAN)

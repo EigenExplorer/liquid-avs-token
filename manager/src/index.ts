@@ -3,6 +3,7 @@ import cron from "node-cron";
 
 import { stakeUnstakedAssets } from "./workflows/stakeUnstakedAssets";
 import { fetchLatestDeploymentData } from "./workflows/fetchLatestDeploymentData";
+import { updateAllTokenPrices } from "./workflows/updateAllTokenPrices";
 
 console.log("Initializing Restaking Manager ...");
 
@@ -59,7 +60,7 @@ async function updatePrices(retryCount = 0) {
 
       console.time("Updated prices in");
 
-      // await updateAllTokenPrices()
+      await updateAllTokenPrices();
 
       console.timeEnd("Updated prices in");
     } catch (error) {
@@ -72,10 +73,7 @@ async function updatePrices(retryCount = 0) {
             retryCount + 1
           } of ${MAX_RETRIES})`
         );
-        setTimeout(
-          () => dailyResponsibilities(retryCount + 1),
-          RETRY_DELAY * 1000
-        );
+        setTimeout(() => updatePrices(retryCount + 1), RETRY_DELAY * 1000);
       } else {
         console.log("Max retries reached. Updating prices failed.");
       }

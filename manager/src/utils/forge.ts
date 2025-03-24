@@ -25,7 +25,7 @@ export const {
   liquidToken: LIQUID_TOKEN_ADDRESS,
   liquidTokenManager: LIQUID_TOKEN_MANAGER_ADDRESS,
   stakeNodeCoordinator: STAKER_NODE_COORDINATOR_ADDRESS,
-} = await getOutputData();
+} = await getDeploymentData();
 
 /**
  * Returns the forge command used to call a task from the /script folder
@@ -185,26 +185,23 @@ export function getRpcUrl(): string {
 
 /**
  * Returns the output file from the deployment
- * Defaults to mainnet if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
+ * Defaults to holesky if `NETWORK` env var not set & public if `DEPLOYMENT` env var not set
  *
  * @returns
  */
 export function getOutputFile(): string {
-  if (NETWORK === "mainnet") {
-    if (DEPLOYMENT === "local") return "/local/mainnet_deployment_data.json";
-    return "/mainnet/deployment_data.json";
-  }
-  if (DEPLOYMENT === "local") return "/local/holesky_deployment_data.json";
+  if (DEPLOYMENT === "local") return "/local/deployment_data.json";
+  if (NETWORK === "mainnet") return "/mainnet/deployment_data.json";
   return "/holesky/deployment_data.json";
 }
 
 /**
- * Returns the output file created after the deployment
+ * Returns the deployment data file
  * Defaults to mainnet if local deployment & `NETWORK` env var not set, public if `DEPLOYMENT` env var not set
  *
  * @returns
  */
-export async function getOutputData() {
+export async function getDeploymentData() {
   try {
     const output = await JSON.parse(
       await fs.readFile(
@@ -226,7 +223,7 @@ export async function getOutputData() {
   } catch (error) {
     console.log("Error: ", error);
     return {
-      liquidToken: process.env.LIQUID_TOKEN_ADDRESS || "",
+      liquidToken: "",
       liquidTokenManager: "",
       stakeNodeCoordinator: "",
     };
