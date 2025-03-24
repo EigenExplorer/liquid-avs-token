@@ -1,23 +1,23 @@
 {
-  "avsAddress": "0x1de75eaab2df55d467494a172652579e6fa4540e",
+  "avsAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
   "contracts": {
     "stakerNodeCoordinator": {
       "init": {
-        "maxNodes": 15
+        "maxNodes": 10
       }
     },
     "liquidToken": {
       "init": {
-        "name": "ARPA Liquid Avs Token",
-        "symbol": "xARPA"
+        "name": "EigenDA Liquid Avs Token",
+        "symbol": "xEIGEN"
       }
     }
   },
   "tokens": [
     {
       "addresses": {
-        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
-        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
+        "token": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
+        "strategy": "0x7d704507b76571a51d9cae8addabbfd0ba0e63d3"
       },
       "params": {
         "pricePerUnit": 1000000000000000000,
@@ -27,8 +27,8 @@
     },
     {
       "addresses": {
-        "token": "0xae78736Cd615f374D3085123A210448E74Fc6393",
-        "strategy": "0x1bee69b7dfffa4e2d53c2a2df135c388ad25dcd2"
+        "token": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
+        "strategy": "0x3a8fbdf9e77dfc25d09741f51d3e181b25d0c4e0"
       },
       "params": {
         "pricePerUnit": 1000000000000000000,

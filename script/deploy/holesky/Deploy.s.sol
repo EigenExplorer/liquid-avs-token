@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
@@ -27,12 +27,9 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To load env file:
 // source .env
 
-/// @dev To setup a local node (on a separate terminal instance):
-// anvil --fork-url $RPC_URL
-
 /// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployMainnet.s.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "mainnet.json" "xeigenda_mainnet.anvil.config.json" -vvvv
-contract DeployMainnet is Script, Test {
+// forge script script/deploy/holesky/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
+contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     // Structs for token deployment config
@@ -53,7 +50,7 @@ contract DeployMainnet is Script, Test {
     }
     
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/mainnet_deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
 
     // Network-level config
     address public strategyManager;
@@ -121,11 +118,10 @@ contract DeployMainnet is Script, Test {
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
     function run(
-      string memory networkConfigFileName,
       string memory deployConfigFileName
     ) external {
         // Load config files
-        loadConfig(networkConfigFileName, deployConfigFileName);
+        loadConfig(deployConfigFileName);
 
         // Core deployment
         vm.startBroadcast();
@@ -146,11 +142,10 @@ contract DeployMainnet is Script, Test {
     }
 
     function loadConfig(
-      string memory networkConfigFileName,
       string memory deployConfigFileName
     ) internal {
         // Load network-specific config
-        string memory networkConfigPath = string(bytes(string.concat("script/configs/", networkConfigFileName)));
+        string memory networkConfigPath = "script/configs/holesky.json";
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(stdJson.readUint(networkConfigData, ".network.chainId") == block.chainid, "Wrong network");
 
@@ -158,7 +153,7 @@ contract DeployMainnet is Script, Test {
         delegationManager = stdJson.readAddress(networkConfigData, ".network.eigenLayer.delegationManager");
 
         // Load deployment-specific config
-        string memory deployConfigPath = string(bytes(string.concat("script/configs/local/", deployConfigFileName)));
+        string memory deployConfigPath = string(bytes(string.concat("script/configs/holesky/", deployConfigFileName)));
         string memory deployConfigData = vm.readFile(deployConfigPath);
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
@@ -336,8 +331,18 @@ contract DeployMainnet is Script, Test {
         _verifyRoles();
     }
 
-    function _verifyProxyImplementations() internal view {
-        // TODO: Make sure all proxy impl addresses are equal to actual impl addresses
+    function _verifyProxyImplementations() internal view {        
+        // LiquidToken
+        require(_getImplementationFromProxy(address(liquidToken)) == address(liquidTokenImpl), "LiquidToken proxy implementation mismatch");
+        
+        // LiquidTokenManager
+        require(_getImplementationFromProxy(address(liquidTokenManager)) == address(liquidTokenManagerImpl), "LiquidTokenManager proxy implementation mismatch");
+        
+        // StakerNodeCoordinator
+        require(_getImplementationFromProxy(address(stakerNodeCoordinator)) == address(stakerNodeCoordinatorImpl), "StakerNodeCoordinator proxy implementation mismatch");
+
+        // TokenRegistryOracle
+        require(_getImplementationFromProxy(address(tokenRegistryOracle)) == address(tokenRegistryOracleImpl), "TokenRegistryOracle proxy implementation mismatch");
     }
 
     function _verifyContractConnections() internal view {
@@ -431,8 +436,26 @@ contract DeployMainnet is Script, Test {
         }
     }
 
-    function _verifyRoles() internal view {
-        // TODO: Verify all contracts have correct role settings
+    function _verifyRoles() internal view {        
+        bytes32 adminRole = 0x00;
+        
+        // LiquidToken
+        require(liquidToken.hasRole(adminRole, admin), "Admin role not assigned in LiquidToken");
+        require(liquidToken.hasRole(liquidToken.PAUSER_ROLE(), pauser), "Pauser role not assigned in LiquidToken");
+        
+        // LiquidTokenManager        
+        require(liquidTokenManager.hasRole(adminRole, admin), "Admin role not assigned in LiquidTokenManager");
+        require(liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), admin), "Strategy Controller role not assigned in LiquidTokenManager");
+        require(liquidTokenManager.hasRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(tokenRegistryOracle)), "Price Updater role not assigned in LiquidTokenManager");
+        
+        // StakerNodeCoordinator
+        require(stakerNodeCoordinator.hasRole(adminRole, admin), "Admin role not assigned in StakerNodeCoordinator");
+        require(stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), admin), "Staker Node Creator role not assigned in StakerNodeCoordinator");
+        require(stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), address(liquidTokenManager)), "Staker Nodes Delegator role not assigned in StakerNodeCoordinator");
+        
+        // TokenRegistryOracle
+        require(tokenRegistryOracle.hasRole(adminRole, admin), "Admin role not assigned in TokenRegistryOracle");
+        require(tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), priceUpdater), "Rate Updater role not assigned in TokenRegistryOracle");
     }
 
     function writeDeploymentOutput() internal {
@@ -445,9 +468,9 @@ contract DeployMainnet is Script, Test {
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
         vm.serializeUint(parent_object, "chainId", block.chainid);
-        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES);
+        vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES); // Adjust as needed
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
-        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000);
+        vm.serializeUint(parent_object, "deploymentTimestamp", block.timestamp * 1000); // Converting to milliseconds
         
         // Contract deployments section
         string memory contractDeployments = "contractDeployments";
@@ -556,5 +579,10 @@ contract DeployMainnet is Script, Test {
         
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
+    }
+
+    // --- Helper functions ---
+    function _getImplementationFromProxy(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc))));
     }
 }
