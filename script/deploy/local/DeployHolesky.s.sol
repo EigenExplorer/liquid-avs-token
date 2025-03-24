@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
@@ -53,7 +53,8 @@ contract DeployHolesky is Script, Test {
     }
     
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/holesky_deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/local/deployment_data.json";
+    string constant ABI_DIR_PATH = "script/outputs/local/abi";
 
     // Network-level config
     address public strategyManager;
@@ -336,8 +337,18 @@ contract DeployHolesky is Script, Test {
         _verifyRoles();
     }
 
-    function _verifyProxyImplementations() internal view {
-        // TODO: Make sure all proxy impl addresses are equal to actual impl addresses
+    function _verifyProxyImplementations() internal view {        
+        // LiquidToken
+        require(_getImplementationFromProxy(address(liquidToken)) == address(liquidTokenImpl), "LiquidToken proxy implementation mismatch");
+        
+        // LiquidTokenManager
+        require(_getImplementationFromProxy(address(liquidTokenManager)) == address(liquidTokenManagerImpl), "LiquidTokenManager proxy implementation mismatch");
+        
+        // StakerNodeCoordinator
+        require(_getImplementationFromProxy(address(stakerNodeCoordinator)) == address(stakerNodeCoordinatorImpl), "StakerNodeCoordinator proxy implementation mismatch");
+
+        // TokenRegistryOracle
+        require(_getImplementationFromProxy(address(tokenRegistryOracle)) == address(tokenRegistryOracleImpl), "TokenRegistryOracle proxy implementation mismatch");
     }
 
     function _verifyContractConnections() internal view {
@@ -431,8 +442,26 @@ contract DeployHolesky is Script, Test {
         }
     }
 
-    function _verifyRoles() internal view {
-        // TODO: Verify all contracts have correct role settings
+    function _verifyRoles() internal view {        
+        bytes32 adminRole = 0x00;
+        
+        // LiquidToken
+        require(liquidToken.hasRole(adminRole, admin), "Admin role not assigned in LiquidToken");
+        require(liquidToken.hasRole(liquidToken.PAUSER_ROLE(), pauser), "Pauser role not assigned in LiquidToken");
+        
+        // LiquidTokenManager        
+        require(liquidTokenManager.hasRole(adminRole, admin), "Admin role not assigned in LiquidTokenManager");
+        require(liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), admin), "Strategy Controller role not assigned in LiquidTokenManager");
+        require(liquidTokenManager.hasRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(tokenRegistryOracle)), "Price Updater role not assigned in LiquidTokenManager");
+        
+        // StakerNodeCoordinator
+        require(stakerNodeCoordinator.hasRole(adminRole, admin), "Admin role not assigned in StakerNodeCoordinator");
+        require(stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), admin), "Staker Node Creator role not assigned in StakerNodeCoordinator");
+        require(stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), address(liquidTokenManager)), "Staker Nodes Delegator role not assigned in StakerNodeCoordinator");
+        
+        // TokenRegistryOracle
+        require(tokenRegistryOracle.hasRole(adminRole, admin), "Admin role not assigned in TokenRegistryOracle");
+        require(tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), priceUpdater), "Rate Updater role not assigned in TokenRegistryOracle");
     }
 
     function writeDeploymentOutput() internal {
@@ -556,5 +585,45 @@ contract DeployHolesky is Script, Test {
         
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
+
+        // Save contract ABIs with contract names
+        _saveContractABIs();
+    }
+
+    // --- Helper functions ---
+    /**
+     * @dev Returns implementation address for a given proxy
+     *
+     */
+    function _getImplementationFromProxy(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc))));
+    }
+
+    /**
+     * @dev Extracts and saves contract ABIs with the same names as the contracts
+     */
+    function _saveContractABIs() internal {        
+        _saveContractABI("LiquidToken", address(liquidToken), ABI_DIR_PATH);
+        _saveContractABI("LiquidTokenManager", address(liquidTokenManager), ABI_DIR_PATH);
+        _saveContractABI("TokenRegistryOracle", address(tokenRegistryOracle), ABI_DIR_PATH);
+        _saveContractABI("StakerNodeCoordinator", address(stakerNodeCoordinator), ABI_DIR_PATH);
+        _saveContractABI("StakerNode", address(0), ABI_DIR_PATH);
+    }
+    
+    /**
+     * @dev Saves a contract's ABI to a file
+     * @param contractName The name of the contract
+     * @param contractAddress The address of the contract
+     * @param abiDir The directory to save the ABI in
+     */
+    function _saveContractABI(string memory contractName, address contractAddress, string memory abiDir) internal {
+        string memory filePath = string.concat(abiDir, "/", contractName, ".json");
+        string memory artifactPath = string.concat("out/", contractName, ".sol/", contractName, ".json");
+        
+        try vm.readFile(artifactPath) returns (string memory artifactJson) {
+            vm.writeFile(filePath, artifactJson);
+        } catch {
+            console.log("  Could not find artifact for %s at %s", contractName, artifactPath);
+        }
     }
 }

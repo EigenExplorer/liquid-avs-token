@@ -62,8 +62,8 @@ mkdir -p script/outputs/local
 # Chain configuration (replace mainnet <> holesky to switch chains)
 NETWORK_CONFIG_FILE="holesky.json"
 DEPLOYMENT_CONFIG_FILE="xeigenda_holesky.anvil.config.json"
-OUTPUT_PATH="script/outputs/local/holesky_deployment_data.json"
-OUTPUT_FILE="/local/holesky_deployment_data.json"
+OUTPUT_PATH="script/outputs/local/deployment_data.json"
+OUTPUT_FILE="/local/deployment_data.json"
 RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb" # mainnet: "0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
 
 # Deploy contracts (replace Mainnet <> Holesky to switch chains)
