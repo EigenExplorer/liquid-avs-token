@@ -50,7 +50,7 @@ echo "[Deploy] Deploying ${LAT_NAME} on ${CHAIN}..."
 
 forge script --via-ir --optimize true script/deploy/$CHAIN/Deploy.s.sol:Deploy \
     --rpc-url $RPC_URL --broadcast \
-		--verify --etherscan-api-key $ETHERSCAN_API_KEY \
+    --verify --etherscan-api-key $ETHERSCAN_API_KEY \
     --private-key $DEPLOYER_PRIVATE_KEY \
     --sig "run(string)" \
     -- $DEPLOYMENT_CONFIG_FILE
