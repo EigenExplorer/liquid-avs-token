@@ -29,12 +29,17 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To setup a local node (on a separate terminal instance):
 // anvil --fork-url $RPC_URL
 
-/// @dev To run this deploy script for local Mainnet deployment:
-// forge script script/DeployMainnet.sol:DeployMainnet --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY -vvvv
+/// @dev To run local deployment:
+// forge script script/deploy/local/Deploy.s.sol:DeployLocal --rpc-url http://localhost:8545 --broadcast --unlocked --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --ffi -vvv
 
-/// @dev To run for Mainnet with verification:
-// forge script script/DeployMainnet.sol:DeployMainnet --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --verify --etherscan-api-key $ETHERSCAN_API_KEY -vvvv
-contract DeployMainnet is Script, Test {
+/// @dev To run testnet deployment:
+// forge script script/deploy/local/Deploy.s.sol:DeployTestnet --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --ffi -vvv
+
+/// @dev To run mainnet deployment with verification:
+// forge script script/deploy/local/Deploy.s.sol:DeployMainnet --rpc-url $RPC_URL --broadcast --private-key $DEPLOYER_PRIVATE_KEY --verify --etherscan-api-key $ETHERSCAN_API_KEY --ffi -vvv
+
+// Base deployment contract with common functions
+contract DeployScript is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     // Mainnet Chain ID
@@ -130,7 +135,7 @@ contract DeployMainnet is Script, Test {
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
-    function run() external {
+    function run() external virtual {
         // Verify we're on Mainnet or a fork of Mainnet
         uint256 chainId = block.chainid;
         
@@ -861,6 +866,7 @@ contract DeployMainnet is Script, Test {
         _saveContractABI("LiquidTokenManager", address(liquidTokenManager), abiDir);
         _saveContractABI("TokenRegistryOracle", address(tokenRegistryOracle), abiDir);
         _saveContractABI("StakerNodeCoordinator", address(stakerNodeCoordinator), abiDir);
+        _saveContractABI("StakerNode", address(0), abiDir); // Address not important for ABI extraction
         _saveContractABI("ProxyAdmin", address(proxyAdmin), abiDir);
         
         console.log("Contract ABIs saved to %s", abiDir);
@@ -896,64 +902,154 @@ contract DeployMainnet is Script, Test {
         
         // Get GitHub configuration from environment variables
         string memory githubToken = vm.envString("GITHUB_TOKEN");
-        string memory githubRepo = vm.envString("GITHUB_REPO");
-        string memory githubBranch = vm.envOr("GITHUB_BRANCH", string("lat-deployments-test"));
+        string memory deploymentRepo = vm.envOr("DEPLOYMENT_REPO", string("lat-deployments-test"));
+        string memory githubOrg = vm.envString("GITHUB_ORG");
+        
+        // Get token name from the config file name
+        string memory deployConfigFileName = vm.envOr("DEPLOY_CONFIG_FILE", string("xarpa_mainnet.anvil.config.json"));
+        string memory tokenName = _extractTokenName(deployConfigFileName);
+        string memory tokenVersion = vm.envOr("TOKEN_VERSION", string("1"));
+        string memory network = vm.envOr("NETWORK", string("local"));
         
         console.log("\n=== Pushing Deployment Data to GitHub ===");
-        console.log("Repository: %s", githubRepo);
-        console.log("Branch: %s", githubBranch);
+        console.log("Organization: %s", githubOrg);
+        console.log("Deployment Repository: %s", deploymentRepo);
+        console.log("Network: %s", network);
+        console.log("Token: %s", tokenName);
+        console.log("Version: %s", tokenVersion);
         
-        // Read the deployment data from the output file
-        string memory deploymentData = vm.readFile(OUTPUT_PATH);
-        
-        // Generate the path in the repository (same as local path)
-        string memory network = vm.envOr("NETWORK", string("local"));
-        string memory githubPath = string.concat("script/outputs/", network, "/", network, "_deployment_data.json");
-        
-        // Construct the GitHub API URL
-        string memory apiUrl = string.concat(
-            "https://api.github.com/repos/", 
-            githubRepo, 
-            "/contents/", 
-            githubPath
-        );
-        
-        // Prepare the curl command
-        string[] memory curlCommand = new string[](11);
-        curlCommand[0] = "curl";
-        curlCommand[1] = "-X";
-        curlCommand[2] = "PUT";
-        curlCommand[3] = apiUrl;
-        curlCommand[4] = "-H";
-        curlCommand[5] = string.concat("Authorization: token ", githubToken);
-        curlCommand[6] = "-H";
-        curlCommand[7] = "Accept: application/vnd.github.v3+json";
-        curlCommand[8] = "-d";
-        
-        // For GitHub API, we need to encode the content in base64
-        // Since we can't use vm.encodeBase64 directly, we'll use a simpler approach
-        // that works for our JSON deployment data
-        
-        // First, let's create a shell script to handle the base64 encoding and GitHub API call
+        // Create a shell script to handle the GitHub API calls
         string memory scriptPath = "script/github_push.sh";
         string memory scriptContent = string.concat(
             "#!/bin/bash\n",
-            "# This script pushes deployment data to GitHub\n",
-            "GITHUB_TOKEN=\"", githubToken, "\"\n",
-            "GITHUB_REPO=\"", githubRepo, "\"\n",
-            "GITHUB_BRANCH=\"", githubBranch, "\"\n",
-            "GITHUB_PATH=\"script/outputs/", network, "/", network, "_deployment_data.json\"\n",
+            "set -e\n",
+            "# This script pushes deployment data and code to GitHub\n",
+            "# Print GitHub token length for debugging (without revealing the token)\n",
+            "echo \"GitHub token length: ${#GITHUB_TOKEN}\"\n",
+            "# Use the token directly from environment variable if available\n",
+            "if [ -z \"$GITHUB_TOKEN\" ]; then\n",
+            "  # If not available in environment, use the one provided by the script\n",
+            "  GITHUB_TOKEN=\"", githubToken, "\"\n",
+            "  echo \"Using GitHub token from script with length: ${#GITHUB_TOKEN}\"\n",
+            "fi\n",
+            "GITHUB_ORG=\"", githubOrg, "\"\n",
+            "DEPLOYMENT_REPO=\"", deploymentRepo, "\"\n",
+            "NETWORK=\"", network, "\"\n",
+            "TOKEN_NAME=\"", tokenName, "\"\n",
+            "TOKEN_VERSION=\"", tokenVersion, "\"\n",
+            "DEPLOY_CONFIG_FILE=\"", deployConfigFileName, "\"\n",
             "DEPLOYMENT_DATA_PATH=\"", OUTPUT_PATH, "\"\n\n",
-            "# Encode the content to base64\n",
-            "CONTENT=$(base64 -i $DEPLOYMENT_DATA_PATH)\n\n",
-            "# Create the request body\n",
-            "REQUEST_BODY=\"{\\\"message\\\":\\\"Update deployment data for ", network, "\\\",\\\"branch\\\":\\\"$GITHUB_BRANCH\\\",\\\"content\\\":\\\"$CONTENT\\\"}\"\n\n",
-            "# Make the API call\n",
-            "curl -X PUT \"https://api.github.com/repos/$GITHUB_REPO/contents/$GITHUB_PATH\" ",
-            "-H \"Authorization: token $GITHUB_TOKEN\" ",
-            "-H \"Accept: application/vnd.github.v3+json\" ",
-            "-d \"$REQUEST_BODY\" ",
-            "--silent"
+            
+            "# Create directory structure\n",
+            "TEMP_DIR=$(mktemp -d)\n",
+            "mkdir -p $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis\n\n",
+            
+            "# Copy deployment data to the version directory\n",
+            "cp $DEPLOYMENT_DATA_PATH $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/info.json\n\n",
+            
+            "# Copy config file used for deployment\n",
+            "CONFIG_FILE_PATH=\"script/configs/local/$DEPLOY_CONFIG_FILE\"\n",
+            "if [ -f \"$CONFIG_FILE_PATH\" ]; then\n",
+            "  cp \"$CONFIG_FILE_PATH\" $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/config.json\n",
+            "fi\n\n",
+            
+            "# Copy ABIs from cache/abis directory to the temporary directory\n",
+            "if [ -d \"cache/abis\" ]; then\n",
+            "  # Copy all ABI files from cache/abis to the temporary directory\n",
+            "  cp cache/abis/*.json $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/\n",
+            "  echo \"Copied ABIs from cache/abis to temporary directory\"\n",
+            "fi\n\n",
+            
+            "# Copy StakerNode ABI from the out directory\n",
+            "if [ -f \"out/StakerNode.sol/StakerNode.json\" ]; then\n",
+            "  cp out/StakerNode.sol/StakerNode.json $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/StakerNode.json\n",
+            "  echo \"Copied StakerNode ABI from out directory\"\n",
+            "fi\n\n",
+            
+            "# Remove ProxyAdmin ABI as it's not needed for frontend interactions\n",
+            "if [ -f \"$TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/ProxyAdmin.json\" ]; then\n",
+            "  rm $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/ProxyAdmin.json\n",
+            "  echo \"Removed ProxyAdmin ABI as it's not needed for frontend interactions\"\n",
+            "fi\n\n",
+            
+            "# Also create a local copy with the same structure for reference\n",
+            "LOCAL_OUTPUT_DIR=\"outputs/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION\"\n",
+            "mkdir -p $LOCAL_OUTPUT_DIR/abis\n",
+            "cp $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/info.json $LOCAL_OUTPUT_DIR/\n",
+            "if [ -f \"$TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/config.json\" ]; then\n",
+            "  cp $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/config.json $LOCAL_OUTPUT_DIR/\n",
+            "fi\n",
+            "cp -r $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/* $LOCAL_OUTPUT_DIR/abis/\n",
+            "echo \"Created local copy of deployment files in $LOCAL_OUTPUT_DIR\"\n\n",
+            
+            "# Function to get the SHA of an existing file in GitHub\n",
+            "get_file_sha() {\n",
+            "  local github_path=\"$1\"\n",
+            "  local response=$(curl -s \"https://api.github.com/repos/$GITHUB_ORG/$DEPLOYMENT_REPO/contents/$github_path\" \\\n",
+            "      -H \"Authorization: token $GITHUB_TOKEN\" \\\n",
+            "      -H \"Accept: application/vnd.github.v3+json\")\n",
+            "  # Extract the SHA if the file exists\n",
+            "  if [[ $response == *\"sha\"* ]]; then\n",
+            "    echo $(echo $response | grep -o '\"sha\":\"[^\"]*\"' | cut -d\":\" -f2 | tr -d '\"')\n",
+            "  else\n",
+            "    echo \"\"\n",
+            "  fi\n",
+            "}\n\n",
+            
+            "# Function to push a file to GitHub\n",
+            "push_file() {\n",
+            "  local file_path=\"$1\"\n",
+            "  local github_path=\"$2\"\n",
+            "  # Skip if file doesn't exist or is empty/null\n",
+            "  if [ ! -f \"$file_path\" ] || [ \"$(cat $file_path)\" = \"null\" ]; then\n",
+            "    echo \"Skipping $github_path (file not found or empty)\"\n",
+            "    return 0\n",
+            "  fi\n",
+            "  local file_content=$(base64 -i \"$file_path\")\n",
+            "  local commit_message=\"Update $github_path for $TOKEN_NAME on $NETWORK\"\n\n",
+            
+            "  # Check if file already exists and get its SHA\n",
+            "  local file_sha=$(get_file_sha \"$github_path\")\n",
+            "  local request_body\n",
+            
+            "  if [ -n \"$file_sha\" ]; then\n",
+            "    echo \"Updating existing file: $github_path\"\n",
+            "    request_body=\"{\\\"message\\\":\\\"$commit_message\\\",\\\"branch\\\":\\\"main\\\",\\\"content\\\":\\\"$file_content\\\",\\\"sha\\\":\\\"$file_sha\\\"}\"\n",
+            "  else\n",
+            "    echo \"Creating new file: $github_path\"\n",
+            "    request_body=\"{\\\"message\\\":\\\"$commit_message\\\",\\\"branch\\\":\\\"main\\\",\\\"content\\\":\\\"$file_content\\\"}\"\n",
+            "  fi\n\n",
+            
+            "  # Make the API call\n",
+            "  curl -X PUT \"https://api.github.com/repos/$GITHUB_ORG/$DEPLOYMENT_REPO/contents/$github_path\" \
+",
+            "    -H \"Authorization: token $GITHUB_TOKEN\" \
+",
+            "    -H \"Accept: application/vnd.github.v3+json\" \
+",
+            "    -d \"$request_body\" \
+",
+            "    --silent\n",
+            "}\n\n",
+            
+            "# Push all files to GitHub\n",
+            "# Push deployment info file\n",
+            "push_file \"$TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/info.json\" \"$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/info.json\"\n\n",
+            
+            "# Push config file\n",
+            "push_file \"$TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/config.json\" \"$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/config.json\"\n\n",
+            
+            "# Push ABI files from the abis directory\n",
+            "for abi_file in $TEMP_DIR/$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/*.json; do\n",
+            "  if [ -f \"$abi_file\" ]; then\n",
+            "    filename=$(basename \"$abi_file\")\n",
+            "    push_file \"$abi_file\" \"$NETWORK/$TOKEN_NAME/$TOKEN_VERSION/abis/$filename\"\n",
+            "  fi\n",
+            "done\n\n",
+            
+            "# Clean up\n",
+            "rm -rf $TEMP_DIR\n",
+            "echo \"Successfully pushed files to GitHub\"\n"
         );
         
         // Write the script to a file
@@ -973,11 +1069,246 @@ contract DeployMainnet is Script, Test {
         
         // Check if the script executed successfully
         if (result.length > 0) {
-            console.log("Successfully pushed deployment data to GitHub");
-            console.log("Path: script/outputs/%s/%s_deployment_data.json", network, network);
+            console.log("Successfully pushed files to GitHub");
+            string memory infoPath = string.concat(deploymentRepo, "/", network, "/", tokenName, "/", tokenVersion, "/info.json");
+            console.log("Deployment data path: %s", infoPath);
+            string memory configPath = string.concat(deploymentRepo, "/", network, "/", tokenName, "/", tokenVersion, "/config.json");
+            console.log("Config file path: %s", configPath);
         } else {
-            console.log("Failed to push deployment data to GitHub");
+            console.log("Failed to push files to GitHub");
             console.log("Check your GitHub token and repository settings");
         }
+    }
+    
+    // Helper function to extract token name from config file name
+    function _extractTokenName(string memory configFileName) internal pure returns (string memory) {
+        // Example: "xarpa_mainnet.anvil.config.json" -> "xARPA"
+        // Split by underscore and take the first part
+        bytes memory configFileNameBytes = bytes(configFileName);
+        uint256 underscorePos = 0;
+        
+        // Find the position of the first underscore
+        for (uint256 i = 0; i < configFileNameBytes.length; i++) {
+            if (configFileNameBytes[i] == '_') {
+                underscorePos = i;
+                break;
+            }
+        }
+        
+        // If no underscore found, use the whole name up to the first dot
+        if (underscorePos == 0) {
+            for (uint256 i = 0; i < configFileNameBytes.length; i++) {
+                if (configFileNameBytes[i] == '.') {
+                    underscorePos = i;
+                    break;
+                }
+            }
+        }
+        
+        // Extract the token name part
+        bytes memory tokenNameBytes = new bytes(underscorePos);
+        for (uint256 i = 0; i < underscorePos; i++) {
+            tokenNameBytes[i] = configFileNameBytes[i];
+        }
+        
+        // Convert to uppercase for the first letter
+        if (tokenNameBytes.length > 0) {
+            // Convert first letter to uppercase if it's lowercase
+            if (tokenNameBytes[0] >= 0x61 && tokenNameBytes[0] <= 0x7A) {
+                tokenNameBytes[0] = bytes1(uint8(tokenNameBytes[0]) - 32);
+            }
+        }
+        
+        // For "xarpa" specifically, convert to "xARPA"
+        if (keccak256(tokenNameBytes) == keccak256(bytes("xarpa"))) {
+            return "xARPA";
+        }
+        
+        return string(tokenNameBytes);
+    }
+}
+
+// Local deployment contract
+contract DeployLocal is DeployScript {
+    function run() external override {
+        // Set local deployment flag
+        isLocalDeployment = true;
+        
+        // Log deployment type
+        console.log("Warning: Not running on Mainnet chain ID (1). Current chain ID: %d", block.chainid);
+        console.log("Continuing as local development deployment");
+        console.log("ChainID: %d", block.chainid);
+        
+        // Load configuration for local deployment
+        string memory networkConfigFileName = "local.json";
+        string memory deployConfigDir = "local";
+        string memory deployConfigFileName = vm.envOr("DEPLOY_CONFIG_FILE", string("xarpa_mainnet.anvil.config.json"));
+        
+        console.log("Loading network config from: script/configs/%s", networkConfigFileName);
+        console.log("Loading deploy config from: script/configs/%s/%s", deployConfigDir, deployConfigFileName);
+        
+        // Check if we're on Anvil
+        if (block.chainid == 31337) {
+            console.log("Local Anvil deployment detected, skipping chain ID check");
+        }
+        
+        // Load configuration
+        loadConfig(networkConfigFileName, deployConfigFileName, deployConfigDir);
+        
+        // Start deployment process
+        vm.startBroadcast();
+        
+        // Deploy infrastructure
+        deployInfrastructure();
+        
+        // Deploy implementations
+        deployImplementations();
+        
+        // Deploy proxies
+        deployProxies();
+        
+        // Initialize contracts
+        initializeProxies();
+        
+        // Transfer ownership
+        transferOwnership();
+        
+        // Verify deployment
+        verifyDeployment();
+        
+        // Write deployment output
+        writeDeploymentOutput();
+        
+        vm.stopBroadcast();
+        
+        // Push to GitHub if enabled
+        pushToGitHub();
+    }
+}
+
+// Testnet deployment contract
+contract DeployTestnet is DeployScript {
+    function run() external override {
+        // Set deployment flag
+        isLocalDeployment = false;
+        
+        // Get the network from environment
+        string memory network = vm.envOr("NETWORK", string("holesky"));
+        uint256 chainId = block.chainid;
+        
+        // Validate chain ID for testnet deployments
+        if (keccak256(bytes(network)) == keccak256(bytes("holesky"))) {
+            // Holesky testnet deployment
+            if (chainId != 17000) { // Holesky chain ID
+                revert(string.concat("Expected Holesky chain ID (17000), got ", vm.toString(chainId)));
+            }
+            console.log("Running Holesky TESTNET deployment");
+        } else if (keccak256(bytes(network)) == keccak256(bytes("sepolia"))) {
+            // Sepolia testnet deployment
+            if (chainId != 11155111) { // Sepolia chain ID
+                revert(string.concat("Expected Sepolia chain ID (11155111), got ", vm.toString(chainId)));
+            }
+            console.log("Running Sepolia TESTNET deployment");
+        } else {
+            // For any other testnet, just log the network name and chain ID
+            console.log("Running deployment on %s testnet with chain ID: %d", network, chainId);
+        }
+        
+        // Load configuration for testnet deployment
+        string memory networkConfigFileName = string.concat(network, ".json");
+        string memory deployConfigDir = network;
+        string memory deployConfigFileName = vm.envOr("DEPLOY_CONFIG_FILE", string("xarpa_mainnet.config.json"));
+        
+        console.log("Loading network config from: script/configs/%s", networkConfigFileName);
+        console.log("Loading deploy config from: script/configs/%s/%s", deployConfigDir, deployConfigFileName);
+        
+        // Load configuration
+        loadConfig(networkConfigFileName, deployConfigFileName, deployConfigDir);
+        
+        // Start deployment process
+        vm.startBroadcast();
+        
+        // Deploy infrastructure
+        deployInfrastructure();
+        
+        // Deploy implementations
+        deployImplementations();
+        
+        // Deploy proxies
+        deployProxies();
+        
+        // Initialize contracts
+        initializeProxies();
+        
+        // Transfer ownership
+        transferOwnership();
+        
+        // Verify deployment
+        verifyDeployment();
+        
+        // Write deployment output
+        writeDeploymentOutput();
+        
+        vm.stopBroadcast();
+        
+        // Push to GitHub if enabled
+        pushToGitHub();
+    }
+}
+
+// Mainnet deployment contract
+contract DeployMainnet is DeployScript {
+    function run() external override {
+        // Set deployment flag
+        isLocalDeployment = false;
+        
+        // Verify we're on Mainnet
+        uint256 chainId = block.chainid;
+        if (chainId != MAINNET_CHAIN_ID) {
+            revert(string.concat("Expected Mainnet chain ID (1), got ", vm.toString(chainId)));
+        }
+        
+        console.log("Running Ethereum MAINNET production deployment");
+        console.log(" WARNING: Deploying to REAL Ethereum mainnet! ");
+        
+        // Load configuration for mainnet deployment
+        string memory networkConfigFileName = "mainnet.json";
+        string memory deployConfigDir = "mainnet";
+        string memory deployConfigFileName = vm.envOr("DEPLOY_CONFIG_FILE", string("xarpa_mainnet.config.json"));
+        
+        console.log("Loading network config from: script/configs/%s", networkConfigFileName);
+        console.log("Loading deploy config from: script/configs/%s/%s", deployConfigDir, deployConfigFileName);
+        
+        // Load configuration
+        loadConfig(networkConfigFileName, deployConfigFileName, deployConfigDir);
+        
+        // Start deployment process
+        vm.startBroadcast();
+        
+        // Deploy infrastructure
+        deployInfrastructure();
+        
+        // Deploy implementations
+        deployImplementations();
+        
+        // Deploy proxies
+        deployProxies();
+        
+        // Initialize contracts
+        initializeProxies();
+        
+        // Transfer ownership
+        transferOwnership();
+        
+        // Verify deployment
+        verifyDeployment();
+        
+        // Write deployment output
+        writeDeploymentOutput();
+        
+        vm.stopBroadcast();
+        
+        // Push to GitHub if enabled
+        pushToGitHub();
     }
 }

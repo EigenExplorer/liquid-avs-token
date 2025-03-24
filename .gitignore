@@ -3,6 +3,7 @@ cache/
 !/cache/abis/
 !/cache/abis/**
 out/
+outputs/
 
 # Ignores development broadcast logs
 broadcast/*
