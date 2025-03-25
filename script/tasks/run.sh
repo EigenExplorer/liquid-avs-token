@@ -6,16 +6,15 @@
 
 # With this script, we simulate a staker depositing funds and the re-staking manager (admin) deploying them
 # to EigenLayer with the following steps:
-#  1. Deploy all LAT contracts with stETH token/strategy registered
+#  1. Deploy all LAT contracts with stETH & rETH token/strategy registered
 #  2. Restaking manager creates five staker nodes
-#  3. Restaking manager delegates nodes to an EigenLayer Operator
+#  3. Restaking manager delegates all nodes to an EigenLayer Operator
 #  4. Update token prices via price updater
 #  5. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
 #  6. Restaking manager stakes the users' funds to the first three nodes
-#  7. (OUT OF SCOPE FOR V1) Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
-#  1. Three nodes are delegated, fourth and fifth are not
+#  1. All nodes are delegated
 #  2. First two nodes hold 25% of deposited funds each
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
@@ -27,9 +26,10 @@
 #  2. LTM_DelegateNodes
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
+#  5. TRO_UpdatePrices
 
 # Task files not tested:
-#  1. TRO_UpdatePrices (consider using these tasks in price-updater v2)
+#  1. LTM_DelegateNodes (out of scope for v1)
 
 # Instructions:
 # To load env file: source .env
@@ -196,16 +196,8 @@ forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode
     --sig "run(string,uint256,address[],uint256[])" \
     -- $OUTPUT_FILE $NODE_3 "[$STETH_TOKEN,$RETH_TOKEN]" "[9000000000000000000,6000000000000000000]"
 
-# OUT OF SCOPE FOR V1: Undelegation functionality
-# Keeping node variables for verification purposes
 NODE_4=$(echo $NODE_IDS | jq '.[3]')
 NODE_5=$(echo $NODE_IDS | jq '.[4]')
-# Commented out undelegation as it's not in scope for V1
-# forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
-#     --rpc-url $RPC_URL --broadcast \
-#     --private-key $ADMIN_PRIVATE_KEY \
-#     --sig "run(string,uint256[])" \
-#     -- $OUTPUT_FILE "[$NODE_4,$NODE_5]"
 
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
@@ -271,7 +263,7 @@ LIQUID_TOKEN_RETH_PERCENT=$(echo "scale=2; $LIQUID_TOKEN_RETH_BALANCE * 100 / $T
 echo "------------------------------------------------------------------"
 echo "End-state verification"
 echo "------------------------------------------------------------------"
-echo "1. Three nodes are delegated, fourth and fifth are not"
+echo "1. All nodes are delegated"
 echo "Node $NODE_1 delegation: $NODE_1_OPERATOR_DELEGATION"
 echo "Node $NODE_2 delegation: $NODE_2_OPERATOR_DELEGATION"
 echo "Node $NODE_3 delegation: $NODE_3_OPERATOR_DELEGATION"
