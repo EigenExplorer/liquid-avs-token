@@ -8,7 +8,6 @@ import {
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
-  getDeploymentData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -26,7 +25,9 @@ export async function createStakerNodes(count: number) {
     // Setup task params
     const task = "SNC_CreateStakerNodes.s.sol:CreateStakerNodes";
     const sender =
-      DEPLOYMENT === "local" ? (await getDeploymentData()).roles.admin : ADMIN;
+      DEPLOYMENT === "local"
+        ? "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        : ADMIN;
     const sig = "run(string,uint256)";
     const params = `${count}`;
 

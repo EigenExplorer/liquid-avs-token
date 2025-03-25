@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { refreshDeploymentAddresses } from "../utils/forge";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,23 +14,28 @@ const DEPLOYMENT_DATA_PATH = path.resolve(
 );
 
 interface VersionWithTimestamp {
-  name: string;
   timestamp: number;
   // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   data: any;
 }
 
 /**
- * Fetches the latest `output.json` from the Github deployments repo and updates
+ * Fetches the latest `info.json` from the Github deployments repo and updates
  * the existing `script/outputs/holesky/deployment_data.json`
  * Note: This process is skipped on local deployments
  *
  * @returns
  */
-export async function fetchLatestDeploymentData() {
+export async function refreshDeployment() {
   try {
     // Skip for local deployments
-    if (!process.env.DEPLOYMENT || process.env.DEPLOYMENT === "local") return;
+    if (!process.env.DEPLOYMENT || process.env.DEPLOYMENT === "local") {
+      console.log(
+        "[Info] Skipping deployment data fetch from GH. Make sure local output file is updated."
+      );
+      await refreshDeploymentAddresses();
+      return;
+    }
 
     if (!LAT_DEPLOYMENTS_REPO || !GITHUB_ACCESS_TOKEN) {
       throw new Error("Env vars not set correctly.");
@@ -66,7 +72,7 @@ export async function fetchLatestDeploymentData() {
       try {
         const outputFileUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${pathParts.join(
           "/"
-        )}/${dir.name}/output.json`;
+        )}/${dir.name}/info.json`;
 
         const outputResponse = await fetch(outputFileUrl, { headers });
         if (!outputResponse.ok) {
@@ -81,13 +87,12 @@ export async function fetchLatestDeploymentData() {
 
         if (deploymentData.deploymentTimestamp) {
           versionsWithTimestamps.push({
-            name: dir.name,
             timestamp: deploymentData.deploymentTimestamp,
             data: deploymentData,
           });
         }
       } catch (error) {
-        console.log(`Error processing output.json for ${dir.name}:`, error);
+        console.log(`Error processing info.json for ${dir.name}:`, error);
       }
     }
 
@@ -107,6 +112,8 @@ export async function fetchLatestDeploymentData() {
       DEPLOYMENT_DATA_PATH,
       JSON.stringify(deploymentData, null, 2)
     );
+
+    await refreshDeploymentAddresses();
   } catch (error) {
     console.log("Error: ", error);
   }

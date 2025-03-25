@@ -2,7 +2,7 @@ import "dotenv/config";
 import cron from "node-cron";
 
 import { stakeUnstakedAssets } from "./workflows/stakeUnstakedAssets";
-import { fetchLatestDeploymentData } from "./workflows/fetchLatestDeploymentData";
+import { refreshDeployment } from "./workflows/refreshDeployment";
 import { updateAllTokenPrices } from "./workflows/updateAllTokenPrices";
 
 console.log("Initializing Restaking Manager ...");
@@ -26,7 +26,7 @@ async function dailyResponsibilities(retryCount = 0) {
 
     console.time("Completed all responsibilities in");
 
-    await fetchLatestDeploymentData();
+    await refreshDeployment();
     await stakeUnstakedAssets();
 
     console.timeEnd("Completed all responsibilities in");
@@ -60,6 +60,7 @@ async function updatePrices(retryCount = 0) {
 
       console.time("Updated prices in");
 
+      await refreshDeployment();
       await updateAllTokenPrices();
 
       console.timeEnd("Updated prices in");
@@ -81,9 +82,6 @@ async function updatePrices(retryCount = 0) {
     await delay(PRICE_UPDATE_FREQUENCY);
   }
 }
-
-// Fetch deployment data immediately
-await fetchLatestDeploymentData();
 
 // Start price updation immediately
 await updatePrices();

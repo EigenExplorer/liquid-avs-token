@@ -16,16 +16,16 @@ const __dirname = path.dirname(__filename);
 
 export const NETWORK = getNetwork();
 export const DEPLOYMENT = getDeployment();
-export const ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY;
-export const PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY;
+
 export const SIGNER_ADMIN = process.env.SIGNER_ADMIN_PUBLIC_KEY;
 export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY;
 
-export const {
-  liquidToken: LIQUID_TOKEN_ADDRESS,
-  liquidTokenManager: LIQUID_TOKEN_MANAGER_ADDRESS,
-  stakeNodeCoordinator: STAKER_NODE_COORDINATOR_ADDRESS,
-} = await getDeploymentData();
+export let LIQUID_TOKEN_ADDRESS = "";
+export let LIQUID_TOKEN_MANAGER_ADDRESS = "";
+export let STAKER_NODE_COORDINATOR_ADDRESS = "";
+export let PRICE_UPDATER = "";
+export let ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY; // Updates from deployment data if not local
+export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY; // Updates from deployment data if not local
 
 /**
  * Returns the forge command used to call a task from the /script folder
@@ -201,7 +201,7 @@ export function getOutputFile(): string {
  *
  * @returns
  */
-export async function getDeploymentData() {
+export async function refreshDeploymentAddresses() {
   try {
     const output = await JSON.parse(
       await fs.readFile(
@@ -210,22 +210,17 @@ export async function getDeploymentData() {
       )
     );
 
-    return {
-      liquidToken: String(output.proxyAddress),
-      liquidTokenManager: String(
-        output.contractDeployments.proxy.liquidTokenManager.address
-      ),
-      stakeNodeCoordinator: String(
-        output.contractDeployments.proxy.stakerNodeCoordinator.address
-      ),
-      roles: output.roles,
-    };
+    LIQUID_TOKEN_ADDRESS = String(output.proxyAddress);
+    LIQUID_TOKEN_MANAGER_ADDRESS = String(
+      output.contractDeployments.proxy.liquidTokenManager.address
+    );
+    STAKER_NODE_COORDINATOR_ADDRESS = String(
+      output.contractDeployments.proxy.stakerNodeCoordinator.address
+    );
+    ADMIN = String(output.roles.admin);
+    PAUSER = String(output.roles.pauser);
+    PRICE_UPDATER = String(output.roles.priceUpdater);
   } catch (error) {
     console.log("Error: ", error);
-    return {
-      liquidToken: "",
-      liquidTokenManager: "",
-      stakeNodeCoordinator: "",
-    };
   }
 }

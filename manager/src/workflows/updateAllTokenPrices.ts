@@ -4,9 +4,9 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import {
   DEPLOYMENT,
-  forgeCommand,
-  getDeploymentData,
+  PRICE_UPDATER,
   LIQUID_TOKEN_ADDRESS,
+  forgeCommand,
 } from "../utils/forge";
 import { getChain, getWalletClient } from "../utils/viemClient";
 import { privateKeyToAccount } from "viem/accounts";
@@ -24,11 +24,7 @@ const PRICE_UPDATE_THRESHOLD = 0.1;
 
 export async function updateAllTokenPrices() {
   try {
-    if (
-      DEPLOYMENT !== "local" &&
-      (!process.env.PRICE_UPDATER_PUBLIC_KEY ||
-        !process.env.PRICE_UPDATER_PRIVATE_KEY)
-    )
+    if (!process.env.PRICE_UPDATER_PRIVATE_KEY)
       throw new Error("Env vars not set correctly.");
 
     // Fetch all supported tokens
@@ -75,8 +71,8 @@ export async function updateAllTokenPrices() {
     const task = "TRO_BatchUpdateRates.s.sol:BatchUpdateRates";
     const sender =
       DEPLOYMENT === "local"
-        ? (await getDeploymentData()).roles.priceUpdater
-        : process.env.PRICE_UPDATER_PUBLIC_KEY;
+        ? "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+        : PRICE_UPDATER;
     const sig = "run(string,address[],uint256[])";
     const addressesParam = `[${addresses.map((op) => `"${op}"`).join(",")}]`;
     const pricesParam = `[${prices.join(",")}]`;
