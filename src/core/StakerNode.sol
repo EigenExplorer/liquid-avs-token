@@ -103,7 +103,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         emit DelegatedToOperator(operator);
     }
 
+    
     /// @notice Undelegates the StakerNode's assets from the current operator
+    /// @dev OUT OF SCOPE FOR V1
+    /** 
     function undelegate()
         public
         override
@@ -121,6 +124,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
         operatorDelegation = address(0);
     }
+    */
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract

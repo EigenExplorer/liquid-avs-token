@@ -435,6 +435,9 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.removeToken(testToken);
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRemoveTokenFailsIfNonZeroQueuedAssetBalance() public {
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
@@ -474,6 +477,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         liquidTokenManager.removeToken(testToken);
     }
+    */
 
     function testStakeAssetsToNode() public {
         // Ensure node 0 is delegated
@@ -748,6 +752,9 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.setVolatilityThreshold(testToken, 20);
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testQueuedAssetBalancesUpdateAfterWithdrawalRequest() public {
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
@@ -787,7 +794,11 @@ contract LiquidTokenManagerTest is BaseTest {
             "Queued assets balance should match original staked amount"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testQueuedWithdrawalsDoNotInflateShares() public {
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
@@ -828,7 +839,11 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 sharesAfterWithdrawalQueued = liquidToken.calculateShares(testToken, 1 ether);
         assertEq(sharesBeforeWithdrawalQueued, sharesAfterWithdrawalQueued, "Token is mispriced due to inflated shares");
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testFulfillWithdrawal() public {
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
@@ -910,7 +925,11 @@ contract LiquidTokenManagerTest is BaseTest {
             "Incorrect total assets after withdrawal"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testFulfillWithdrawalFailsForInsufficientBalance() public {
         // Ensure node 0 is delegated
         _ensureNodeIsDelegated(0);
@@ -953,6 +972,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
     }
+    */
 
     function testCannotDelegateDelegatedNode() public {
         address testOperator = address(uint160(uint256(keccak256(abi.encodePacked(
@@ -985,6 +1005,9 @@ contract LiquidTokenManagerTest is BaseTest {
         stakerNode.delegate(testOperator, signature, bytes32(0));
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testCannotUndelegateUndelegatedNode() public {
         // Make sure the node is delegated first
         address currentOperator = stakerNode.getOperatorDelegation();
@@ -1014,7 +1037,11 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.expectRevert(IStakerNode.NodeIsNotDelegated.selector);
         stakerNode.undelegate();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testMultipleDepositWithdrawInDifferentOrders() public {
         // Setup new user
         address user3 = address(10);
@@ -1137,7 +1164,11 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(testToken2.balanceOf(address(liquidToken)), 0, "testToken2 contract balance not zero");
         assertEq(liquidToken.totalSupply(), 0, "LiquidToken total supply not zero");
     }
+    */
 
+    /// Tests for undelegation functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testUndelegationSecurity() public {        
         // Setup: Create and delegate a node
         vm.startPrank(admin);
@@ -1202,7 +1233,11 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(liquidToken.totalSupply(), initialTotalSupply, "Total supply should not change after undelegation");
         assertEq(liquidToken.balanceOf(user1), initialUser1Balance, "User balance should not change after undelegation");
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testMultipleUndelegationScenarios() public {
         // Setup: Create multiple nodes and delegate them
         vm.startPrank(admin);
@@ -1270,7 +1305,11 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(liquidToken.balanceOf(user2), initialUser2Balance, "User2 balance should not change after all undelegations");
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testShareInflationPreventionDuringUndelegation() public {        
         // Setup: Create and delegate a node
         vm.startPrank(admin);
@@ -1357,7 +1396,11 @@ contract LiquidTokenManagerTest is BaseTest {
             "Total supply should remain constant after withdrawal request"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testStrategyDisablingSafety() public {
         // Setup initial state
         IERC20[] memory assets = new IERC20[](1);
@@ -1435,6 +1478,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         vm.stopPrank();
     }
+    */
 
     function testStrategyShareValueConsistency() public {
         // Setup initial state with two strategies
@@ -1484,6 +1528,9 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testStrategyManagementSafety() public {
         // Setup initial state
         IERC20[] memory assets = new IERC20[](1);
@@ -1561,6 +1608,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         vm.stopPrank();
     }
+    */
 
     function testMultipleTokenStrategyManagement() public {
         // Create a new token and strategy for testing

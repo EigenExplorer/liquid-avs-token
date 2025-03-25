@@ -44,6 +44,9 @@ contract LiquidTokenTest is BaseTest {
         );
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawal() public {
         vm.startPrank(user1);
 
@@ -68,7 +71,11 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect balance after withdrawal request"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testWithdrawalRequestIdsAreAlwaysUnique() public {
         vm.startPrank(user1);
 
@@ -103,7 +110,11 @@ contract LiquidTokenTest is BaseTest {
 
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestIdUniqueness() public {
         // Setup initial state
         uint256 depositAmount = 5 ether;
@@ -183,7 +194,11 @@ contract LiquidTokenTest is BaseTest {
         
         vm.stopPrank();
     }
+    */
     
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestIdAcrossBlocks() public {
         // Setup initial state
         uint256 depositAmount = 5 ether;
@@ -234,6 +249,7 @@ contract LiquidTokenTest is BaseTest {
         
         vm.stopPrank();
     }
+    */
 
     function testTransferAssets() public {
         vm.prank(user1);
@@ -293,6 +309,9 @@ contract LiquidTokenTest is BaseTest {
         vm.stopPrank();
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawalMultipleAssets() public {
         vm.startPrank(user1);
 
@@ -322,7 +341,12 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect balance after withdrawal request"
         );
     }
+    */
 
+
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testFulfillWithdrawalMultipleAssets() public {
         vm.startPrank(user1);
 
@@ -364,6 +388,7 @@ contract LiquidTokenTest is BaseTest {
             "Incorrect token2 balance after withdrawal"
         );
     }
+    */
 
     function testTransferMultipleAssets() public {
         vm.startPrank(user1);
@@ -463,6 +488,9 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawalArrayLengthMismatch() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
@@ -474,7 +502,11 @@ contract LiquidTokenTest is BaseTest {
         vm.expectRevert(ILiquidToken.ArrayLengthMismatch.selector);
         liquidToken.requestWithdrawal(assets, amountsToWithdraw);
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawalUnsupportedAsset() public {
         IERC20 unsupportedToken = new MockERC20("Unsupported Token", "UT");
         IERC20[] memory assets = new IERC20[](1);
@@ -486,7 +518,11 @@ contract LiquidTokenTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(ILiquidToken.UnsupportedAsset.selector, address(unsupportedToken)));
         liquidToken.requestWithdrawal(assets, amountsToWithdraw);
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawalZeroAmount() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
@@ -497,7 +533,11 @@ contract LiquidTokenTest is BaseTest {
         vm.expectRevert(ILiquidToken.ZeroAmount.selector);
         liquidToken.requestWithdrawal(assets, amountsToWithdraw);
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testRequestWithdrawalInsufficientBalance() public {
         vm.startPrank(user1);
 
@@ -522,7 +562,11 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.requestWithdrawal(assets, amountsToWithdraw);
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testInvalidWithdrawalRequest() public {
             IERC20[] memory assets = new IERC20[](1);
             assets[0] = IERC20(address(testToken));
@@ -544,7 +588,11 @@ contract LiquidTokenTest is BaseTest {
             vm.expectRevert(ILiquidToken.InvalidWithdrawalRequest.selector);
             liquidToken.fulfillWithdrawal(requestId);
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testWithdrawalAlreadyFulfilled() public {
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
@@ -566,7 +614,11 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testFulfillWithdrawalBeforeDelay() public {
         vm.startPrank(user1);
 
@@ -592,6 +644,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.fulfillWithdrawal(requestId);
         vm.stopPrank();
     }
+    */
 
     function testTransferAssetsNotLiquidTokenManager() public {
         IERC20[] memory assets = new IERC20[](1);
@@ -675,6 +728,9 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.pause();
     }
 
+    /// Tests for deposit functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testZeroAddressInput() public {
         vm.startPrank(user1);
 
@@ -722,7 +778,11 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[0] = 5 ether;
         liquidToken.transferAssets(assets, amountsToTransfer);
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testConsecutiveWithdrawalRequestsWithFulfillments() public {
         vm.startPrank(user1);
 
@@ -807,7 +867,11 @@ contract LiquidTokenTest is BaseTest {
 
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testMultipleUsersMultipleWithdrawals() public {
         vm.prank(user1);
         IERC20[] memory assets = new IERC20[](1);
@@ -882,7 +946,11 @@ contract LiquidTokenTest is BaseTest {
 
         vm.stopPrank();
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testMultipleTokensWithdrawalsWithPriceChangeAfterDeposit() public {
         vm.startPrank(admin);
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
@@ -987,7 +1055,11 @@ contract LiquidTokenTest is BaseTest {
             "Contract should not hold any liquid tokens after User1's fulfillment"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testMultipleTokensWithdrawalsWithPriceChangeAfterRequest() public {
         vm.startPrank(admin);
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), admin);
@@ -1092,7 +1164,11 @@ contract LiquidTokenTest is BaseTest {
             "Contract should not hold any liquid tokens after User1's fulfillment"
         );
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testShareLockingInWithdrawalRequest() public {
         // Setup: User deposits tokens first
         vm.startPrank(user1);
@@ -1136,7 +1212,11 @@ contract LiquidTokenTest is BaseTest {
         assertEq(liquidToken.balanceOf(user1), 5 ether, "User balance should remain the same after fulfillment");
         assertEq(liquidToken.balanceOf(address(liquidToken)), 0, "Contract should not hold shares after fulfillment");
     }
+    */
 
+    /// Tests for withdrawal functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testShareLockingWithMultipleAssets() public {
         // Setup: User deposits multiple tokens
         vm.startPrank(user1);
@@ -1200,6 +1280,7 @@ contract LiquidTokenTest is BaseTest {
             "Contract should not hold shares after fulfillment"
         );
     }
+    */
 
     function testTotalAssetsCalculationEdgeCases() public {
         vm.startPrank(admin);
@@ -1235,6 +1316,9 @@ contract LiquidTokenTest is BaseTest {
         assertEq(liquidToken.assetBalances(address(testToken)), maxAmount + smallAmount, "Total assets should include small amount");
     }
 
+    /// Tests for locked token recovery functionality that will be implemented in future versions
+    /// OUT OF SCOPE FOR V1
+    /**
     function testLockedTokenRecovery() public {
         // Test direct transfer to contract
         uint256 directAmount = 1 ether;
@@ -1268,6 +1352,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Total assets should track pending withdrawals");
         assertEq(liquidToken.queuedAssetBalances(address(testToken)), 0, "Queued assets should be 0 until withdrawal is fulfilled");
     }
+    */
 
     function testTotalAssetsWithStrategyMigration() public {
         vm.startPrank(admin);

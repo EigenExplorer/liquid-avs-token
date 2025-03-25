@@ -12,7 +12,7 @@
 #  4. Update token prices via price updater
 #  5. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
 #  6. Restaking manager stakes the users' funds to the first three nodes
-#  7. Restaking manager undelegates the fourth and fifth nodes
+#  7. (OUT OF SCOPE FOR V1) Restaking manager undelegates the fourth and fifth nodes
 
 # End-state verification:
 #  1. Three nodes are delegated, fourth and fifth are not
@@ -196,14 +196,16 @@ forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode
     --sig "run(string,uint256,address[],uint256[])" \
     -- $OUTPUT_FILE $NODE_3 "[$STETH_TOKEN,$RETH_TOKEN]" "[9000000000000000000,6000000000000000000]"
 
-# Undelegate fourth and fifth nodes
+# OUT OF SCOPE FOR V1: Undelegation functionality
+# Keeping node variables for verification purposes
 NODE_4=$(echo $NODE_IDS | jq '.[3]')
 NODE_5=$(echo $NODE_IDS | jq '.[4]')
-forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $ADMIN_PRIVATE_KEY \
-    --sig "run(string,uint256[])" \
-    -- $OUTPUT_FILE "[$NODE_4,$NODE_5]"
+# Commented out undelegation as it's not in scope for V1
+# forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes \
+#     --rpc-url $RPC_URL --broadcast \
+#     --private-key $ADMIN_PRIVATE_KEY \
+#     --sig "run(string,uint256[])" \
+#     -- $OUTPUT_FILE "[$NODE_4,$NODE_5]"
 
 #-----------------------------------------------------------------------------------------------------
 # VERIFICATION
