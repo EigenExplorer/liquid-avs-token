@@ -440,6 +440,8 @@ contract LiquidTokenManager is
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     function undelegateNodes(
         uint256[] calldata nodeIds
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
@@ -454,6 +456,7 @@ contract LiquidTokenManager is
             node.undelegate();
         }
     }
+    */
 
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address

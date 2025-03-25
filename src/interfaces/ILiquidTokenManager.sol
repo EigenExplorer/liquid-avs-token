@@ -209,9 +209,12 @@ interface ILiquidTokenManager {
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
+    /// @dev Out OF SCOPE FOR V1
+    /**
     function undelegateNodes(
         uint256[] calldata nodeIds
     ) external;
+    */
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for

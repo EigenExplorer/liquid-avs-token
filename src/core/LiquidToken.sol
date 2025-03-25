@@ -27,13 +27,22 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
+    /**
+    * @dev Withdrawal delay constant used for request/fulfill withdrawal flow
+     * @dev OUT OF SCOPE FOR V1
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
+    */
 
     mapping(address => uint256) public assetBalances;
     mapping(address => uint256) public queuedAssetBalances;
+    /**
+     * @dev Withdrawal request structure
+     * @dev OUT OF SCOPE FOR V1
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
     mapping(address => uint256) private _withdrawalNonce;
+    */
+    
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -129,6 +138,8 @@ contract LiquidToken is
     /// @notice Allows users to request a withdrawal of their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
+    /// @dev OUT OF SCOPE FOR V1
+    /** 
     function requestWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
@@ -194,9 +205,12 @@ contract LiquidToken is
             block.timestamp
         );
     }
+    */
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
@@ -256,6 +270,7 @@ contract LiquidToken is
             block.timestamp
         );
     }
+    */
 
     /// @notice Credits queued balances for a given set of asset
     /// @param assets The assets to credit
@@ -354,17 +369,29 @@ contract LiquidToken is
     // Getter functions
     // ------------------------------------------------------------------------------
 
+    /**
+     * @dev Gets withdrawal requests for a user
+     * @dev OUT OF SCOPE FOR V1
+    */
+    /**
     function getUserWithdrawalRequests(
         address user
     ) external view returns (bytes32[] memory) {
         return userWithdrawalRequests[user];
     }
+    */
 
+    /**
+     * @dev Gets details of a specific withdrawal request
+     * @dev OUT OF SCOPE FOR V1
+    */
+    /**
     function getWithdrawalRequest(
         bytes32 requestId
     ) external view returns (WithdrawalRequest memory) {
         return withdrawalRequests[requestId];
     }
+    */
 
     /// @notice Returns the total value of assets managed by the contract
     /// @return The total value of assets in the unit of account
