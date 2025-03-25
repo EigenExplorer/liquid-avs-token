@@ -120,14 +120,20 @@ interface ILiquidToken is IERC20 {
     /// @notice Allows users to request a withdrawal of their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
+    /// @dev Out OF SCOPE FOR V1
+    /** 
     function requestWithdrawal(
         IERC20[] memory withdrawAssets,
         uint256[] memory shareAmounts
     ) external;
+    */
 
     /// @notice Allows users to fulfill a withdrawal request after the delay period
     /// @param requestId The unique identifier of the withdrawal request
+    /// @dev Out OF SCOPE FOR V1
+    /** 
     function fulfillWithdrawal(bytes32 requestId) external;
+    */
 
     /// @notice Transfers assets to the LiquidTokenManager
     /// @param assetsToRetrieve The assets to transfer
@@ -170,15 +176,21 @@ interface ILiquidToken is IERC20 {
     /// @notice Returns the withdrawal requests for a user
     /// @param user The address of the user
     /// @return An array of withdrawal request IDs
+    /// @dev Out OF SCOPE FOR V1
+    /**
     function getUserWithdrawalRequests(address user)
         external
         view
         returns (bytes32[] memory);
+    */
 
     /// @notice Returns the details of a withdrawal request
     /// @param requestId The ID of the withdrawal request
     /// @return The withdrawal request details
+    /// @dev Out OF SCOPE FOR V1
+    /**
     function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);
+    */
 
     /// @notice Returns the balances of multiple assets
     /// @param assetList The list of assets to get balances for
