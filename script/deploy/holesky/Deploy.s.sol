@@ -51,6 +51,7 @@ contract Deploy is Script, Test {
     
     // Path to output file
     string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
+    string constant ABI_DIR_PATH = "script/outputs/holesky/abi";
 
     // Network-level config
     address public strategyManager;

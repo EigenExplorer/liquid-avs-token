@@ -149,6 +149,8 @@ export async function stakeUnstakedAssets() {
 
     // Create proposals to stake assets to nodes
     await stakeAssetsToNodes(allocations);
+
+    console.log("[Manager] Stake unstaked assets complete");
   } catch (error) {
     console.log("Error: ", error);
   }

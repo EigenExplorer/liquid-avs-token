@@ -47,13 +47,17 @@ export async function updateAllTokenPrices() {
     for (const token of latData.tokens) {
       try {
         const tokenAddress = token.address as `0x${string}`;
-        const oneToken = 10n ** BigInt(token.decimals);
 
+        // -------------------------- TODO --------------------------
+        // Get prices from 3 sources and pass median/mean price
+        // Make sure mappings to token symbol and/or API ID are dynamic
+        const oneToken = 10n ** BigInt(token.decimals);
         const ethPriceCMC = 10n ** BigInt(token.decimals); // "https://pro-api.coinmarketcap.com",
         const ethPriceCoinGecko = 10n ** BigInt(token.decimals); // "https://api.coingecko.com/api/v3"
         const ethPrice = ethPriceCMC + ethPriceCoinGecko / 2n;
         const currentPrice = BigInt(token.pricePerUnit);
         const priceDifference = 0.15;
+        //----------------------------------------------------------
 
         // Requires update if price diff > threshold
         const requiresUpdate = priceDifference > PRICE_UPDATE_THRESHOLD;

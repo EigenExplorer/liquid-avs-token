@@ -19,17 +19,18 @@ function delay(seconds: number) {
 /**
  * Daily responsibilities of restaking manager
  *
+ * @param retryCount
  */
 async function dailyResponsibilities(retryCount = 0) {
   try {
-    console.log("\nPerforming daily responsibilities...");
+    console.log("\n[Manager] Performing daily responsibilities...");
 
-    console.time("Completed all responsibilities in");
+    console.time("[Manager] Completed all responsibilities in");
 
     await refreshDeployment();
     await stakeUnstakedAssets();
 
-    console.timeEnd("Completed all responsibilities in");
+    console.timeEnd("[Manager] Completed all responsibilities in");
   } catch (error) {
     console.log(`Failed to perform daily responsibilities at: ${Date.now()}`);
     console.log(error);
@@ -52,18 +53,24 @@ async function dailyResponsibilities(retryCount = 0) {
   }
 }
 
-// Manager plays the role of price-updater in v1
+/**
+ * Manager plays the role of price-updater in v1
+ *
+ * @param retryCount
+ */
 async function updatePrices(retryCount = 0) {
   while (true) {
     try {
-      console.log(`\nUpdating prices every ${PRICE_UPDATE_FREQUENCY} seconds:`);
+      console.log(
+        `\n[Price Updater] Updating prices every ${PRICE_UPDATE_FREQUENCY} seconds:`
+      );
 
-      console.time("Updated prices in");
+      console.time("[Price Updater] Updated prices in");
 
       await refreshDeployment();
       await updateAllTokenPrices();
 
-      console.timeEnd("Updated prices in");
+      console.timeEnd("[Price Updater] Updated prices in");
     } catch (error) {
       console.log("Failed to update prices at:", Date.now());
       console.log(error);
