@@ -29,7 +29,7 @@ contract LiquidToken is
     ILiquidTokenManager public liquidTokenManager;
     /**
     * @dev Withdrawal delay constant used for request/fulfill withdrawal flow
-     * @dev OUT OF SCOPE FOR V1
+    * @dev OUT OF SCOPE FOR V1
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
     */
 

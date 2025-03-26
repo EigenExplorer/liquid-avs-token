@@ -8,7 +8,6 @@ import {
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
-  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -26,7 +25,9 @@ export async function undelegateNodes(nodeIds: string[]) {
     // Setup task params
     const task = "LTM_UndelegateNodes.s.sol:UndelegateNodes";
     const sender =
-      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
+      DEPLOYMENT === "local"
+        ? "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        : ADMIN;
     const sig = "run(string,uint256[])";
     const params = `[${nodeIds.join(",")}]`;
 

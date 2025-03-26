@@ -8,7 +8,6 @@ import {
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
-  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -34,7 +33,9 @@ export async function delegateNodes(
     // Setup task params
     const task = "LTM_DelegateNodes.s.sol:DelegateNodes";
     const sender =
-      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
+      DEPLOYMENT === "local"
+        ? "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        : ADMIN;
     const sig = "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])";
     const nodeIdsParam = `[${nodeIds.join(",")}]`;
     const operatorsParam = `[${operators.map((op) => `"${op}"`).join(",")}]`;

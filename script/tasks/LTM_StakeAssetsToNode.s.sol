@@ -15,7 +15,7 @@ import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256,address[],uint256[])" -- "/local/mainnet_deployment_data.json" <NODE_ID> <ASSETS> <AMOUNTS> -vvvv
+// forge script --via-ir script/tasks/LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256,address[],uint256[])" -- "/local/deployment_data.json" <NODE_ID> <ASSETS> <AMOUNTS> -vvvv
 contract StakeAssetsToNode is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

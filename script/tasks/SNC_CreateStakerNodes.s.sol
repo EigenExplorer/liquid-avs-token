@@ -14,7 +14,7 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev To run this task (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256)" -- "/local/mainnet_deployment_data.json" <COUNT> -vvvv
+// forge script script/tasks/SNC_CreateStakerNodes.s.sol:CreateStakerNodes --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256)" -- "/local/deployment_data.json" <COUNT> -vvvv
 contract CreateStakerNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

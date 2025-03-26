@@ -8,7 +8,6 @@ import {
   forgeCommand,
   createSafeTransactions,
   proposeSafeTransaction,
-  getOutputData,
 } from "../utils/forge";
 
 const execAsync = promisify(exec);
@@ -32,7 +31,9 @@ export async function stakeAssetsToNode(
     // Setup task params
     const task = "LTM_StakeAssetsToNode.s.sol:StakeAssetsToNode";
     const sender =
-      DEPLOYMENT === "local" ? (await getOutputData()).roles.admin : ADMIN;
+      DEPLOYMENT === "local"
+        ? "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        : ADMIN;
     const sig = "run(string,uint256,address[],uint256[])";
     const assetsParam = `[${assets.map((op) => `"${op}"`).join(",")}]`;
     const amountsParam = `[${amounts.join(",")}]`;
