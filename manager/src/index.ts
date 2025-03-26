@@ -58,7 +58,7 @@ async function dailyResponsibilities(retryCount = 0) {
  *
  * @param retryCount
  */
-async function updatePrices(retryCount = 0) {
+async function priceUpdater(retryCount = 0) {
   while (true) {
     try {
       console.log(
@@ -81,7 +81,7 @@ async function updatePrices(retryCount = 0) {
             retryCount + 1
           } of ${MAX_RETRIES})`
         );
-        setTimeout(() => updatePrices(retryCount + 1), RETRY_DELAY * 1000);
+        setTimeout(() => priceUpdater(retryCount + 1), RETRY_DELAY * 1000);
       } else {
         console.log("Max retries reached. Updating prices failed.");
       }
@@ -91,7 +91,7 @@ async function updatePrices(retryCount = 0) {
 }
 
 // Start price updation immediately
-await updatePrices();
+await priceUpdater();
 
 // 5 minutes past midnight every day
 cron.schedule("5 0 * * *", () => dailyResponsibilities());

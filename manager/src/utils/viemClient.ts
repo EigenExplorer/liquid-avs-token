@@ -6,7 +6,6 @@ import {
   createWalletClient,
   http,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { type Chain, holesky, mainnet } from "viem/chains";
 
 let publicViemClient: PublicClient;
@@ -69,8 +68,8 @@ export function getWalletClient(account: PrivateKeyAccount, n?: Chain) {
   walletViemClient = createWalletClient({
     account,
     chain: network,
-    transport: process.env.NETWORK_CHAIN_RPC_URL
-      ? http(process.env.NETWORK_CHAIN_RPC_URL)
+    transport: process.env.RPC_URL
+      ? http(process.env.RPC_URL)
       : http(network.rpcUrls.default.http[0]),
   });
 
