@@ -45,8 +45,8 @@ export function getViemClient(n?: Chain) {
       batch: {
         multicall: true,
       },
-      transport: process.env.NETWORK_CHAIN_RPC_URL
-        ? http(process.env.NETWORK_CHAIN_RPC_URL)
+      transport: process.env.RPC_URL
+        ? http(process.env.RPC_URL)
         : http(network.rpcUrls.default.http[0]),
     });
   }
@@ -86,8 +86,8 @@ if (!(global as any).publicViemClient) {
     batch: {
       multicall: true,
     },
-    transport: process.env.NETWORK_CHAIN_RPC_URL
-      ? http(process.env.NETWORK_CHAIN_RPC_URL)
+    transport: process.env.RPC_URL
+      ? http(process.env.RPC_URL)
       : http(network.rpcUrls.default.http[0]),
   });
 }
