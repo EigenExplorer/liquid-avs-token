@@ -34,7 +34,13 @@ contract LiquidToken is
     */
 
     mapping(address => uint256) public assetBalances;
+
+    /**
+     * Storing queued balances
+     * @dev OUT OF SCOPE FOR V1
+    /*
     mapping(address => uint256) public queuedAssetBalances;
+    */
     /**
      * @dev Withdrawal request structure
      * @dev OUT OF SCOPE FOR V1
@@ -275,6 +281,8 @@ contract LiquidToken is
     /// @notice Credits queued balances for a given set of asset
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     function creditQueuedAssetBalances (
         IERC20[] calldata assets,
         uint256[] calldata amounts
@@ -289,6 +297,7 @@ contract LiquidToken is
             queuedAssetBalances[address(assets[i])] += amounts[i];
         }
     }
+    */
 
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
     /// @param assetsToRetrieve The ERC20 assets to transfer
@@ -407,10 +416,13 @@ contract LiquidToken is
             );
 
             // Queued Asset Balances
+            /// @dev OUT OF SCOPE FOR V1
+            /**
             total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceQueuedAsset(supportedTokens[i])
             );
+            */
 
             // Staked Asset Balances
             total += liquidTokenManager.getStakedAssetBalance(supportedTokens[i]);
@@ -432,6 +444,8 @@ contract LiquidToken is
     /// @notice Returns the queued balances of multiple assets
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     function balanceQueuedAssets(
         IERC20[] calldata assetList
     ) public view returns (uint256[] memory) {
@@ -441,6 +455,7 @@ contract LiquidToken is
         }
         return balances;
     }
+    */
 
     // ------------------------------------------------------------------------------
     // Internal functions
@@ -474,9 +489,12 @@ contract LiquidToken is
         return assetBalances[address(asset)];
     }
 
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
         return queuedAssetBalances[address(asset)];
     }
+    */
 
     // ------------------------------------------------------------------------------
     // Misc

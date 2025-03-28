@@ -146,10 +146,13 @@ interface ILiquidToken is IERC20 {
     /// @notice Credits queued balances for a given set of asset
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
+    /// @dev Out OF SCOPE FOR V1
+    /**
     function creditQueuedAssetBalances(
         IERC20[] calldata assets,
         uint256[] calldata amounts
     ) external;
+    */
 
     /// @notice Calculates the number of shares for a given asset amount
     /// @param asset The asset to calculate shares for
@@ -200,7 +203,10 @@ interface ILiquidToken is IERC20 {
     /// @notice Returns the queued balances of multiple assets
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
+    /// @dev Out OF SCOPE FOR V1
+    /**
     function balanceQueuedAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+    */
 
     /// @notice Pauses the contract
     function pause() external;

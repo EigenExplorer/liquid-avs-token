@@ -191,7 +191,8 @@ contract LiquidTokenManager is
         if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
+        /// @dev OUT OF SCOPE FOR V1
+        // if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Cache nodes array and length
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
