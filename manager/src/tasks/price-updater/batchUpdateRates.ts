@@ -54,16 +54,19 @@ export async function batchUpdateRates(
     if (!transactions || !Array.isArray(transactions))
       throw new Error("No transactions found");
 
-    const key = process.env.PRICE_UPDATER_PRIVATE_KEY as `0x${string}`;
+    const rawKey = process.env.PRICE_UPDATER_PRIVATE_KEY as string;
+    const key = `0x${
+      rawKey.startsWith("0x") ? rawKey.substring(2) : rawKey
+    }` as `0x${string}`;
     const account = privateKeyToAccount(key);
     const walletClient = getWalletClient(account);
 
     // Send tx
     const txHash = await walletClient.sendTransaction({
       account,
-      to: transactions[0].to as `0x${string}`,
-      data: transactions[0].input as `0x${string}`,
-      value: BigInt(transactions[0].value || "0x0"),
+      to: transactions[0].transaction.to as `0x${string}`,
+      data: transactions[0].transaction.input as `0x${string}`,
+      value: BigInt(transactions[0].transaction.value || "0x0"),
       chain: walletClient.chain,
     });
 

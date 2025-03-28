@@ -35,9 +35,9 @@ CHAIN="holesky"
 GITHUB_REPO="Eigenexplorer/lat-deployments"
 GITHUB_BRANCH="dev"
 DEPLOYMENT_CONFIG_FILE="${LAT_NAME}.anvil.config.json"
-DEPLOYMENT_CONFIG_PATH="script/configs/$DEPLOYMENT_CONFIG_FILE"
+DEPLOYMENT_CONFIG_PATH="script/configs/$CHAIN/$DEPLOYMENT_CONFIG_FILE"
 OUTPUT_PATH="script/outputs/$CHAIN/deployment_data.json"
-ABI_PATH="script/outputs/holesky/abi"
+ABI_PATH="script/outputs/$CHAIN/abi"
 
 mkdir -p script/outputs/${CHAIN}
 mkdir -p script/outputs/${CHAIN}/abi

@@ -594,20 +594,19 @@ contract Deploy is Script, Test {
      * @dev Extracts and saves contract ABIs with the same names as the contracts
      */
     function _saveContractABIs() internal {        
-        _saveContractABI("LiquidToken", address(liquidToken), ABI_DIR_PATH);
-        _saveContractABI("LiquidTokenManager", address(liquidTokenManager), ABI_DIR_PATH);
-        _saveContractABI("TokenRegistryOracle", address(tokenRegistryOracle), ABI_DIR_PATH);
-        _saveContractABI("StakerNodeCoordinator", address(stakerNodeCoordinator), ABI_DIR_PATH);
-        _saveContractABI("StakerNode", address(0), ABI_DIR_PATH);
+        _saveContractABI("LiquidToken", ABI_DIR_PATH);
+        _saveContractABI("LiquidTokenManager", ABI_DIR_PATH);
+        _saveContractABI("TokenRegistryOracle", ABI_DIR_PATH);
+        _saveContractABI("StakerNodeCoordinator", ABI_DIR_PATH);
+        _saveContractABI("StakerNode", ABI_DIR_PATH);
     }
     
     /**
      * @dev Saves a contract's ABI to a file
      * @param contractName The name of the contract
-     * @param contractAddress The address of the contract
      * @param abiDir The directory to save the ABI in
      */
-    function _saveContractABI(string memory contractName, address contractAddress, string memory abiDir) internal {
+    function _saveContractABI(string memory contractName, string memory abiDir) internal {
         string memory filePath = string.concat(abiDir, "/", contractName, ".json");
         string memory artifactPath = string.concat("out/", contractName, ".sol/", contractName, ".json");
         
