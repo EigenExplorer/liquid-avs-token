@@ -37,7 +37,7 @@ async function manualAddToken() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Add Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Add Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {

@@ -28,7 +28,7 @@ async function manualSetVolatilityThreshold() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Set Volatility Threshold for ${assetAddress}: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Set Volatility Threshold for ${assetAddress}: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {

@@ -21,7 +21,7 @@ async function manualUnpauseLiquidToken() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Unpause Contract: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Unpause Contract: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {
