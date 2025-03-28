@@ -27,7 +27,7 @@ async function manualSetMaxNodes() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Set Max Nodes to ${maxNodes}: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Set Max Nodes to ${maxNodes}: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {

@@ -27,7 +27,7 @@ async function manualUpgradeStakerNodeImplementation() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Upgrade Staker Node Implementation to ${implementationContractAddress}: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Upgrade Staker Node Implementation to ${implementationContractAddress}: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {

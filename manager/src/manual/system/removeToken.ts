@@ -27,7 +27,7 @@ async function manualRemoveToken() {
 
     if (pendingTransactions.length > 0) {
       console.log(
-        `[Manual] Remove Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
+        `[Manual][System] Remove Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
       );
     }
   } catch (error) {
