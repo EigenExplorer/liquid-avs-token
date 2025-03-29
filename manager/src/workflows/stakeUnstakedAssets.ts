@@ -1,4 +1,4 @@
-import { LIQUID_TOKEN_ADDRESS } from "../utils/forge";
+import { LIQUID_TOKEN_ADDRESS, NETWORK } from "../utils/forge";
 import {
   type NodeAllocation,
   stakeAssetsToNodes,
@@ -35,7 +35,7 @@ interface StakerNodesResponse {
 }
 
 const LAT_API_URL = process.env.LAT_API_URL;
-const MIN_ALLOCATION_ETH = 0.5;
+const MIN_ALLOCATION_ETH = NETWORK === "holesky" ? 0.01 : 1;
 
 /**
  * Workflow for staking unstaked assets in the `LiquidToken` contract across nodes
