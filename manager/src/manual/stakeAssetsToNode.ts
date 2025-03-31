@@ -1,10 +1,14 @@
 import { stakeAssetsToNode } from "../tasks/stakeAssetsToNode";
 import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
+import { refreshDeployment } from "../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
  * `npm run stake-assets-to-node` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualStakeAssetsToNode() {
@@ -19,6 +23,7 @@ async function manualStakeAssetsToNode() {
     const amounts: string[] = ["3000000000000000000", "1000000000000000000"];
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await stakeAssetsToNode(nodeId, assets, amounts);
 
     const pendingTx = (

@@ -1,10 +1,14 @@
 import { setMaxNodes } from "../../tasks/system/setMaxNodes";
 import { ADMIN } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
+import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
  * `npx tsx run .src/manual/system/setMaxNodes.ts` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualSetMaxNodes() {
@@ -17,6 +21,7 @@ async function manualSetMaxNodes() {
     const maxNodes = "10";
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await setMaxNodes(maxNodes);
 
     const pendingTransactions = (

@@ -1,10 +1,14 @@
 import { delegateNodes } from "../tasks/delegateNodes";
 import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
+import { refreshDeployment } from "../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
  * `npm run delegate-nodes` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualDelegateNodes() {
@@ -34,6 +38,7 @@ async function manualDelegateNodes() {
     ];
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await delegateNodes(nodeIds, operators, signatures, salts);
 
     const pendingTx = (

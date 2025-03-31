@@ -1,10 +1,14 @@
 import { addToken } from "../../tasks/system/addToken";
 import { ADMIN } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
+import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
- * `npx tsx run .src/manual/system/addToken.ts` from the `/manager` folder
+ * `npx tsx ./src/manual/system/addToken.ts` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualAddToken() {
@@ -21,6 +25,7 @@ async function manualAddToken() {
     const strategyAddress = "0x";
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await addToken(
       tokenAddress,
       decimals,

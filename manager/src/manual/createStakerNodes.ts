@@ -1,10 +1,14 @@
 import { createStakerNodes } from "../tasks/createStakerNodes";
 import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
+import { refreshDeployment } from "../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
  * `npm run create-staker-nodes` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualCreateStakerNodes() {
@@ -17,6 +21,7 @@ async function manualCreateStakerNodes() {
     const count: number = 1;
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await createStakerNodes(count);
 
     const pendingTransactions = (

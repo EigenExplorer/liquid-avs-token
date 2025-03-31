@@ -1,10 +1,14 @@
 import { setVolatilityThreshold } from "../../tasks/system/setVolatilityThreshold";
 import { ADMIN } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
+import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
- * `npx tsx run .src/manual/system/setVolatilityThreshold.ts` from the `/manager` folder
+ * `npx tsx ./src/manual/system/setVolatilityThreshold.ts` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualSetVolatilityThreshold() {
@@ -18,6 +22,7 @@ async function manualSetVolatilityThreshold() {
     const newThreshold = "50000000000000000";
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await setVolatilityThreshold(assetAddress, newThreshold);
 
     const pendingTransactions = (
