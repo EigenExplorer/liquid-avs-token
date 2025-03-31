@@ -1,8 +1,12 @@
 import { batchUpdateRates } from "../../tasks/price-updater/batchUpdateRates";
+import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
- * `npx tsx run .src/manual/price-updater/batchUpdateRates.ts` from the `/manager` folder
+ * `npx tsx ./src/manual/price-updater/batchUpdateRates.ts` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualBatchUpdateRates() {
@@ -17,6 +21,7 @@ async function manualBatchUpdateRates() {
     const prices: bigint[] = [1000000000000000000n];
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await batchUpdateRates(addresses, prices);
 
     console.log(
