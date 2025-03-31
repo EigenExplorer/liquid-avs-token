@@ -28,13 +28,21 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
+    /**
+    * @dev Withdrawal delay constant used for request/fulfill withdrawal flow
+    * @dev OUT OF SCOPE FOR V1
     uint256 public constant WITHDRAWAL_DELAY = 14 days;
+    */
 
     mapping(address => uint256) public assetBalances;
     mapping(address => uint256) public queuedAssetBalances;
+    /**
+     * @dev Withdrawal request structure
+     * @dev OUT OF SCOPE FOR V1
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
     mapping(address => uint256) private _withdrawalNonce;
+    */
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 

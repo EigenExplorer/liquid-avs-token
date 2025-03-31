@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+// OUT OF SCOPE FOR V1: This entire file is related to undelegation functionality
+// which is not implemented in v1 of the Liquid AVS Token project.
+
+/**
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 
@@ -16,7 +20,6 @@ import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 /// Original command:
 // forge script --via-ir script/tasks/LTM_UndelegateNodes.s.sol:UndelegateNodes --rpc-url $RPC_URL --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(string,uint256[])" -- "/local/mainnet_deployment_data.json" <NODE_IDS> -vvvv
 
-/**
 contract UndelegateNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 

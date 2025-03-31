@@ -18,6 +18,8 @@ interface ILiquidToken is IERC20Upgradeable {
     }
 
     /// @notice Represents a withdrawal request
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     struct WithdrawalRequest {
         address user;
         IERC20Upgradeable[] assets;
@@ -25,6 +27,7 @@ interface ILiquidToken is IERC20Upgradeable {
         uint256 requestTime;
         bool fulfilled;
     }
+    */
 
     /// @notice Emitted when an asset is deposited
     event AssetDeposited(
@@ -36,6 +39,8 @@ interface ILiquidToken is IERC20Upgradeable {
     );
 
     /// @notice Emitted when a withdrawal is requested
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     event WithdrawalRequested(
         bytes32 indexed requestId,
         address indexed user,
@@ -43,8 +48,11 @@ interface ILiquidToken is IERC20Upgradeable {
         uint256[] shareAmounts,
         uint256 timestamp
     );
+    */
 
     /// @notice Emitted when a withdrawal is fulfilled
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     event WithdrawalFulfilled(
         bytes32 indexed requestId,
         address indexed user,
@@ -52,6 +60,7 @@ interface ILiquidToken is IERC20Upgradeable {
         uint256[] shareAmounts,
         uint256 timestamp
     );
+    */
 
     /// @notice Emitted when an asset is transferred
     event AssetTransferred(
@@ -74,6 +83,8 @@ interface ILiquidToken is IERC20Upgradeable {
     error NotLiquidTokenManager(address sender);
 
     /// @notice Error for invalid withdrawal request
+    /// @dev OUT OF SCOPE FOR V1
+    /**
     error InvalidWithdrawalRequest();
 
     /// @notice Error when withdrawal delay is not met
@@ -84,6 +95,7 @@ interface ILiquidToken is IERC20Upgradeable {
 
     /// @notice Error when a new withdrawal is attempted with an existing request ID
     error DuplicateRequestId(bytes32 requestId);
+    */
 
     /// @notice Error for unsupported asset
     error AssetNotSupported(IERC20Upgradeable asset);
