@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
@@ -60,10 +60,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
         // Cache strategyManager to save gas
         IStrategyManager strategyManager = coordinator.strategyManager();
-        
+
         // Cache array length
         uint256 assetsLength = assets.length;
-        
+
         // Use unchecked for counter increment since i < assetsLength
         unchecked {
             for (uint256 i = 0; i < assetsLength; i++) {
@@ -79,7 +79,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                     amount
                 );
 
-                emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+                emit AssetDepositedToStrategy(
+                    asset,
+                    strategy,
+                    amount,
+                    eigenShares
+                );
             }
         }
     }
@@ -93,7 +98,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
         bytes32 approverSalt
     ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
-        if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
+        if (operatorDelegation != address(0))
+            revert NodeIsDelegated(operatorDelegation);
 
         // Cache delegationManager to save gas
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -103,7 +109,6 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         emit DelegatedToOperator(operator);
     }
 
-    
     /// @notice Undelegates the StakerNode's assets from the current operator
     /// @dev OUT OF SCOPE FOR V1
     /** 
