@@ -21,7 +21,7 @@
       },
       "params": {
         "pricePerUnit": 1000000000000000000,
-        "volatilityThreshold": 700000000000000000,
+        "volatilityThreshold": 100000000000000000,
         "decimals": 18
       }
     },
@@ -32,14 +32,102 @@
       },
       "params": {
         "pricePerUnit": 1000000000000000000,
-        "volatilityThreshold": 700000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
+        "strategy": "0x05037a81bd7b4c9e0f7b430f1f2a22c31a2fd943"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3",
+        "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0xb4f5fc289a778b80392b86fa70a7111e5be0f859",
+        "strategy": "0x31b6f59e1627cefc9fa174ad03859fc337666af7"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0xf603c5a3f774f05d4d848a9bb139809790890864",
+        "strategy": "0x46281e3b7fdcacdba44cadf069a94a588fd4c6ef"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0x8720095fa5739ab051799211b146a2eee4dd8b37",
+        "strategy": "0x70eb4d3c164a6b4a5f908d4fbb5a9caffb66bab6"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0xe3c063b1bee9de02eb28352b55d49d85514c67ff",
+        "strategy": "0xaccc5a86732be85b5012e8614af237801636f8e5"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
+        "strategy": "0x7673a47463f80c6a3553db9e54c8cdcd5313d0ac"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
+        "decimals": 18
+      }
+    },
+    {
+      "addresses": {
+        "token": "0x94373a4919b3240d86ea41593d5eba789fef3848",
+        "strategy": "0x80528d6e9a2babfc766965e0e26d5ab08d9cfaf9"
+      },
+      "params": {
+        "pricePerUnit": 1000000000000000000,
+        "volatilityThreshold": 100000000000000000,
         "decimals": 18
       }
     }
   ],
   "roles": {
-    "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-    "pauser": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "priceUpdater": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+    "admin": "0xfB069FF1d105F4B33Ffad1c0d1aeC08D379FC715",
+    "pauser": "0xfB069FF1d105F4B33Ffad1c0d1aeC08D379FC715",
+    "priceUpdater": "0x48F8BE189372d8aE0Aca865330E918570623B2fa"
   }
 }
