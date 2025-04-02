@@ -3,11 +3,13 @@ pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
@@ -114,10 +116,8 @@ contract LiquidTokenManager is
 
                 if (
                     init.tokenInfo[i].volatilityThreshold != 0 &&
-                    (
-                        init.tokenInfo[i].volatilityThreshold < 1e16 || 
-                        init.tokenInfo[i].volatilityThreshold > 1e18
-                    )
+                    (init.tokenInfo[i].volatilityThreshold < 1e16 ||
+                        init.tokenInfo[i].volatilityThreshold > 1e18)
                 ) {
                     revert InvalidThreshold();
                 }
@@ -154,14 +154,20 @@ contract LiquidTokenManager is
         uint256 volatilityThreshold,
         IStrategy strategy
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (address(tokenStrategies[token]) != address(0)) revert TokenExists(address(token));
+        if (address(tokenStrategies[token]) != address(0))
+            revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
         if (initialPrice == 0) revert InvalidPrice();
-        if (volatilityThreshold != 0 && (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)) revert InvalidThreshold();
+        if (
+            volatilityThreshold != 0 &&
+            (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
+        ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
 
-        try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
+        try IERC20Metadata(address(token)).decimals() returns (
+            uint8 decimalsFromContract
+        ) {
             if (decimalsFromContract == 0) revert InvalidDecimals();
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
@@ -169,13 +175,20 @@ contract LiquidTokenManager is
         tokens[token] = TokenInfo({
             decimals: decimals,
             pricePerUnit: initialPrice,
-            volatilityThreshold: volatilityThreshold 
+            volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
 
         supportedTokens.push(token);
 
-        emit TokenAdded(token, decimals, initialPrice, volatilityThreshold, address(strategy), msg.sender);
+        emit TokenAdded(
+            token,
+            decimals,
+            initialPrice,
+            volatilityThreshold,
+            address(strategy),
+            msg.sender
+        );
     }
 
     /// @notice Removes a token from the registry
@@ -187,16 +200,24 @@ contract LiquidTokenManager is
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
 
+        // Convert to IERC20Upgradeable array for interface calls
+        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
+            1
+        );
+        upgradeableAssets[0] = IERC20Upgradeable(address(token));
+
         // Check for unstaked balances
-        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
+        if (liquidToken.balanceAssets(upgradeableAssets)[0] > 0)
+            revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
+        if (liquidToken.balanceQueuedAssets(upgradeableAssets)[0] > 0)
+            revert TokenInUse(token);
 
         // Cache nodes array and length
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 len = nodes.length;
-        
+
         // Use unchecked for counter increment since i < len
         unchecked {
             for (uint256 i = 0; i < len; i++) {
@@ -245,9 +266,14 @@ contract LiquidTokenManager is
                 ? newPrice - oldPrice
                 : oldPrice - newPrice;
             uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
-            
+
             if (changeRatio > tokens[token].volatilityThreshold) {
-                emit VolatilityCheckFailed(token, oldPrice, newPrice, changeRatio);
+                emit VolatilityCheckFailed(
+                    token,
+                    oldPrice,
+                    newPrice,
+                    changeRatio
+                );
                 revert VolatilityThresholdHit(token, changeRatio);
             }
         }
@@ -259,9 +285,7 @@ contract LiquidTokenManager is
     /// @notice Checks if a token is supported
     /// @param token Address of the token to check
     /// @return bool indicating whether the token is supported
-    function tokenIsSupported(
-        IERC20 token
-    ) public view override returns (bool) {
+    function tokenIsSupported(IERC20 token) external view returns (bool) {
         return tokens[token].decimals != 0;
     }
 
@@ -272,7 +296,7 @@ contract LiquidTokenManager is
     function convertToUnitOfAccount(
         IERC20 token,
         uint256 amount
-    ) public view override returns (uint256) {
+    ) external view returns (uint256) {
         TokenInfo memory info = tokens[token];
         if (info.decimals == 0) revert TokenNotSupported(token);
 
@@ -286,7 +310,7 @@ contract LiquidTokenManager is
     function convertFromUnitOfAccount(
         IERC20 token,
         uint256 amount
-    ) public view override returns (uint256) {
+    ) external view returns (uint256) {
         TokenInfo memory info = tokens[token];
         if (info.decimals == 0) revert TokenNotSupported(token);
 
@@ -319,9 +343,7 @@ contract LiquidTokenManager is
     /// @notice Returns the strategy for a given asset
     /// @param asset Asset to get the strategy for
     /// @return IStrategy Interface for the corresponding strategy
-    function getTokenStrategy(
-        IERC20 asset
-    ) external view returns (IStrategy) {
+    function getTokenStrategy(IERC20 asset) external view returns (IStrategy) {
         if (address(asset) == address(0)) revert ZeroAddress();
 
         IStrategy strategy = tokenStrategies[asset];
@@ -391,7 +413,15 @@ contract LiquidTokenManager is
             strategiesForNode[i] = strategy;
         }
 
-        liquidToken.transferAssets(assets, amounts);
+        // Convert to IERC20Upgradeable array for interface calls
+        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
+            assetsLength
+        );
+        for (uint256 i = 0; i < assetsLength; i++) {
+            upgradeableAssets[i] = IERC20Upgradeable(address(assets[i]));
+        }
+
+        liquidToken.transferAssets(upgradeableAssets, amounts);
 
         IERC20[] memory depositAssets = new IERC20[](assetsLength);
         uint256[] memory depositAmounts = new uint256[](amountsLength);
@@ -415,28 +445,39 @@ contract LiquidTokenManager is
     }
 
     /// @notice Delegate a set of staker nodes to a corresponding set of operators
-     /// @param nodeIds The IDs of the staker nodes
-     /// @param operators The addresses of the operators
-     /// @param approverSignatureAndExpiries The signatures authorizing the delegations
-     /// @param approverSalts The salts used in the signatures
-     function delegateNodes(
-         uint256[] memory nodeIds,
-         address[] memory operators,
-         ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
-         bytes32[] calldata approverSalts
-     ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
-         uint256 arrayLength = nodeIds.length;
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
+    function delegateNodes(
+        uint256[] memory nodeIds,
+        address[] memory operators,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[]
+            calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        uint256 arrayLength = nodeIds.length;
 
-         if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
-         if (approverSignatureAndExpiries.length != arrayLength) revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
-         if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
+        if (operators.length != arrayLength)
+            revert LengthMismatch(operators.length, arrayLength);
+        if (approverSignatureAndExpiries.length != arrayLength)
+            revert LengthMismatch(
+                approverSignatureAndExpiries.length,
+                arrayLength
+            );
+        if (approverSalts.length != arrayLength)
+            revert LengthMismatch(approverSalts.length, arrayLength);
 
-         for (uint256 i = 0; i < arrayLength; i++) {
-             IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
-             node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
-             emit NodeDelegated(nodeIds[i], operators[i]);
-         }
-     }
+        for (uint256 i = 0; i < arrayLength; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+            node.delegate(
+                operators[i],
+                approverSignatureAndExpiries[i],
+                approverSalts[i]
+            );
+            emit NodeDelegated(nodeIds[i], operators[i]);
+        }
+    }
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
@@ -448,8 +489,20 @@ contract LiquidTokenManager is
         // Fetch and add all asset balances from the node to queued balances
         for (uint256 i = 0; i < nodeIds.length; i++) {
             IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+
+            // Convert supportedTokens to IERC20Upgradeable array
+            IERC20Upgradeable[]
+                memory upgradeableTokens = new IERC20Upgradeable[](
+                    supportedTokens.length
+                );
+            for (uint256 j = 0; j < supportedTokens.length; j++) {
+                upgradeableTokens[j] = IERC20Upgradeable(
+                    address(supportedTokens[j])
+                );
+            }
+
             liquidToken.creditQueuedAssetBalances(
-                supportedTokens, 
+                upgradeableTokens,
                 _getAllStakedAssetBalancesNode(node)
             );
 
@@ -461,7 +514,9 @@ contract LiquidTokenManager is
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
-    function getStakedAssetBalance(IERC20 asset) public view returns (uint256) {
+    function getStakedAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -529,12 +584,21 @@ contract LiquidTokenManager is
     /// @notice Sets the volatility threshold for a given asset
     /// @param asset The asset token address
     /// @param newThreshold The new volatility threshold value to update to
-    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVolatilityThreshold(
+        IERC20 asset,
+        uint256 newThreshold
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(asset) == address(0)) revert ZeroAddress();
         if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
-        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();
+        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18))
+            revert InvalidThreshold();
 
-        emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
+        emit VolatilityThresholdUpdated(
+            asset,
+            tokens[asset].volatilityThreshold,
+            newThreshold,
+            msg.sender
+        );
 
         tokens[asset].volatilityThreshold = newThreshold;
     }

@@ -26,32 +26,45 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
     function testUpgradeStakerNodeImplementationSuccess() public {
         // Retrieve the old implementation address from the UpgradeableBeacon
-        address oldImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon())).implementation();
+        address oldImplementation = UpgradeableBeacon(
+            address(stakerNodeCoordinator.upgradeableBeacon())
+        ).implementation();
         address newImplementation = address(new StakerNode());
 
         assertTrue(newImplementation != oldImplementation);
 
         // Upgrade to the new implementation
         vm.prank(admin);
-        stakerNodeCoordinator.upgradeStakerNodeImplementation(newImplementation);
+        stakerNodeCoordinator.upgradeStakerNodeImplementation(
+            newImplementation
+        );
 
         // Retrieve the upgraded implementation address from the UpgradeableBeacon
-        address upgradedImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon())).implementation();
+        address upgradedImplementation = UpgradeableBeacon(
+            address(stakerNodeCoordinator.upgradeableBeacon())
+        ).implementation();
 
         // Check if the upgrade has succeeded
-        assertEq(address(stakerNodeCoordinator.upgradeableBeacon()) != address(0), true);
+        assertEq(
+            address(stakerNodeCoordinator.upgradeableBeacon()) != address(0),
+            true
+        );
         assertEq(upgradedImplementation, newImplementation);
         assertTrue(upgradedImplementation != oldImplementation);
     }
 
-    function testUpgradeStakerNodeImplementationRevertsWhenNotContract() public {
+    function testUpgradeStakerNodeImplementationRevertsWhenNotContract()
+        public
+    {
         // Use an EOA address as implementation
         address nonContractAddress = makeAddr("nonContract");
 
         // Expect revert when trying to upgrade to non-contract address
         vm.prank(admin);
         vm.expectRevert(IStakerNodeCoordinator.NotAContract.selector);
-        stakerNodeCoordinator.upgradeStakerNodeImplementation(nonContractAddress);
+        stakerNodeCoordinator.upgradeStakerNodeImplementation(
+            nonContractAddress
+        );
     }
 
     function testSetMaxNodesSuccess() public {
@@ -98,7 +111,13 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         // Try to set maxNodes lower than the current number of nodes
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector, 1, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector,
+                1,
+                0
+            )
+        );
         stakerNodeCoordinator.setMaxNodes(0);
     }
 
@@ -107,22 +126,29 @@ contract StakerNodeCoordinatorTest is BaseTest {
         stakerNodeCoordinator.createStakerNode();
 
         // Accessing node ID that is out of range
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.NodeIdOutOfRange.selector, 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.NodeIdOutOfRange.selector,
+                1
+            )
+        );
         stakerNodeCoordinator.getNodeById(1);
     }
 
     function testInitializeRevertsWithZeroMaxNodes() public {
         // Deploy new implementation
         StakerNodeCoordinator newCoordinator = new StakerNodeCoordinator();
-        
-        // Create a proxy to properly handle initialization
+
+        // Create a proxy with proxyAdminAddress instead of admin
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(newCoordinator),
-            admin,
+            proxyAdminAddress, // Use proxyAdminAddress instead of admin
             ""
         );
-        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
-        
+        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(
+            address(proxy)
+        );
+
         // Initialize with zero maxNodes
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
@@ -136,7 +162,11 @@ contract StakerNodeCoordinatorTest is BaseTest {
             stakerNodeImplementation: address(stakerNodeImplementation)
         });
 
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.ZeroAmount.selector));
+        // Use deployer to call the function
+        vm.prank(deployer);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStakerNodeCoordinator.ZeroAmount.selector)
+        );
         proxiedCoordinator.initialize(init);
     }
 
@@ -149,7 +179,12 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         // Try to create another node, which exceeds the max node limit
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.TooManyStakerNodes.selector,
+                1
+            )
+        );
         stakerNodeCoordinator.createStakerNode();
     }
 
@@ -169,55 +204,58 @@ contract StakerNodeCoordinatorTest is BaseTest {
         // 1. Deploy the implementation contracts
         StakerNode stakerNodeImplementation = new StakerNode();
         StakerNodeCoordinator newCoordinator = new StakerNodeCoordinator();
-        
+
         // 2. Set up the beacon
         UpgradeableBeacon upgradeableBeacon = new UpgradeableBeacon(
-            address(stakerNodeImplementation),
-            admin
+            address(stakerNodeImplementation)
         );
-        
-        // 3. Create and set up the proxy
+
+        // 3. Create and set up the proxy using proxyAdminAddress
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(newCoordinator),
-            admin,
+            proxyAdminAddress, // Use proxyAdminAddress instead of admin
             ""
         );
-        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
-        
+        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(
+            address(proxy)
+        );
+
         // 4. Store the beacon in the coordinator
         vm.store(
             address(proxiedCoordinator),
             bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1),
             bytes32(uint256(uint160(address(upgradeableBeacon))))
         );
-        
-        // 5. Initialize with maxNodes = 1 (normal case)
+
+        // 5. Initialize with maxNodes = 1 (normal case) using deployer as caller
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
             delegationManager: delegationManager,
             strategyManager: strategyManager,
-            maxNodes: 1,  // Allow 1 node
-            initialOwner: admin,
+            maxNodes: 1, // Allow 1 node
+            initialOwner: deployer, // Initialize with deployer as owner
             pauser: pauser,
-            stakerNodeCreator: admin,
-            stakerNodesDelegator: admin,
+            stakerNodeCreator: deployer, // Use deployer for roles too
+            stakerNodesDelegator: deployer,
             stakerNodeImplementation: address(stakerNodeImplementation)
         });
+
+        vm.prank(deployer);
         proxiedCoordinator.initialize(init);
 
-        // 6. We can create a node successfully
-        vm.startPrank(admin);
+        // 6. We can create a node successfully using deployer
+        vm.startPrank(deployer);
         IStakerNode node = proxiedCoordinator.createStakerNode();
         assertEq(address(node) != address(0), true);
-        
+
         // 7. But we can't create more than maxNodes
-        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStakerNodeCoordinator.TooManyStakerNodes.selector,
+                1
+            )
+        );
         proxiedCoordinator.createStakerNode();
         vm.stopPrank();
-
-        // This demonstrates why maxNodes=0 would be bad:
-        // - With maxNodes=1, we can create 1 node
-        // - With maxNodes=2, we can create 2 nodes
-        // - With maxNodes=0, we can create 0 nodes (completely unusable)
     }
 }

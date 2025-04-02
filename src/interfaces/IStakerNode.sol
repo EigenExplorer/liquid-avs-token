@@ -49,7 +49,7 @@ interface IStakerNode {
     error NodeIsDelegated(address operatorDelegation);
 
     /// @notice Error for undelegating node when not delegated
-     error NodeIsNotDelegated();
+    error NodeIsNotDelegated();
 
     /// @notice Initializes the StakerNode contract
     /// @param init Initialization parameters including coordinator address and node ID

@@ -43,7 +43,9 @@ contract BaseTest is Test {
     MockStrategy public mockStrategy2;
 
     // Addresses
+    address public proxyAdminAddress = address(0xABCD); // Proxy admin address
     address public admin = address(this);
+    address public deployer = address(0x1234); // Non-admin address for interacting with proxies
     address public pauser = address(2);
     address public user1 = address(3);
     address public user2 = address(4);
@@ -54,11 +56,19 @@ contract BaseTest is Test {
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
 
+    // Helper method to use deployer for proxy interactions
+    modifier asDeployer() {
+        vm.startPrank(deployer);
+        _;
+        vm.stopPrank();
+    }
+
     function setUp() public virtual {
         _setupELContracts();
         _deployMockContracts();
         _deployMainContracts();
         _deployProxies();
+        // Initialize with deployer as the initialOwner
         _initializeProxies();
         _setupTestTokens();
     }
@@ -70,18 +80,19 @@ contract BaseTest is Test {
 
         // LiquidTokenManager Initialization Tests
         {
-            ILiquidTokenManager.Init memory validInit = ILiquidTokenManager.Init({
-                assets: new IERC20[](2),
-                tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
-                strategies: new IStrategy[](2),
-                liquidToken: liquidToken,
-                strategyManager: strategyManager,
-                delegationManager: delegationManager,
-                stakerNodeCoordinator: stakerNodeCoordinator,
-                initialOwner: admin,
-                strategyController: admin,
-                priceUpdater: address(tokenRegistryOracle)
-            });
+            ILiquidTokenManager.Init memory validInit = ILiquidTokenManager
+                .Init({
+                    assets: new IERC20[](2),
+                    tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
+                    strategies: new IStrategy[](2),
+                    liquidToken: liquidToken,
+                    strategyManager: strategyManager,
+                    delegationManager: delegationManager,
+                    stakerNodeCoordinator: stakerNodeCoordinator,
+                    initialOwner: deployer,
+                    strategyController: deployer,
+                    priceUpdater: address(tokenRegistryOracle)
+                });
 
             validInit.assets[0] = IERC20(address(testToken));
             validInit.assets[1] = IERC20(address(testToken2));
@@ -104,54 +115,63 @@ contract BaseTest is Test {
             // Zero address for owner
             testInit = validInit;
             testInit.initialOwner = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for liquidToken
             testInit = validInit;
             testInit.liquidToken = ILiquidToken(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for strategyManager
             testInit = validInit;
             testInit.strategyManager = IStrategyManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for delegationManager
             testInit = validInit;
             testInit.delegationManager = IDelegationManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for stakerNodeCoordinator
             testInit = validInit;
             testInit.stakerNodeCoordinator = IStakerNodeCoordinator(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for strategyController
             testInit = validInit;
             testInit.strategyController = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address for priceUpdater
             testInit = validInit;
             testInit.priceUpdater = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address in assets array
             testInit = validInit;
             testInit.assets[0] = IERC20(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
 
             // Zero address in strategies array
             testInit = validInit;
             testInit.strategies[0] = IStrategy(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidTokenManager.initialize(testInit);
         }
@@ -161,9 +181,11 @@ contract BaseTest is Test {
             ILiquidToken.Init memory validInit = ILiquidToken.Init({
                 name: "Liquid Staking Token",
                 symbol: "LST",
-                initialOwner: admin,
+                initialOwner: deployer,
                 pauser: pauser,
-                liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+                liquidTokenManager: ILiquidTokenManager(
+                    address(liquidTokenManager)
+                )
             });
 
             // Test each parameter individually
@@ -172,35 +194,39 @@ contract BaseTest is Test {
             // Zero address for owner
             testInit = validInit;
             testInit.initialOwner = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidToken.initialize(testInit);
 
             // Zero address for pauser
             testInit = validInit;
             testInit.pauser = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidToken.initialize(testInit);
 
             // Zero address for liquidTokenManager
             testInit = validInit;
             testInit.liquidTokenManager = ILiquidTokenManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newLiquidToken.initialize(testInit);
         }
 
         // StakerNodeCoordinator Initialization Tests
         {
-            IStakerNodeCoordinator.Init memory validInit = IStakerNodeCoordinator.Init({
-                liquidTokenManager: liquidTokenManager,
-                strategyManager: strategyManager,
-                delegationManager: delegationManager,
-                maxNodes: 10,
-                initialOwner: admin,
-                pauser: pauser,
-                stakerNodeCreator: admin,
-                stakerNodesDelegator: admin,
-                stakerNodeImplementation: address(stakerNodeImplementation)
-            });
+            IStakerNodeCoordinator.Init
+                memory validInit = IStakerNodeCoordinator.Init({
+                    liquidTokenManager: liquidTokenManager,
+                    strategyManager: strategyManager,
+                    delegationManager: delegationManager,
+                    maxNodes: 10,
+                    initialOwner: deployer,
+                    pauser: pauser,
+                    stakerNodeCreator: deployer,
+                    stakerNodesDelegator: deployer,
+                    stakerNodeImplementation: address(stakerNodeImplementation)
+                });
 
             // Test each parameter individually
             IStakerNodeCoordinator.Init memory testInit;
@@ -208,48 +234,56 @@ contract BaseTest is Test {
             // Zero address for owner
             testInit = validInit;
             testInit.initialOwner = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for pauser
             testInit = validInit;
             testInit.pauser = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for stakerNodeCreator
             testInit = validInit;
             testInit.stakerNodeCreator = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for stakerNodesDelegator
             testInit = validInit;
             testInit.stakerNodesDelegator = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for liquidTokenManager
             testInit = validInit;
             testInit.liquidTokenManager = ILiquidTokenManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for strategyManager
             testInit = validInit;
             testInit.strategyManager = IStrategyManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for delegationManager
             testInit = validInit;
             testInit.delegationManager = IDelegationManager(address(0));
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
 
             // Zero address for stakerNodeImplementation
             testInit = validInit;
             testInit.stakerNodeImplementation = address(0);
+            vm.prank(deployer);
             vm.expectRevert();
             newStakerNodeCoordinator.initialize(testInit);
         }
@@ -290,7 +324,7 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_tokenRegistryOracleImplementation),
-                    address(admin),
+                    proxyAdminAddress,
                     ""
                 )
             )
@@ -299,7 +333,7 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_liquidTokenManagerImplementation),
-                    address(admin),
+                    proxyAdminAddress,
                     ""
                 )
             )
@@ -308,7 +342,7 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_liquidTokenImplementation),
-                    address(admin),
+                    proxyAdminAddress,
                     ""
                 )
             )
@@ -317,7 +351,7 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_stakerNodeCoordinatorImplementation),
-                    address(admin),
+                    proxyAdminAddress,
                     ""
                 )
             )
@@ -329,14 +363,18 @@ contract BaseTest is Test {
         _initializeLiquidTokenManager();
         _initializeStakerNodeCoordinator();
         _initializeLiquidToken();
+
+        // Grant admin role to the admin address for all contracts
+        _grantRolesToAdmin();
     }
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
-            initialOwner: admin,
+            initialOwner: deployer, // Initialize with deployer as owner
             priceUpdater: user2,
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
+        vm.prank(deployer);
         tokenRegistryOracle.initialize(init);
     }
 
@@ -349,8 +387,8 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
-            initialOwner: admin,
-            strategyController: admin,
+            initialOwner: deployer, // Initialize with deployer as owner
+            strategyController: deployer, // Initialize with deployer
             priceUpdater: address(tokenRegistryOracle)
         });
         init.assets[0] = IERC20(address(testToken));
@@ -367,6 +405,8 @@ contract BaseTest is Test {
         });
         init.strategies[0] = IStrategy(address(mockStrategy));
         init.strategies[1] = IStrategy(address(mockStrategy2));
+
+        vm.prank(deployer);
         liquidTokenManager.initialize(init);
     }
 
@@ -374,10 +414,12 @@ contract BaseTest is Test {
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
-            initialOwner: admin,
+            initialOwner: deployer, // Initialize with deployer as owner
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
+
+        vm.prank(deployer);
         liquidToken.initialize(init);
     }
 
@@ -387,13 +429,56 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
-            initialOwner: admin,
+            initialOwner: deployer, // Initialize with deployer as owner
             pauser: pauser,
-            stakerNodeCreator: admin,
-            stakerNodesDelegator: admin,
+            stakerNodeCreator: deployer, // Initialize with deployer
+            stakerNodesDelegator: deployer, // Initialize with deployer
             stakerNodeImplementation: address(stakerNodeImplementation)
         });
+
+        vm.prank(deployer);
         stakerNodeCoordinator.initialize(init);
+    }
+
+    // Now grant admin roles to the admin address
+    function _grantRolesToAdmin() private {
+        // Grant roles from deployer (who has them) to admin
+        vm.startPrank(deployer);
+
+        // Transfer ownership of TokenRegistryOracle
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+
+        // Transfer ownership of LiquidTokenManager
+        liquidTokenManager.grantRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+            admin
+        );
+
+        // Transfer ownership of LiquidToken
+        liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), admin);
+
+        // Transfer ownership of StakerNodeCoordinator
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            admin
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            admin
+        );
+
+        vm.stopPrank();
     }
 
     function _setupTestTokens() private {
@@ -410,5 +495,18 @@ contract BaseTest is Test {
         testToken.approve(address(liquidToken), type(uint256).max);
         vm.prank(user2);
         testToken2.approve(address(liquidToken), type(uint256).max);
+    }
+
+    // Helper functions for inheriting contracts to use
+    function _actAsAdmin(function() internal fn) internal {
+        vm.startPrank(admin);
+        fn();
+        vm.stopPrank();
+    }
+
+    function _actAsDeployer(function() internal fn) internal {
+        vm.startPrank(deployer);
+        fn();
+        vm.stopPrank();
     }
 }

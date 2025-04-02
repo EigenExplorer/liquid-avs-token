@@ -135,20 +135,20 @@ contract StakerNodeCoordinator is
     /// @dev Can only be called once by an account with DEFAULT_ADMIN_ROLE
     function _registerStakerNodeImplementation(
         address _implementationContract
-    )
-        internal
-        notZeroAddress(_implementationContract)
-    {
+    ) internal notZeroAddress(_implementationContract) {
         if (address(upgradeableBeacon) != address(0)) {
             revert BeaconImplementationAlreadyExists();
         }
 
-        upgradeableBeacon = new UpgradeableBeacon(
-            _implementationContract,
-            address(this)
-        );
+        upgradeableBeacon = new UpgradeableBeacon(_implementationContract);
 
-        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, true);
+        upgradeableBeacon.transferOwnership(address(this));
+
+        emit NodeImplementationChanged(
+            address(upgradeableBeacon),
+            _implementationContract,
+            true
+        );
     }
 
     /// @notice Upgrades the staker node implementation
@@ -173,7 +173,7 @@ contract StakerNodeCoordinator is
 
         // Cache array length
         uint256 nodeCount = stakerNodes.length;
-        
+
         // Use unchecked for counter increment since i < nodeCount
         unchecked {
             for (uint256 i = 0; i < nodeCount; i++) {
@@ -181,7 +181,11 @@ contract StakerNodeCoordinator is
             }
         }
 
-        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, false);
+        emit NodeImplementationChanged(
+            address(upgradeableBeacon),
+            _implementationContract,
+            false
+        );
     }
 
     /// @notice Sets the maximum number of staker nodes
