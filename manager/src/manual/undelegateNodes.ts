@@ -1,10 +1,14 @@
 import { undelegateNodes } from "../tasks/undelegateNodes";
 import { ADMIN } from "../utils/forge";
 import { apiKit } from "../utils/safe";
+import { refreshDeployment } from "../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
  * `npm run undelegate-nodes` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualUndelegateNodes() {
@@ -17,6 +21,7 @@ async function manualUndelegateNodes() {
     const nodeIds: string[] = ["0", "1"];
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await undelegateNodes(nodeIds);
 
     const pendingTx = (

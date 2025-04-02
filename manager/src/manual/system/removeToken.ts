@@ -1,10 +1,14 @@
 import { removeToken } from "../../tasks/system/removeToken";
 import { ADMIN } from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
+import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
- * `npx tsx run .src/manual/system/removeToken.ts` from the `/manager` folder
+ * `npx tsx ./src/manual/system/removeToken.ts` from the `/manager` folder
+ *
+ * IMPORTANT:
+ * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
  */
 async function manualRemoveToken() {
@@ -17,6 +21,7 @@ async function manualRemoveToken() {
     const tokenAddress = "0x";
     // ------------------------------------------------------------------------------------
 
+    await refreshDeployment();
     await removeToken(tokenAddress);
 
     const pendingTransactions = (
