@@ -148,19 +148,33 @@ verify_proxy() {
         # Encode constructor arguments
         local constructor_args=$(cast abi-encode "constructor(address,address,bytes)" $impl_address $proxy_admin_address "0x")
         
-        # Skip direct verification and go straight to linking
-        echo "[Verify] Skipping direct verification and proceeding to link proxy to implementation..."
+        # Actually verify the proxy contract using Standard JSON Input method
+        echo "[Verify] Verifying proxy contract using Standard JSON Input method..."
         
-        # Check if proxy has an ABI (might be verified or recognized by Etherscan)
-        local recheck_url="${API_URL}?module=contract&action=getabi&address=${proxy_address}&apikey=${ETHERSCAN_API_KEY}"
-        local recheck_result=$(curl -s "$recheck_url")
-        local recheck_status=$(echo $recheck_result | jq -r '.status')
+        # Find the contract file for TransparentUpgradeableProxy
+        local contract_file="lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
         
-        if [[ "$recheck_status" != "1" ]]; then
-            echo "[Verify] Note: Proxy contract at $proxy_address not verified directly (expected for OpenZeppelin proxies)"
+        # Encode constructor arguments
+        local constructor_args=$(cast abi-encode "constructor(address,address,bytes)" $impl_address $proxy_admin_address "0x")
+        constructor_args=${constructor_args:2}  # Remove 0x prefix
+        
+        # Verify the proxy contract
+        echo "[Verify] Verifying proxy contract with constructor args: $constructor_args"
+        forge verify-contract --chain-id $CHAIN_ID \
+            --compiler-version 0.8.27 \
+            --optimizer-runs 200 \
+            --constructor-args $constructor_args \
+            --watch \
+            --etherscan-api-key $ETHERSCAN_API_KEY \
+            $proxy_address \
+            $contract_file
+            
+        if [ $? -ne 0 ]; then
+            echo "[Verify] Warning: Failed to verify proxy contract directly. Will still try to link it."
+            echo "[Verify] Note: Proxy contract at $proxy_address not verified directly"
             echo "[Verify] Proceeding to link proxy to implementation..."
         else
-            echo "[Verify] Proxy contract at $proxy_address has ABI available"
+            echo "[Verify] Successfully verified proxy contract directly"
         fi
         
         sleep 5  # Wait a few seconds for Etherscan to update
