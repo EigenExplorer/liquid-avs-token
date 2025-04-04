@@ -91,7 +91,7 @@ async function priceUpdater(retryCount = 0) {
 }
 
 // Start price updation immediately
-await priceUpdater();
+priceUpdater();
 
 // 5 minutes past midnight every day
 cron.schedule("5 0 * * *", () => dailyResponsibilities());
