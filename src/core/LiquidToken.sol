@@ -82,23 +82,52 @@ contract LiquidToken is
     /// @param receiver The address to receive the minted shares
     /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20Upgradeable[] calldata assets,
+        IERC20[] calldata assets,
         uint256[] calldata amounts,
         address receiver
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
+        // === CHECK AND UPDATE STALE PRICES ===
+        // Get the token registry oracle address from LiquidTokenManager
+        address oracleAddress = liquidTokenManager.getTokenRegistryOracle();
+        ITokenRegistryOracle oracle = ITokenRegistryOracle(oracleAddress);
+
+        // Check if prices need updating (single global check is gas efficient)
+        bool pricesUpdated = false;
+        try oracle.arePricesStale() returns (bool stale) {
+            if (stale) {
+                // Prices are stale, try to update them
+                try oracle.updateAllPricesIfNeeded() returns (bool updated) {
+                    pricesUpdated = updated;
+                } catch Error(string memory reason) {
+                    // If price update fails, emit event but continue with deposit
+                    emit PriceUpdateFailed(reason);
+                } catch {
+                    // Catch any other errors
+                    emit PriceUpdateFailed("Unknown error updating prices");
+                }
+            }
+        } catch {
+            // If staleness check fails, continue with deposit
+            emit PriceUpdateFailed("Failed to check price staleness");
+        }
+
+        // Emit event for price update status
+        emit PricesUpdatedDuringDeposit(msg.sender, pricesUpdated);
+
+        // === ORIGINAL DEPOSIT LOGIC ===
         uint256 len = assets.length;
         uint256[] memory sharesArray = new uint256[](len);
 
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                IERC20 asset = IERC20(address(assets[i]));
+                IERC20 asset = assets[i];
                 uint256 amount = amounts[i];
 
                 if (amount == 0) revert ZeroAmount();
                 if (!liquidTokenManager.tokenIsSupported(asset))
-                    revert UnsupportedAsset(assets[i]);
+                    revert UnsupportedAsset(asset);
 
                 // True amount received may differ from `amount` for rebasing tokens
                 uint256 balanceBefore = asset.balanceOf(address(this));
@@ -107,7 +136,7 @@ contract LiquidToken is
 
                 uint256 trueAmount = balanceAfter - balanceBefore;
 
-                uint256 shares = calculateShares(assets[i], trueAmount);
+                uint256 shares = calculateShares(asset, trueAmount);
                 if (shares == 0) revert ZeroShares();
 
                 assetBalances[address(asset)] += trueAmount;
@@ -117,7 +146,7 @@ contract LiquidToken is
                     asset.balanceOf(address(this))
                 )
                     revert AssetBalanceOutOfSync(
-                        assets[i],
+                        asset,
                         assetBalances[address(asset)],
                         asset.balanceOf(address(this))
                     );
@@ -128,7 +157,7 @@ contract LiquidToken is
                 emit AssetDeposited(
                     msg.sender,
                     receiver,
-                    assets[i],
+                    asset,
                     trueAmount,
                     shares
                 );
@@ -377,7 +406,7 @@ contract LiquidToken is
     /**
      * @dev Gets withdrawal requests for a user
      * @dev OUT OF SCOPE FOR V1
-    */
+     */
     /**
     function getUserWithdrawalRequests(
         address user
@@ -389,7 +418,7 @@ contract LiquidToken is
     /**
      * @dev Gets details of a specific withdrawal request
      * @dev OUT OF SCOPE FOR V1
-    */
+     */
     /**
     function getWithdrawalRequest(
         bytes32 requestId
@@ -504,5 +533,5 @@ contract LiquidToken is
     /// @notice Unpauses the contract
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
-    } 
+    }
 }
