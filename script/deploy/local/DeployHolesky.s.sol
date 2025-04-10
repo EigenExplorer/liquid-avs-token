@@ -367,7 +367,10 @@ contract DeployHolesky is Script, Test {
                 pauser: pauser,
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
-                )
+                ),
+                tokenRegistryOracle: ITokenRegistryOracle(
+                    address(tokenRegistryOracle)
+                ) // Added this line
             })
         );
     }

@@ -185,7 +185,10 @@ contract BaseTest is Test {
                 pauser: pauser,
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
-                )
+                ),
+                tokenRegistryOracle: ITokenRegistryOracle(
+                    address(tokenRegistryOracle)
+                ) // Added this line
             });
 
             // Test each parameter individually
@@ -416,7 +419,12 @@ contract BaseTest is Test {
             symbol: "LST",
             initialOwner: deployer, // Initialize with deployer as owner
             pauser: pauser,
-            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+            liquidTokenManager: ILiquidTokenManager(
+                address(liquidTokenManager)
+            ),
+            tokenRegistryOracle: ITokenRegistryOracle(
+                address(tokenRegistryOracle)
+            ) // Added this line
         });
 
         vm.prank(deployer);

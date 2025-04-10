@@ -233,7 +233,12 @@ interface ILiquidTokenManager {
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
-    function undelegateNodes(uint256[] calldata nodeIds) external;
+    /// @dev Out OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external;
+    */
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
@@ -277,9 +282,4 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
-    /**
-     * @notice Gets the address of the token registry oracle
-     * @return The address of the token registry oracle
-     */
-    function getTokenRegistryOracle() external view returns (address);
 }

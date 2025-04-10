@@ -9,6 +9,7 @@ import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -28,6 +29,8 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
+    ITokenRegistryOracle public tokenRegistryOracle;
+
     /**
     * @dev Withdrawal delay constant used for request/fulfill withdrawal flow
     * @dev OUT OF SCOPE FOR V1
@@ -74,6 +77,11 @@ contract LiquidToken is
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
+        // Set token registry oracle if provided
+        if (address(init.tokenRegistryOracle) != address(0)) {
+            tokenRegistryOracle = init.tokenRegistryOracle;
+            emit TokenRegistryOracleSet(address(init.tokenRegistryOracle));
+        }
     }
 
     /// @notice Allows users to deposit multiple assets and receive shares
@@ -82,52 +90,40 @@ contract LiquidToken is
     /// @param receiver The address to receive the minted shares
     /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20[] calldata assets,
+        IERC20Upgradeable[] calldata assets,
         uint256[] calldata amounts,
         address receiver
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        // === CHECK AND UPDATE STALE PRICES ===
-        // Get the token registry oracle address from LiquidTokenManager
-        address oracleAddress = liquidTokenManager.getTokenRegistryOracle();
-        ITokenRegistryOracle oracle = ITokenRegistryOracle(oracleAddress);
-
-        // Check if prices need updating (single global check is gas efficient)
-        bool pricesUpdated = false;
-        try oracle.arePricesStale() returns (bool stale) {
-            if (stale) {
-                // Prices are stale, try to update them
-                try oracle.updateAllPricesIfNeeded() returns (bool updated) {
-                    pricesUpdated = updated;
-                } catch Error(string memory reason) {
-                    // If price update fails, emit event but continue with deposit
-                    emit PriceUpdateFailed(reason);
-                } catch {
-                    // Catch any other errors
-                    emit PriceUpdateFailed("Unknown error updating prices");
+        // Check if prices need to be updated and update them if needed
+        if (
+            address(tokenRegistryOracle) != address(0) &&
+            tokenRegistryOracle.arePricesStale()
+        ) {
+            try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
+                bool updated
+            ) {
+                if (updated) {
+                    emit PricesUpdatedBeforeDeposit(msg.sender);
                 }
+            } catch {
+                // Continue with deposit even if price update fails //WE NEED TO DECIDE ABOUT THAT LATER
+                emit PriceUpdateFailedDuringDeposit(msg.sender);
             }
-        } catch {
-            // If staleness check fails, continue with deposit
-            emit PriceUpdateFailed("Failed to check price staleness");
         }
 
-        // Emit event for price update status
-        emit PricesUpdatedDuringDeposit(msg.sender, pricesUpdated);
-
-        // === ORIGINAL DEPOSIT LOGIC ===
         uint256 len = assets.length;
         uint256[] memory sharesArray = new uint256[](len);
 
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                IERC20 asset = assets[i];
+                IERC20 asset = IERC20(address(assets[i]));
                 uint256 amount = amounts[i];
 
                 if (amount == 0) revert ZeroAmount();
                 if (!liquidTokenManager.tokenIsSupported(asset))
-                    revert UnsupportedAsset(asset);
+                    revert UnsupportedAsset(assets[i]);
 
                 // True amount received may differ from `amount` for rebasing tokens
                 uint256 balanceBefore = asset.balanceOf(address(this));
@@ -136,7 +132,7 @@ contract LiquidToken is
 
                 uint256 trueAmount = balanceAfter - balanceBefore;
 
-                uint256 shares = calculateShares(asset, trueAmount);
+                uint256 shares = calculateShares(assets[i], trueAmount);
                 if (shares == 0) revert ZeroShares();
 
                 assetBalances[address(asset)] += trueAmount;
@@ -146,7 +142,7 @@ contract LiquidToken is
                     asset.balanceOf(address(this))
                 )
                     revert AssetBalanceOutOfSync(
-                        asset,
+                        assets[i],
                         assetBalances[address(asset)],
                         asset.balanceOf(address(this))
                     );
@@ -157,7 +153,7 @@ contract LiquidToken is
                 emit AssetDeposited(
                     msg.sender,
                     receiver,
-                    asset,
+                    assets[i],
                     trueAmount,
                     shares
                 );
@@ -166,7 +162,6 @@ contract LiquidToken is
 
         return sharesArray;
     }
-
     /// @notice Allows users to request a withdrawal of their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
