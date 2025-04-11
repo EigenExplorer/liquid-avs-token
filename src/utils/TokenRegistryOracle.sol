@@ -792,7 +792,7 @@ contract TokenRegistryOracle is
      */
     function getTokenPrice(
         address token
-    ) external view override returns (uint256) {
+    ) external view override(IPriceOracle, ITokenRegistryOracle) returns (uint256) {
         (uint256 price, bool success) = _getTokenPrice(token);
 
         if (success && price > 0) {

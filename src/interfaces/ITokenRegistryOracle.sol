@@ -98,4 +98,6 @@ interface ITokenRegistryOracle {
     /// @notice Sets price update interval
     /// @param interval New interval in seconds
     function setPriceUpdateInterval(uint256 interval) external;
+
+    function getTokenPrice(address token) external view returns (uint256);
 }

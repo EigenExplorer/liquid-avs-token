@@ -12,6 +12,7 @@ import {MockCurvePool} from "./mocks/MockCurvePool.sol";
 import {MockProtocolToken} from "./mocks/MockProtocolToken.sol";
 import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
+import {MockFailingOracle, MockRejectedUpdateOracle, MockZeroPriceOracle, ZeroTokenPriceOracle, MockStillStaleOracle, MockZeroPriceCheckOracle} from "./mocks/MockFailingOracle.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
 import {LiquidToken} from "../src/core/LiquidToken.sol";
@@ -19,6 +20,12 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
+
+error PriceUpdateFailed();
+error PriceUpdateRejected();
+error PricesRemainStale();
+error AssetPriceInvalid(address token);
 
 contract LiquidTokenTest is BaseTest {
     // Mock tokens for testing - real-world LSTs
@@ -631,6 +638,151 @@ contract LiquidTokenTest is BaseTest {
             1.04e18,
             "Should return the stored price from LiquidTokenManager"
         );
+    }
+
+    // Test case for generic price update failure
+    function testDepositRevertOnPriceUpdateException() public {
+        // Setup
+        MockFailingOracle mockOracle = new MockFailingOracle();
+        vm.etch(address(tokenRegistryOracle), address(mockOracle).code);
+
+        // Prepare test data
+        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
+        assets[0] = IERC20Upgradeable(address(testToken)); // Using testToken from BaseTest
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Expect the gas-efficient custom error
+        vm.expectRevert(PriceUpdateFailed.selector);
+
+        // Act
+        liquidToken.deposit(assets, amounts, address(this));
+    }
+
+    // Add more tests for the other error cases
+    function testDepositRevertOnUpdateRejected() public {
+        // Setup
+        MockRejectedUpdateOracle mockOracle = new MockRejectedUpdateOracle();
+        vm.etch(address(tokenRegistryOracle), address(mockOracle).code);
+
+        // Prepare test data
+        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
+        assets[0] = IERC20Upgradeable(address(testToken)); // Using testToken from BaseTest
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Expect revert
+        vm.expectRevert(PriceUpdateRejected.selector);
+
+        // Act
+        liquidToken.deposit(assets, amounts, address(this));
+    }
+
+    // Test for prices remaining stale
+    function testDepositRevertOnPricesStillStale() public {
+        // Create a custom mock that says prices are still stale after update
+        MockStillStaleOracle mockOracle = new MockStillStaleOracle();
+        vm.etch(address(tokenRegistryOracle), address(mockOracle).code);
+
+        // Prepare test data
+        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
+        assets[0] = IERC20Upgradeable(address(testToken)); // Using testToken from BaseTest
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Expect revert
+        vm.expectRevert(PricesRemainStale.selector);
+
+        // Act
+        liquidToken.deposit(assets, amounts, address(this));
+    }
+
+    // Test for invalid asset price
+    function testDepositRevertOnInvalidAssetPrice() public {
+        // Setup - use testToken from BaseTest and properly prepare it
+        address testTokenAddress = address(testToken);
+
+        // Mint tokens to the test contract
+        deal(testTokenAddress, address(this), 1000 ether);
+
+        // Approve tokens for the liquidToken contract
+        vm.startPrank(address(this));
+        IERC20(testTokenAddress).approve(
+            address(liquidToken),
+            type(uint256).max
+        );
+        vm.stopPrank();
+
+        // Create a mock oracle that returns zero prices for all tests
+        ZeroTokenPriceOracle mockOracle = new ZeroTokenPriceOracle();
+        vm.etch(address(tokenRegistryOracle), address(mockOracle).code);
+
+        // Prepare test data
+        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
+        assets[0] = IERC20Upgradeable(testTokenAddress);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 100 ether;
+
+        // Expect the AssetPriceInvalid error with the token address as parameter
+        vm.expectRevert(
+            abi.encodeWithSelector(AssetPriceInvalid.selector, testTokenAddress)
+        );
+
+        // Act
+        liquidToken.deposit(assets, amounts, address(this));
+    }
+    function testDebugZeroPrice() public {
+        // Setup
+        address testTokenAddress = address(testToken);
+
+        // Add the token to the manager if it's not already supported
+        if (!liquidTokenManager.tokenIsSupported(IERC20(testTokenAddress))) {
+            vm.prank(admin);
+            liquidTokenManager.addToken(
+                IERC20(testTokenAddress),
+                18,
+                1e18, // Initial price
+                0,
+                mockStrategy
+            );
+        }
+
+        // Create mock and replace oracle
+        ZeroTokenPriceOracle mockOracle = new ZeroTokenPriceOracle();
+        vm.etch(address(tokenRegistryOracle), address(mockOracle).code);
+
+        // Check if stale
+        assertFalse(
+            tokenRegistryOracle.arePricesStale(),
+            "Prices should not be stale"
+        );
+
+        // Check direct price
+        assertEq(
+            tokenRegistryOracle.getTokenPrice(testTokenAddress),
+            0,
+            "Price should be zero"
+        );
+
+        // Prepare simple call data to check
+        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
+        assets[0] = IERC20Upgradeable(testTokenAddress);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+
+        // Give tokens and approve
+        deal(testTokenAddress, address(this), 100 ether);
+        IERC20(testTokenAddress).approve(address(liquidToken), 100 ether);
+
+        // This should revert, but let's catch it to diagnose
+        bool depositFailed;
+        try liquidToken.deposit(assets, amounts, address(this)) {
+            depositFailed = false;
+        } catch {
+            depositFailed = true;
+        }
+
+        assertTrue(depositFailed, "Deposit should fail with zero price");
     }
 
     function testDeposit() public {

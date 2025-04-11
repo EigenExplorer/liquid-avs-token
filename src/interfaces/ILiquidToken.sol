@@ -31,6 +31,12 @@ interface ILiquidToken is IERC20Upgradeable {
     }
     */
 
+    /// @notice Custom errors for price update failures
+    error PriceUpdateFailed(); // Generic price update failure
+    error PriceUpdateRejected(); // Update returned false
+    error PricesRemainStale(); // Prices still stale after update
+    error AssetPriceInvalid(address token); // Specific token has invalid price
+
     /// @notice Emitted when prices are updated during a deposit
     event PricesUpdatedBeforeDeposit(address indexed depositor);
 

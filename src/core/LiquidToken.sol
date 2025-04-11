@@ -10,7 +10,6 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/se
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
-
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
@@ -96,20 +95,40 @@ contract LiquidToken is
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        // Check if prices need to be updated and update them if needed
+        // Check if prices need update
         if (
             address(tokenRegistryOracle) != address(0) &&
             tokenRegistryOracle.arePricesStale()
         ) {
+            // Attempt price update with minimal try/catch
+            bool updated;
             try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
-                bool updated
+                bool result
             ) {
-                if (updated) {
-                    emit PricesUpdatedBeforeDeposit(msg.sender);
-                }
+                updated = result;
             } catch {
-                // Continue with deposit even if price update fails //WE NEED TO DECIDE ABOUT THAT LATER
-                emit PriceUpdateFailedDuringDeposit(msg.sender);
+                revert PriceUpdateFailed();
+            }
+
+            // Check update result - most gas efficient check first
+            if (!updated) revert PriceUpdateRejected();
+
+            // Verify prices are no longer stale
+            if (tokenRegistryOracle.arePricesStale())
+                revert PricesRemainStale();
+
+            emit PricesUpdatedBeforeDeposit(msg.sender);
+        }
+
+        // Always check token prices regardless of staleness (enhanced security)
+        if (address(tokenRegistryOracle) != address(0)) {
+            for (uint256 i = 0; i < assets.length; i++) {
+                address assetAddr = address(assets[i]);
+                if (liquidTokenManager.tokenIsSupported(IERC20(assetAddr))) {
+                    if (tokenRegistryOracle.getTokenPrice(assetAddr) == 0) {
+                        revert AssetPriceInvalid(assetAddr);
+                    }
+                }
             }
         }
 
