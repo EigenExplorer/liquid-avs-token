@@ -295,7 +295,8 @@ contract DeployHolesky is Script, Test {
                 priceUpdater: priceUpdater,
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
-                )
+                ),
+                btcEthFeed: address(0) // BTC/ETH feed address (can be set to 0 initially)
             })
         );
     }
@@ -331,6 +332,9 @@ contract DeployHolesky is Script, Test {
                 strategyManager: IStrategyManager(strategyManager),
                 delegationManager: IDelegationManager(delegationManager),
                 stakerNodeCoordinator: stakerNodeCoordinator,
+                tokenRegistryOracle: ITokenRegistryOracle(
+                    address(tokenRegistryOracle)
+                ), // Add this line
                 initialOwner: admin,
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)

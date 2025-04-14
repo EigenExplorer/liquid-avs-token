@@ -19,6 +19,7 @@ import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
@@ -48,6 +49,8 @@ contract LiquidTokenManager is
     IStakerNodeCoordinator public stakerNodeCoordinator;
     /// @notice The LiquidToken contract
     ILiquidToken public liquidToken;
+    /// @notice The TokenRegistryOracle contract
+    ITokenRegistryOracle public tokenRegistryOracle;
 
     /// @notice Mapping of tokens to their corresponding token info
     mapping(IERC20 => TokenInfo) public tokens;
@@ -98,6 +101,7 @@ contract LiquidTokenManager is
         stakerNodeCoordinator = init.stakerNodeCoordinator;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
+        tokenRegistryOracle = init.tokenRegistryOracle;
 
         // Initialize strategies for each asset
         uint256 len = init.assets.length;
@@ -142,17 +146,28 @@ contract LiquidTokenManager is
         }
     }
 
-    /// @notice Adds a new token to the registry
+    /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
     /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primarySource Primary source address
+    /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Function selector for fallback
     function addToken(
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
         uint256 volatilityThreshold,
-        IStrategy strategy
+        IStrategy strategy,
+        uint8 primaryType,
+        address primarySource,
+        uint8 needsArg,
+        address fallbackSource,
+        bytes4 fallbackFn
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(tokenStrategies[token]) != address(0))
             revert TokenExists(address(token));
@@ -164,6 +179,93 @@ contract LiquidTokenManager is
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
         ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
+
+        // Price source validation and configuration
+        if (address(tokenRegistryOracle) != address(0)) {
+            // If oracle is set, validate price source parameters
+            if (primaryType < 1 || primaryType > 4) revert InvalidPriceSource();
+            if (primarySource == address(0)) revert InvalidPriceSource();
+
+            // Configure token in oracle
+            tokenRegistryOracle.configureToken(
+                address(token),
+                primaryType,
+                primarySource,
+                needsArg,
+                fallbackSource,
+                fallbackFn
+            );
+        }
+
+        try IERC20Metadata(address(token)).decimals() returns (
+            uint8 decimalsFromContract
+        ) {
+            if (decimalsFromContract == 0) revert InvalidDecimals();
+            if (decimals != decimalsFromContract) revert InvalidDecimals();
+        } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
+
+        tokens[token] = TokenInfo({
+            decimals: decimals,
+            pricePerUnit: initialPrice,
+            volatilityThreshold: volatilityThreshold
+        });
+        tokenStrategies[token] = strategy;
+
+        supportedTokens.push(token);
+
+        emit TokenAdded(
+            token,
+            decimals,
+            initialPrice,
+            volatilityThreshold,
+            address(strategy),
+            msg.sender
+        );
+    }
+
+    /// @notice Adds a new BTC-denominated token to the registry
+    /// @param token Address of the BTC-denominated token to add
+    /// @param decimals Number of decimals for the token
+    /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
+    /// @param strategy Strategy corresponding to the token
+    /// @param btcFeed Token/BTC price feed
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Fallback function selector
+    function addBtcToken(
+        IERC20 token,
+        uint8 decimals,
+        uint256 initialPrice,
+        uint256 volatilityThreshold,
+        IStrategy strategy,
+        address btcFeed,
+        address fallbackSource,
+        bytes4 fallbackFn
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (address(tokenStrategies[token]) != address(0))
+            revert TokenExists(address(token));
+        if (address(token) == address(0)) revert ZeroAddress();
+        if (decimals == 0) revert InvalidDecimals();
+        if (initialPrice == 0) revert InvalidPrice();
+        if (
+            volatilityThreshold != 0 &&
+            (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
+        ) revert InvalidThreshold();
+        if (address(strategy) == address(0)) revert ZeroAddress();
+
+        // Price source validation and configuration
+        if (address(tokenRegistryOracle) != address(0)) {
+            // If oracle is set, validate BTC feed
+            if (btcFeed == address(0)) revert InvalidPriceSource();
+
+            // Configure BTC-denominated token in oracle
+            tokenRegistryOracle.configureBtcToken(
+                address(token),
+                btcFeed,
+                fallbackSource,
+                fallbackFn
+            );
+        }
 
         try IERC20Metadata(address(token)).decimals() returns (
             uint8 decimalsFromContract
@@ -478,38 +580,6 @@ contract LiquidTokenManager is
             emit NodeDelegated(nodeIds[i], operators[i]);
         }
     }
-
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    /// @dev OUT OF SCOPE FOR V1
-    /**
-    function undelegateNodes(
-        uint256[] calldata nodeIds
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        // Fetch and add all asset balances from the node to queued balances
-        for (uint256 i = 0; i < nodeIds.length; i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
-
-            // Convert supportedTokens to IERC20Upgradeable array
-            IERC20Upgradeable[]
-                memory upgradeableTokens = new IERC20Upgradeable[](
-                    supportedTokens.length
-                );
-            for (uint256 j = 0; j < supportedTokens.length; j++) {
-                upgradeableTokens[j] = IERC20Upgradeable(
-                    address(supportedTokens[j])
-                );
-            }
-
-            liquidToken.creditQueuedAssetBalances(
-                upgradeableTokens,
-                _getAllStakedAssetBalancesNode(node)
-            );
-
-            node.undelegate();
-        }
-    }
-    */
 
     /// @notice Gets the staked balance of an asset for all nodes
     /// @param asset The asset token address

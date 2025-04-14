@@ -17,6 +17,10 @@ import {StakerNode} from "../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockStrategy} from "../mocks/MockStrategy.sol";
+import {MockChainlinkFeed} from "../mocks/MockChainlinkFeed.sol";
+import {MockCurvePool} from "../mocks/MockCurvePool.sol";
+import {MockProtocolToken} from "../mocks/MockProtocolToken.sol";
+import {MockFailingOracle} from "../mocks/MockFailingOracle.sol";
 import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
@@ -25,6 +29,15 @@ import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol"
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
+    // Source type constants
+    uint8 constant SOURCE_TYPE_CHAINLINK = 1;
+    uint8 constant SOURCE_TYPE_CURVE = 2;
+    uint8 constant SOURCE_TYPE_BTC_CHAINED = 3;
+    uint8 constant SOURCE_TYPE_PROTOCOL = 4;
+
+    // Price freshness constants
+    uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours; // Prices are stale after 12 hours
+
     // EigenLayer Contracts
     IStrategyManager public strategyManager;
     IDelegationManager public delegationManager;
@@ -36,16 +49,32 @@ contract BaseTest is Test {
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
 
-    // Mock contracts
+    // Mock contracts - base test tokens
     MockERC20 public testToken;
     MockERC20 public testToken2;
     MockStrategy public mockStrategy;
     MockStrategy public mockStrategy2;
 
+    // Mock price feeds for basic test tokens
+    MockChainlinkFeed public btcEthFeed;
+    MockChainlinkFeed public testTokenFeed;
+    MockChainlinkFeed public testToken2Feed;
+
+    // Common function selectors for price sources
+    bytes4 public exchangeRateSelector;
+    bytes4 public getPooledEthBySharesSelector;
+    bytes4 public convertToAssetsSelector;
+    bytes4 public getRateSelector;
+    bytes4 public stEthPerTokenSelector;
+    bytes4 public swETHToETHRateSelector;
+    bytes4 public ratioSelector;
+    bytes4 public underlyingBalanceFromSharesSelector;
+    bytes4 public mETHToETHSelector;
+
     // Addresses
-    address public proxyAdminAddress = address(0xABCD); // Proxy admin address
+    address public proxyAdminAddress = address(0xABCD);
     address public admin = address(this);
-    address public deployer = address(0x1234); // Non-admin address for interacting with proxies
+    address public deployer = address(0x1234);
     address public pauser = address(2);
     address public user1 = address(3);
     address public user2 = address(4);
@@ -64,16 +93,37 @@ contract BaseTest is Test {
     }
 
     function setUp() public virtual {
+        // Initialize common function selectors
+        _initializeSelectors();
+
         _setupELContracts();
         _deployMockContracts();
         _deployMainContracts();
         _deployProxies();
-        // Initialize with deployer as the initialOwner
         _initializeProxies();
+        _setupOracleSources();
         _setupTestTokens();
     }
 
+    function _initializeSelectors() internal {
+        // Initialize all common function selectors for price sources
+        exchangeRateSelector = bytes4(keccak256("exchangeRate()"));
+        getPooledEthBySharesSelector = bytes4(
+            keccak256("getPooledEthByShares(uint256)")
+        );
+        convertToAssetsSelector = bytes4(keccak256("convertToAssets(uint256)"));
+        getRateSelector = bytes4(keccak256("getRate()"));
+        stEthPerTokenSelector = bytes4(keccak256("stEthPerToken()"));
+        swETHToETHRateSelector = bytes4(keccak256("swETHToETHRate()"));
+        ratioSelector = bytes4(keccak256("ratio()"));
+        underlyingBalanceFromSharesSelector = bytes4(
+            keccak256("underlyingBalanceFromShares(uint256)")
+        );
+        mETHToETHSelector = bytes4(keccak256("mETHToETH(uint256)"));
+    }
+
     function testZeroAddressInitialization() public {
+        // This test remains unchanged
         LiquidTokenManager newLiquidTokenManager = new LiquidTokenManager();
         StakerNodeCoordinator newStakerNodeCoordinator = new StakerNodeCoordinator();
         LiquidToken newLiquidToken = new LiquidToken();
@@ -89,6 +139,9 @@ contract BaseTest is Test {
                     strategyManager: strategyManager,
                     delegationManager: delegationManager,
                     stakerNodeCoordinator: stakerNodeCoordinator,
+                    tokenRegistryOracle: ITokenRegistryOracle(
+                        address(tokenRegistryOracle)
+                    ),
                     initialOwner: deployer,
                     strategyController: deployer,
                     priceUpdater: address(tokenRegistryOracle)
@@ -188,7 +241,7 @@ contract BaseTest is Test {
                 ),
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
-                ) // Added this line
+                )
             });
 
             // Test each parameter individually
@@ -302,6 +355,7 @@ contract BaseTest is Test {
     }
 
     function _deployMockContracts() private {
+        // Base test tokens
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
         mockStrategy = new MockStrategy(
@@ -312,6 +366,11 @@ contract BaseTest is Test {
             strategyManager,
             IERC20(address(testToken2))
         );
+
+        // Deploy price feed mocks with realistic values for test tokens
+        btcEthFeed = new MockChainlinkFeed(int256(3000000000), 8); // 30 ETH per BTC (8 decimals)
+        testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
+        testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
     }
 
     function _deployMainContracts() private {
@@ -361,6 +420,34 @@ contract BaseTest is Test {
         );
     }
 
+    function _setupOracleSources() private {
+        vm.startPrank(admin);
+
+        // Configure BTC/ETH feed in TokenRegistryOracle
+        tokenRegistryOracle.setBtcEthFeed(address(btcEthFeed));
+
+        // Configure test tokens with Chainlink sources
+        tokenRegistryOracle.configureToken(
+            address(testToken),
+            SOURCE_TYPE_CHAINLINK,
+            address(testTokenFeed),
+            0, // No args needed
+            address(0), // No fallback source
+            bytes4(0) // No fallback function
+        );
+
+        tokenRegistryOracle.configureToken(
+            address(testToken2),
+            SOURCE_TYPE_CHAINLINK,
+            address(testToken2Feed),
+            0, // No args needed
+            address(0), // No fallback source
+            bytes4(0) // No fallback function
+        );
+
+        vm.stopPrank();
+    }
+
     function _initializeProxies() private {
         _initializeTokenRegistryOracle();
         _initializeLiquidTokenManager();
@@ -373,9 +460,12 @@ contract BaseTest is Test {
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
-            initialOwner: deployer, // Initialize with deployer as owner
+            initialOwner: deployer,
             priceUpdater: user2,
-            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
+            liquidTokenManager: ILiquidTokenManager(
+                address(liquidTokenManager)
+            ),
+            btcEthFeed: address(btcEthFeed) // Initialize with BTC/ETH feed
         });
         vm.prank(deployer);
         tokenRegistryOracle.initialize(init);
@@ -390,8 +480,11 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
-            initialOwner: deployer, // Initialize with deployer as owner
-            strategyController: deployer, // Initialize with deployer
+            tokenRegistryOracle: ITokenRegistryOracle(
+                address(tokenRegistryOracle)
+            ),
+            initialOwner: deployer,
+            strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
         });
         init.assets[0] = IERC20(address(testToken));
@@ -403,7 +496,7 @@ contract BaseTest is Test {
         });
         init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
             decimals: 18,
-            pricePerUnit: 1e18,
+            pricePerUnit: 0.5e18, // Match with testToken2Feed value
             volatilityThreshold: 0
         });
         init.strategies[0] = IStrategy(address(mockStrategy));
@@ -417,14 +510,14 @@ contract BaseTest is Test {
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
-            initialOwner: deployer, // Initialize with deployer as owner
+            initialOwner: deployer,
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(
                 address(liquidTokenManager)
             ),
             tokenRegistryOracle: ITokenRegistryOracle(
                 address(tokenRegistryOracle)
-            ) // Added this line
+            )
         });
 
         vm.prank(deployer);
@@ -437,10 +530,10 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
-            initialOwner: deployer, // Initialize with deployer as owner
+            initialOwner: deployer,
             pauser: pauser,
-            stakerNodeCreator: deployer, // Initialize with deployer
-            stakerNodesDelegator: deployer, // Initialize with deployer
+            stakerNodeCreator: deployer,
+            stakerNodesDelegator: deployer,
             stakerNodeImplementation: address(stakerNodeImplementation)
         });
 
@@ -448,18 +541,24 @@ contract BaseTest is Test {
         stakerNodeCoordinator.initialize(init);
     }
 
-    // Now grant admin roles to the admin address
     function _grantRolesToAdmin() private {
-        // Grant roles from deployer (who has them) to admin
         vm.startPrank(deployer);
 
-        // Transfer ownership of TokenRegistryOracle
+        // TokenRegistryOracle roles
         tokenRegistryOracle.grantRole(
             tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
             admin
         );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            admin
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            user2
+        );
 
-        // Transfer ownership of LiquidTokenManager
+        // LiquidTokenManager roles
         liquidTokenManager.grantRole(
             liquidTokenManager.DEFAULT_ADMIN_ROLE(),
             admin
@@ -469,10 +568,10 @@ contract BaseTest is Test {
             admin
         );
 
-        // Transfer ownership of LiquidToken
+        // LiquidToken roles
         liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), admin);
 
-        // Transfer ownership of StakerNodeCoordinator
+        // StakerNodeCoordinator roles
         stakerNodeCoordinator.grantRole(
             stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
             admin
@@ -505,6 +604,120 @@ contract BaseTest is Test {
         testToken2.approve(address(liquidToken), type(uint256).max);
     }
 
+    // ================= PRICE ORACLE HELPER METHODS =================
+
+    /**
+     * @dev Updates prices for all configured tokens
+     */
+    function _updateAllPrices() internal {
+        vm.prank(user2); // user2 has RATE_UPDATER_ROLE
+        tokenRegistryOracle.updateAllPricesIfNeeded();
+    }
+
+    /**
+     * @dev Makes prices stale by advancing time past the freshness period
+     */
+    function _makePricesStale() internal {
+        vm.warp(block.timestamp + PRICE_FRESHNESS_PERIOD + 1 hours);
+    }
+
+    /**
+     * @dev Configures a token with Chainlink as the primary price source
+     */
+    function _setupChainlinkToken(address token, address feed) internal {
+        vm.prank(admin);
+        tokenRegistryOracle.configureToken(
+            token,
+            SOURCE_TYPE_CHAINLINK,
+            feed,
+            0, // No args needed
+            address(0), // No fallback
+            bytes4(0) // No fallback function
+        );
+    }
+
+    /**
+     * @dev Configures a token with Protocol rate as the primary price source
+     */
+    function _setupProtocolToken(
+        address token,
+        address contract_,
+        bytes4 selector,
+        bool needsArg
+    ) internal {
+        vm.prank(admin);
+        tokenRegistryOracle.configureToken(
+            token,
+            SOURCE_TYPE_PROTOCOL,
+            contract_,
+            needsArg ? 1 : 0, // Set if argument is needed
+            address(0), // No fallback
+            selector
+        );
+    }
+
+    /**
+     * @dev Configures a token with Curve pool as the primary price source
+     */
+    function _setupCurveToken(address token, address curvePool) internal {
+        vm.prank(admin);
+        tokenRegistryOracle.configureToken(
+            token,
+            SOURCE_TYPE_CURVE,
+            curvePool,
+            0, // No args needed
+            address(0), // No fallback
+            bytes4(0) // No fallback function
+        );
+    }
+
+    /**
+     * @dev Configures a BTC-chained token (e.g., uniBTC)
+     */
+    function _setupBtcToken(
+        address token,
+        address feed,
+        address fallbackSource,
+        bytes4 fallbackFn
+    ) internal {
+        vm.prank(admin);
+        tokenRegistryOracle.configureBtcToken(
+            token,
+            feed,
+            fallbackSource,
+            fallbackFn
+        );
+    }
+
+    /**
+     * @dev Configures a token with primary and fallback price sources
+     */
+    function _setupTokenWithFallback(
+        address token,
+        uint8 primaryType,
+        address primarySource,
+        uint8 needsArg,
+        address fallbackSource,
+        bytes4 fallbackFn
+    ) internal {
+        vm.prank(admin);
+        tokenRegistryOracle.configureToken(
+            token,
+            primaryType,
+            primarySource,
+            needsArg,
+            fallbackSource,
+            fallbackFn
+        );
+    }
+
+    /**
+     * @dev Gets the price of a token directly from TokenRegistryOracle
+     */
+    function _getTokenPrice(address token) internal view returns (uint256) {
+        return tokenRegistryOracle.getTokenPrice(token);
+    }
+
     // Helper functions for inheriting contracts to use
     function _actAsAdmin(function() internal fn) internal {
         vm.startPrank(admin);
@@ -516,5 +729,45 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
         fn();
         vm.stopPrank();
+    }
+
+    function _actAsUser1(function() internal fn) internal {
+        vm.startPrank(user1);
+        fn();
+        vm.stopPrank();
+    }
+
+    function _actAsUser2(function() internal fn) internal {
+        vm.startPrank(user2);
+        fn();
+        vm.stopPrank();
+    }
+
+    // Helper to create a new price source mock for a token - updated to use int256
+    function _createMockPriceFeed(
+        int256 price,
+        uint8 decimals
+    ) internal returns (MockChainlinkFeed) {
+        return new MockChainlinkFeed(price, decimals);
+    }
+
+    function _createMockProtocolToken(
+        uint256 exchangeRate
+    ) internal returns (MockProtocolToken) {
+        MockProtocolToken token = new MockProtocolToken();
+        token.setExchangeRate(exchangeRate);
+        return token;
+    }
+
+    function _createMockCurvePool(
+        uint256 virtualPrice
+    ) internal returns (MockCurvePool) {
+        MockCurvePool pool = new MockCurvePool();
+        pool.setVirtualPrice(virtualPrice);
+        return pool;
+    }
+
+    function _createMockFailingOracle() internal returns (MockFailingOracle) {
+        return new MockFailingOracle();
     }
 }

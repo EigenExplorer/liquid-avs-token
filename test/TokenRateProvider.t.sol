@@ -29,8 +29,28 @@ contract TokenRateProviderTest is BaseTest {
     MockChainlinkFeed public uniBtcFeed; // uniBTC/BTC feed (~0.99 BTC per uniBTC)
     MockChainlinkFeed public btcEthFeed; // BTC/ETH feed (~30 ETH per BTC)
 
+    // Common function selectors
+    bytes4 public exchangeRateSelector;
+    bytes4 public getPooledEthBySharesSelector;
+    bytes4 public convertToAssetsSelector;
+    bytes4 public getRateSelector;
+
+    // Source type constants
+    uint8 constant SOURCE_TYPE_CHAINLINK = 1;
+    uint8 constant SOURCE_TYPE_CURVE = 2;
+    uint8 constant SOURCE_TYPE_BTC_CHAINED = 3;
+    uint8 constant SOURCE_TYPE_PROTOCOL = 4;
+
     function setUp() public override {
         super.setUp();
+
+        // Define common function selectors
+        exchangeRateSelector = bytes4(keccak256("exchangeRate()"));
+        getPooledEthBySharesSelector = bytes4(
+            keccak256("getPooledEthByShares(uint256)")
+        );
+        convertToAssetsSelector = bytes4(keccak256("convertToAssets(uint256)"));
+        getRateSelector = bytes4(keccak256("getRate()"));
 
         // Disable volatility check for test tokens
         liquidTokenManager.setVolatilityThreshold(testToken, 0);
@@ -73,7 +93,12 @@ contract TokenRateProviderTest is BaseTest {
             18,
             1.04e18, // Initial price: 1.04 ETH
             0,
-            mockStrategy
+            mockStrategy,
+            0, // primaryType - 0 means uninitialized
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         liquidTokenManager.addToken(
@@ -81,7 +106,12 @@ contract TokenRateProviderTest is BaseTest {
             18,
             1.03e18, // Initial price: 1.03 ETH
             0,
-            mockStrategy
+            mockStrategy,
+            0, // primaryType - 0 means uninitialized
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         liquidTokenManager.addToken(
@@ -89,7 +119,12 @@ contract TokenRateProviderTest is BaseTest {
             18,
             1.02e18, // Initial price: 1.02 ETH
             0,
-            mockStrategy
+            mockStrategy,
+            0, // primaryType - 0 means uninitialized
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         liquidTokenManager.addToken(
@@ -97,7 +132,12 @@ contract TokenRateProviderTest is BaseTest {
             18,
             29.7e18, // Initial price: 29.7 ETH (0.99 BTC * 30 ETH/BTC)
             0,
-            mockStrategy
+            mockStrategy,
+            0, // primaryType - 0 means uninitialized
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         // Set up BTC/ETH feed in TokenRegistryOracle
@@ -134,16 +174,14 @@ contract TokenRateProviderTest is BaseTest {
     // ========== TOKEN CONFIGURATION TESTS ==========
 
     function testConfigureRethWithChainlink() public {
-        // Arrange - Prepare selectors
-        bytes4 exchangeRateSelector = bytes4(keccak256("exchangeRate()"));
-
         // Act - Configure rETH with Chainlink as primary source
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             address(rethToken),
-            1, // Chainlink type
+            SOURCE_TYPE_CHAINLINK, // Chainlink type
             address(rethFeed),
             0, // No arg needed
+            address(0), // No fallback source
             exchangeRateSelector // Fallback function
         );
 
@@ -153,11 +191,17 @@ contract TokenRateProviderTest is BaseTest {
             uint8 needsArg,
             ,
             address primarySource,
+            address fallbackSource,
             bytes4 fallbackFn
         ) = tokenRegistryOracle.tokenConfigs(address(rethToken));
 
-        assertEq(primaryType, 1, "Should be configured as Chainlink source");
+        assertEq(
+            primaryType,
+            SOURCE_TYPE_CHAINLINK,
+            "Should be configured as Chainlink source"
+        );
         assertEq(primarySource, address(rethFeed), "Should use rETH feed");
+        assertEq(fallbackSource, address(0), "Should have no fallback source");
         assertEq(
             fallbackFn,
             exchangeRateSelector,
@@ -170,19 +214,15 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testConfigureStethWithProtocol() public {
-        // Arrange - Prepare selectors
-        bytes4 getPooledEthBySharesSelector = bytes4(
-            keccak256("getPooledEthByShares(uint256)")
-        );
-
         // Act - Configure stETH with Protocol as primary source
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(stethToken),
-            4, // Protocol type
+            SOURCE_TYPE_PROTOCOL, // Protocol type
             address(stethProtocol),
             1, // Needs argument
-            getPooledEthBySharesSelector // Primary function
+            address(0), // No fallback source
+            getPooledEthBySharesSelector // Function selector
         );
         vm.stopPrank();
 
@@ -192,18 +232,24 @@ contract TokenRateProviderTest is BaseTest {
             uint8 needsArg,
             ,
             address primarySource,
-            bytes4 fallbackFn
+            address fallbackSource,
+            bytes4 functionSelector
         ) = tokenRegistryOracle.tokenConfigs(address(stethToken));
 
-        assertEq(primaryType, 4, "Should be configured as Protocol source");
+        assertEq(
+            primaryType,
+            SOURCE_TYPE_PROTOCOL,
+            "Should be configured as Protocol source"
+        );
         assertEq(needsArg, 1, "Should be configured to need argument");
         assertEq(
             primarySource,
             address(stethProtocol),
             "Should use stETH protocol contract"
         );
+        assertEq(fallbackSource, address(0), "Should have no fallback source");
         assertEq(
-            fallbackFn,
+            functionSelector,
             getPooledEthBySharesSelector,
             "Should use correct selector"
         );
@@ -214,19 +260,15 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testConfigureOsethWithCurve() public {
-        // Arrange - Prepare selectors
-        bytes4 convertToAssetsSelector = bytes4(
-            keccak256("convertToAssets(uint256)")
-        );
-
         // Act - Configure osETH with Curve as primary source
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(osethToken),
-            2, // Curve type
+            SOURCE_TYPE_CURVE, // Curve type
             address(osethCurvePool),
             0, // No arg needed for Curve
-            convertToAssetsSelector // Fallback function
+            address(0), // No fallback source
+            convertToAssetsSelector // Function selector
         );
         vm.stopPrank();
 
@@ -236,19 +278,25 @@ contract TokenRateProviderTest is BaseTest {
             uint8 needsArg,
             ,
             address primarySource,
-            bytes4 fallbackFn
+            address fallbackSource,
+            bytes4 functionSelector
         ) = tokenRegistryOracle.tokenConfigs(address(osethToken));
 
-        assertEq(primaryType, 2, "Should be configured as Curve source");
+        assertEq(
+            primaryType,
+            SOURCE_TYPE_CURVE,
+            "Should be configured as Curve source"
+        );
         assertEq(
             primarySource,
             address(osethCurvePool),
             "Should use osETH Curve pool"
         );
+        assertEq(fallbackSource, address(0), "Should have no fallback source");
         assertEq(
-            fallbackFn,
+            functionSelector,
             convertToAssetsSelector,
-            "Should use correct fallback selector"
+            "Should use correct function selector"
         );
         assertTrue(
             tokenRegistryOracle.isConfigured(address(osethToken)),
@@ -257,15 +305,13 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testConfigureUniBtcWithBtcChained() public {
-        // Arrange - Prepare selectors
-        bytes4 getRateSelector = bytes4(keccak256("getRate()"));
-
         // Act - Configure uniBTC with BTC-chained as primary source
         vm.startPrank(admin);
         tokenRegistryOracle.configureBtcToken(
             address(unibtcToken),
             address(uniBtcFeed),
-            getRateSelector
+            address(0), // No fallback source
+            getRateSelector // Function selector
         );
         vm.stopPrank();
 
@@ -275,16 +321,13 @@ contract TokenRateProviderTest is BaseTest {
             uint8 needsArg,
             ,
             address primarySource,
-            bytes4 fallbackFn
+            address fallbackSource,
+            bytes4 functionSelector
         ) = tokenRegistryOracle.tokenConfigs(address(unibtcToken));
-
-        uint8 expectedType = uint8(
-            tokenRegistryOracle.priceConstants().SOURCE_TYPE_BTC_CHAINED()
-        );
 
         assertEq(
             primaryType,
-            expectedType,
+            SOURCE_TYPE_BTC_CHAINED,
             "Should be configured as BTC-chained source"
         );
         assertEq(
@@ -292,7 +335,12 @@ contract TokenRateProviderTest is BaseTest {
             address(uniBtcFeed),
             "Should use uniBTC/BTC feed"
         );
-        assertEq(fallbackFn, getRateSelector, "Should use getRate as fallback");
+        assertEq(fallbackSource, address(0), "Should have no fallback source");
+        assertEq(
+            functionSelector,
+            getRateSelector,
+            "Should use getRate as function selector"
+        );
         assertTrue(
             tokenRegistryOracle.isConfigured(address(unibtcToken)),
             "Token should be marked as configured"
@@ -308,14 +356,13 @@ contract TokenRateProviderTest is BaseTest {
 
     function testGetRethPrice() public {
         // Arrange
-        bytes4 exchangeRateSelector = bytes4(keccak256("exchangeRate()"));
-
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(rethToken),
-            1, // Chainlink
+            SOURCE_TYPE_CHAINLINK, // Chainlink
             address(rethFeed),
             0, // No arg
+            address(0), // No fallback source
             exchangeRateSelector
         );
         vm.stopPrank();
@@ -334,27 +381,19 @@ contract TokenRateProviderTest is BaseTest {
     }
 
     function testGetStethPrice() public {
-        // Arrange - Configure stETH with Protocol as primary source
-        bytes4 getPooledEthBySharesSelector = bytes4(
-            keccak256("getPooledEthByShares(uint256)")
-        );
-
-        // Set up mock protocol contract in PriceConstants
+        // Set up mock protocol contract
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(stethToken),
-            4, // Protocol type
+            SOURCE_TYPE_PROTOCOL, // Protocol type
             address(stethProtocol),
             1, // Needs argument
+            address(0), // No fallback source
             getPooledEthBySharesSelector
         );
 
-        // Register stETH protocol address in the oracle for fallback
-        vm.store(
-            address(tokenRegistryOracle.priceConstants()),
-            bytes32(uint256(10)), // Assuming STETH_CONTRACT is at slot 10
-            bytes32(uint256(uint160(address(stethProtocol))))
-        );
+        // Register stETH protocol address in the oracle for fallback if needed
+        // Using a storage hack may no longer be needed with the new implementation
         vm.stopPrank();
 
         // Act
@@ -372,16 +411,13 @@ contract TokenRateProviderTest is BaseTest {
 
     function testGetOsethPrice() public {
         // Arrange - Configure osETH with Curve as primary source
-        bytes4 convertToAssetsSelector = bytes4(
-            keccak256("convertToAssets(uint256)")
-        );
-
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(osethToken),
-            2, // Curve type
+            SOURCE_TYPE_CURVE, // Curve type
             address(osethCurvePool),
             0, // No arg needed for Curve
+            address(0), // No fallback source
             convertToAssetsSelector
         );
         vm.stopPrank();
@@ -401,12 +437,11 @@ contract TokenRateProviderTest is BaseTest {
 
     function testGetUniBtcPrice() public {
         // Arrange - Configure uniBTC with BTC-chained as primary source
-        bytes4 getRateSelector = bytes4(keccak256("getRate()"));
-
         vm.startPrank(admin);
         tokenRegistryOracle.configureBtcToken(
             address(unibtcToken),
             address(uniBtcFeed),
+            address(0), // No fallback source
             getRateSelector
         );
         vm.stopPrank();
@@ -433,35 +468,39 @@ contract TokenRateProviderTest is BaseTest {
         // Configure rETH with Chainlink
         tokenRegistryOracle.configureToken(
             address(rethToken),
-            1, // Chainlink
+            SOURCE_TYPE_CHAINLINK, // Chainlink
             address(rethFeed),
             0,
-            bytes4(keccak256("exchangeRate()"))
+            address(0), // No fallback source
+            exchangeRateSelector
         );
 
         // Configure stETH with Protocol
         tokenRegistryOracle.configureToken(
             address(stethToken),
-            4, // Protocol
+            SOURCE_TYPE_PROTOCOL, // Protocol
             address(stethProtocol),
             1,
-            bytes4(keccak256("getPooledEthByShares(uint256)"))
+            address(0), // No fallback source
+            getPooledEthBySharesSelector
         );
 
         // Configure osETH with Curve
         tokenRegistryOracle.configureToken(
             address(osethToken),
-            2, // Curve
+            SOURCE_TYPE_CURVE, // Curve
             address(osethCurvePool),
             0,
-            bytes4(keccak256("convertToAssets(uint256)"))
+            address(0), // No fallback source
+            convertToAssetsSelector
         );
 
         // Configure uniBTC with BTC-chained
         tokenRegistryOracle.configureBtcToken(
             address(unibtcToken),
             address(uniBtcFeed),
-            bytes4(keccak256("getRate()"))
+            address(0), // No fallback source
+            getRateSelector
         );
 
         // Make prices stale
@@ -525,9 +564,10 @@ contract TokenRateProviderTest is BaseTest {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             address(rethToken),
-            1, // Chainlink
+            SOURCE_TYPE_CHAINLINK, // Chainlink
             address(rethFeed),
             0,
+            address(0), // No fallback source
             bytes4(0)
         );
 
@@ -615,9 +655,10 @@ contract TokenRateProviderTest is BaseTest {
         vm.startPrank(admin);
         tokenRegistryOracle.configureToken(
             address(rethToken),
-            1, // Chainlink
+            SOURCE_TYPE_CHAINLINK, // Chainlink
             address(0), // Invalid source
             0,
+            address(0), // No fallback source
             bytes4(0) // No fallback
         );
         vm.stopPrank();

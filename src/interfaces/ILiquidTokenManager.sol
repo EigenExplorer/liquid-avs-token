@@ -9,6 +9,7 @@ import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISigna
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
 
 /// @title ILiquidTokenManager Interface
 /// @notice Interface for the LiquidTokenManager contract
@@ -22,6 +23,7 @@ interface ILiquidTokenManager {
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
+        ITokenRegistryOracle tokenRegistryOracle;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -91,6 +93,9 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when attempting to remove a token that is currently in use
     error TokenInUse(IERC20 token);
 
+    /// @notice Error thrown when price source configuration is invalid
+    error InvalidPriceSource();
+
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
@@ -143,17 +148,48 @@ interface ILiquidTokenManager {
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
-    /// @notice Adds a new token to the registry
-    /// @param token The address of the token to add
-    /// @param decimals The number of decimals for the token
-    /// @param volatilityThreshold The volatility threshold for the token in 1e18
-    /// @param initialPrice The initial price for the token
+    /// @notice Adds a new token to the registry and configures its price sources
+    /// @param token Address of the token to add
+    /// @param decimals Number of decimals for the token
+    /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
+    /// @param strategy Strategy corresponding to the token
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primarySource Primary source address
+    /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Function selector for fallback
     function addToken(
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
         uint256 volatilityThreshold,
-        IStrategy strategy
+        IStrategy strategy,
+        uint8 primaryType,
+        address primarySource,
+        uint8 needsArg,
+        address fallbackSource,
+        bytes4 fallbackFn
+    ) external;
+
+    /// @notice Adds a new BTC-denominated token to the registry
+    /// @param token Address of the BTC-denominated token to add
+    /// @param decimals Number of decimals for the token
+    /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
+    /// @param strategy Strategy corresponding to the token
+    /// @param btcFeed Token/BTC price feed
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Fallback function selector
+    function addBtcToken(
+        IERC20 token,
+        uint8 decimals,
+        uint256 initialPrice,
+        uint256 volatilityThreshold,
+        IStrategy strategy,
+        address btcFeed,
+        address fallbackSource,
+        bytes4 fallbackFn
     ) external;
 
     /// @notice Removes a token from the registry
@@ -231,15 +267,6 @@ interface ILiquidTokenManager {
         bytes32[] calldata approverSalts
     ) external;
 
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegateNodes(
-        uint256[] calldata nodeIds
-    ) external;
-    */
-
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
     /// @return The total staked balance of the asset across all nodes
@@ -263,6 +290,10 @@ interface ILiquidTokenManager {
         IERC20 asset,
         uint256 newThreshold
     ) external;
+
+    /// @notice Returns the token registry oracle contract
+    /// @return The ITokenRegistryOracle interface
+    function tokenRegistryOracle() external view returns (ITokenRegistryOracle);
 
     /// @notice Returns the StrategyManager contract
     /// @return The IStrategyManager interface

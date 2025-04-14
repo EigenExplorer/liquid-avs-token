@@ -4,12 +4,10 @@ pragma solidity ^0.8.27;
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
-import {IPriceConstants} from "../interfaces/IPriceConstants.sol";
-import {IPriceOracle} from "../interfaces/IPriceOracle.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/interfaces/feeds/AggregatorV3Interface.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {PriceConstants} from "./sources/PriceConstants.sol";
+
 /**
  * @title TokenRegistryOracle
  * @notice Gas-optimized price oracle with primary/fallback lookup
@@ -17,7 +15,6 @@ import {PriceConstants} from "./sources/PriceConstants.sol";
  */
 contract TokenRegistryOracle is
     ITokenRegistryOracle,
-    IPriceOracle,
     Initializable,
     AccessControlUpgradeable
 {
@@ -27,9 +24,14 @@ contract TokenRegistryOracle is
     uint256 private constant PRECISION = 1e18;
     uint256 private constant STALENESS_PERIOD = 24 hours;
 
+    // Source types
+    uint8 public constant SOURCE_TYPE_CHAINLINK = 1;
+    uint8 public constant SOURCE_TYPE_CURVE = 2;
+    uint8 public constant SOURCE_TYPE_BTC_CHAINED = 3;
+    uint8 public constant SOURCE_TYPE_PROTOCOL = 4;
+
     // Core dependencies
     ILiquidTokenManager public liquidTokenManager;
-    IPriceConstants public priceConstants;
 
     // Price staleness controls
     uint64 private _priceUpdateInterval = 12 hours;
@@ -41,6 +43,7 @@ contract TokenRegistryOracle is
         uint8 needsArg; // 0=No arg, 1=Needs arg
         uint16 reserved; // For future use
         address primarySource; // Primary price source address
+        address fallbackSource; // Fallback source contract address
         bytes4 fallbackFn; // Function selector for fallback
     }
 
@@ -73,11 +76,10 @@ contract TokenRegistryOracle is
         _grantRole(RATE_UPDATER_ROLE, init.priceUpdater);
 
         liquidTokenManager = init.liquidTokenManager;
-        priceConstants = IPriceConstants(address(new PriceConstants()));
         lastGlobalPriceUpdate = uint64(block.timestamp);
 
         // Set up BTC price feed for BTC-denominated tokens
-        BTCETHFEED = priceConstants.CHAINLINK_BTC_ETH();
+        BTCETHFEED = init.btcEthFeed;
     }
 
     /**
@@ -86,6 +88,7 @@ contract TokenRegistryOracle is
      * @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
      * @param primarySource Primary source address
      * @param needsArg Whether fallback fn needs args
+     * @param fallbackSource Address of the fallback source contract
      * @param fallbackFn Function selector for fallback
      */
     function configureToken(
@@ -93,9 +96,21 @@ contract TokenRegistryOracle is
         uint8 primaryType,
         address primarySource,
         uint8 needsArg,
+        address fallbackSource,
         bytes4 fallbackFn
     ) external onlyRole(ORACLE_ADMIN_ROLE) {
         require(token != address(0), "Token cannot be zero address");
+        require(
+            primarySource != address(0),
+            "Primary source cannot be zero address"
+        );
+
+        if (fallbackFn != bytes4(0)) {
+            require(
+                fallbackSource != address(0),
+                "Fallback source required when fallback function provided"
+            );
+        }
 
         // Store token configuration
         tokenConfigs[token] = TokenConfig({
@@ -103,6 +118,7 @@ contract TokenRegistryOracle is
             needsArg: needsArg,
             reserved: 0,
             primarySource: primarySource,
+            fallbackSource: fallbackSource,
             fallbackFn: fallbackFn
         });
 
@@ -119,11 +135,13 @@ contract TokenRegistryOracle is
      * @notice Configure BTC-denominated token with chained feeds
      * @param token BTC-denominated token
      * @param btcFeed Token/BTC price feed
+     * @param fallbackSource Address of the fallback source contract
      * @param fallbackFn Fallback function selector
      */
     function configureBtcToken(
         address token,
         address btcFeed,
+        address fallbackSource,
         bytes4 fallbackFn
     ) external onlyRole(ORACLE_ADMIN_ROLE) {
         require(
@@ -132,12 +150,20 @@ contract TokenRegistryOracle is
         );
         require(BTCETHFEED != address(0), "BTC/ETH feed not set");
 
+        if (fallbackFn != bytes4(0)) {
+            require(
+                fallbackSource != address(0),
+                "Fallback source required when fallback function provided"
+            );
+        }
+
         // Set up token configuration as BTC-chained
         tokenConfigs[token] = TokenConfig({
-            primaryType: uint8(priceConstants.SOURCE_TYPE_BTC_CHAINED()),
+            primaryType: SOURCE_TYPE_BTC_CHAINED,
             needsArg: 0,
             reserved: 0,
             primarySource: btcFeed,
+            fallbackSource: fallbackSource,
             fallbackFn: fallbackFn
         });
 
@@ -151,178 +177,6 @@ contract TokenRegistryOracle is
         }
 
         emit TokenSourceSet(token, btcFeed);
-    }
-
-    /**
-     * @notice Sets up all tokens with their primary/fallback sources
-     * @dev Call after initialization to configure all tokens at once
-     */
-    function configureAllTokens() external onlyRole(ORACLE_ADMIN_ROLE) {
-        // Configure Chainlink-primary tokens
-        _configureToken(
-            priceConstants.RETH(),
-            priceConstants.SOURCE_TYPE_CHAINLINK(),
-            priceConstants.CHAINLINK_RETH_ETH(),
-            0, // No arg
-            priceConstants.SELECTOR_GET_EXCHANGE_RATE()
-        );
-
-        _configureToken(
-            priceConstants.STETH(),
-            priceConstants.SOURCE_TYPE_CHAINLINK(),
-            priceConstants.CHAINLINK_STETH_ETH(),
-            1, // Needs arg
-            priceConstants.SELECTOR_GET_POOLED_ETH_BY_SHARES()
-        );
-
-        _configureToken(
-            priceConstants.CBETH(),
-            priceConstants.SOURCE_TYPE_CHAINLINK(),
-            priceConstants.CHAINLINK_CBETH_ETH(),
-            0, // No arg
-            priceConstants.SELECTOR_EXCHANGE_RATE()
-        );
-
-        _configureToken(
-            priceConstants.METH(),
-            priceConstants.SOURCE_TYPE_CHAINLINK(),
-            priceConstants.CHAINLINK_METH_ETH(),
-            1, // Needs arg
-            priceConstants.SELECTOR_METH_TO_ETH()
-        );
-
-        _configureToken(
-            priceConstants.OETH(),
-            priceConstants.SOURCE_TYPE_CHAINLINK(),
-            priceConstants.CHAINLINK_OETH_ETH(),
-            1, // Needs arg
-            priceConstants.SELECTOR_CONVERT_TO_ASSETS()
-        );
-
-        // Configure BTC-denominated tokens
-        _configureBtcToken(
-            priceConstants.UNIBTC(),
-            priceConstants.CHAINLINK_UNIBTC_BTC(),
-            priceConstants.SELECTOR_GET_RATE()
-        );
-
-        _configureBtcToken(
-            priceConstants.STBTC(),
-            priceConstants.CHAINLINK_STBTC_BTC(),
-            priceConstants.SELECTOR_GET_RATE()
-        );
-
-        // Configure Curve-primary tokens
-        _configureToken(
-            priceConstants.LSETH(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.LSETH_CURVE_POOL(),
-            1, // Needs arg
-            priceConstants.SELECTOR_UNDERLYING_BALANCE_FROM_SHARES()
-        );
-
-        _configureToken(
-            priceConstants.ETHx(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.ETHx_CURVE_POOL(),
-            0, // No arg
-            priceConstants.SELECTOR_GET_EXCHANGE_RATE()
-        );
-
-        _configureToken(
-            priceConstants.SFRxETH(),
-            priceConstants.SOURCE_TYPE_PROTOCOL(), // Direct contract call
-            priceConstants.SFRxETH_CONTRACT(),
-            1, // Needs arg
-            priceConstants.SELECTOR_CONVERT_TO_ASSETS()
-        );
-
-        _configureToken(
-            priceConstants.ANKR_ETH(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.ANKR_ETH_CURVE_POOL(),
-            0, // No arg
-            priceConstants.SELECTOR_RATIO()
-        );
-
-        _configureToken(
-            priceConstants.OSETH(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.OSETH_CURVE_POOL(),
-            1, // Needs arg
-            priceConstants.SELECTOR_CONVERT_TO_ASSETS()
-        );
-
-        _configureToken(
-            priceConstants.SWETH(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.SWETH_CURVE_POOL(),
-            0, // No arg
-            priceConstants.SELECTOR_SWETH_TO_ETH_RATE()
-        );
-
-        _configureToken(
-            priceConstants.WSTETH(),
-            priceConstants.SOURCE_TYPE_CURVE(),
-            priceConstants.WSTETH_CONTRACT(),
-            0, // No arg
-            priceConstants.SELECTOR_STETH_PER_TOKEN()
-        );
-        _configureToken(
-            priceConstants.WBETH(),
-            priceConstants.SOURCE_TYPE_PROTOCOL(), // Direct contract call
-            priceConstants.WBETH_CONTRACT(),
-            0, // No arg needed
-            priceConstants.SELECTOR_EXCHANGE_RATE()
-        );
-    }
-
-    /**
-     * @notice Internal helper for configuring tokens
-     */
-    function _configureToken(
-        address token,
-        uint8 primaryType,
-        address primarySource,
-        uint8 needsArg,
-        bytes4 fallbackFn
-    ) internal {
-        tokenConfigs[token] = TokenConfig({
-            primaryType: primaryType,
-            needsArg: needsArg,
-            reserved: 0,
-            primarySource: primarySource,
-            fallbackFn: fallbackFn
-        });
-
-        if (!isConfigured[token]) {
-            configuredTokens.push(token);
-            isConfigured[token] = true;
-        }
-    }
-
-    /**
-     * @notice Internal helper for configuring BTC-denominated tokens
-     */
-    function _configureBtcToken(
-        address token,
-        address btcFeed,
-        bytes4 fallbackFn
-    ) internal {
-        tokenConfigs[token] = TokenConfig({
-            primaryType: uint8(priceConstants.SOURCE_TYPE_BTC_CHAINED()),
-            needsArg: 0,
-            reserved: 0,
-            primarySource: btcFeed,
-            fallbackFn: fallbackFn
-        });
-
-        btcTokenPairs[token] = btcFeed;
-
-        if (!isConfigured[token]) {
-            configuredTokens.push(token);
-            isConfigured[token] = true;
-        }
     }
 
     /**
@@ -377,7 +231,7 @@ contract TokenRegistryOracle is
      * @notice Gets configured update interval
      * @return Interval in seconds
      */
-    function priceUpdateInterval() external view override returns (uint256) {
+    function priceUpdateInterval() external view returns (uint256) {
         return _priceUpdateInterval;
     }
 
@@ -387,7 +241,7 @@ contract TokenRegistryOracle is
     function arePricesStale()
         public
         view
-        override(IPriceOracle, ITokenRegistryOracle)
+        override(ITokenRegistryOracle)
         returns (bool)
     {
         return (block.timestamp >
@@ -406,7 +260,7 @@ contract TokenRegistryOracle is
      */
     function updateAllPricesIfNeeded()
         external
-        override(IPriceOracle, ITokenRegistryOracle)
+        override(ITokenRegistryOracle)
         returns (bool)
     {
         // Skip if prices are fresh
@@ -483,22 +337,13 @@ contract TokenRegistryOracle is
         }
 
         // Get price based on source type
-        if (
-            config.primaryType == uint8(priceConstants.SOURCE_TYPE_CHAINLINK())
-        ) {
+        if (config.primaryType == SOURCE_TYPE_CHAINLINK) {
             return _getChainlinkPrice(config.primarySource);
-        } else if (
-            config.primaryType == uint8(priceConstants.SOURCE_TYPE_CURVE())
-        ) {
+        } else if (config.primaryType == SOURCE_TYPE_CURVE) {
             return _getCurvePrice(config.primarySource);
-        } else if (
-            config.primaryType ==
-            uint8(priceConstants.SOURCE_TYPE_BTC_CHAINED())
-        ) {
+        } else if (config.primaryType == SOURCE_TYPE_BTC_CHAINED) {
             return _getBtcChainedPrice(token, config.primarySource);
-        } else if (
-            config.primaryType == uint8(priceConstants.SOURCE_TYPE_PROTOCOL())
-        ) {
+        } else if (config.primaryType == SOURCE_TYPE_PROTOCOL) {
             // Use protocol rate directly
             return
                 _getContractCallPrice(
@@ -521,49 +366,17 @@ contract TokenRegistryOracle is
         TokenConfig memory config = tokenConfigs[token];
 
         // Skip if no fallback
-        if (config.fallbackFn == bytes4(0)) {
+        if (
+            config.fallbackFn == bytes4(0) ||
+            config.fallbackSource == address(0)
+        ) {
             return (0, false);
         }
-
-        // Get token contract from constants
-        address contractAddr;
-
-        if (token == priceConstants.RETH())
-            contractAddr = priceConstants.RETH_CONTRACT();
-        else if (token == priceConstants.STETH())
-            contractAddr = priceConstants.STETH_CONTRACT();
-        else if (token == priceConstants.CBETH())
-            contractAddr = priceConstants.CBETH_CONTRACT();
-        else if (token == priceConstants.ETHx())
-            contractAddr = priceConstants.ETHx_CONTRACT();
-        else if (token == priceConstants.OSETH())
-            contractAddr = priceConstants.OSETH_CONTRACT();
-        else if (token == priceConstants.SFRxETH())
-            contractAddr = priceConstants.SFRxETH_CONTRACT();
-        else if (token == priceConstants.SWETH())
-            contractAddr = priceConstants.SWETH_CONTRACT();
-        else if (token == priceConstants.WSTETH())
-            contractAddr = priceConstants.WSTETH_CONTRACT();
-        else if (token == priceConstants.ANKR_ETH())
-            contractAddr = priceConstants.ANKR_ETH_CONTRACT();
-        else if (token == priceConstants.LSETH())
-            contractAddr = priceConstants.LSETH_CONTRACT();
-        else if (token == priceConstants.OETH())
-            contractAddr = priceConstants.OETH_CONTRACT();
-        else if (token == priceConstants.METH())
-            contractAddr = priceConstants.METH_CONTRACT();
-        else if (token == priceConstants.UNIBTC())
-            contractAddr = priceConstants.UNIBTC_CONTRACT();
-        else if (token == priceConstants.WBETH())
-            contractAddr = priceConstants.WBETH_CONTRACT();
-        else if (token == priceConstants.STBTC())
-            contractAddr = priceConstants.STBTC_ACCOUNTANT_CONTRACT();
-        else return (0, false);
 
         return
             _getContractCallPrice(
                 token,
-                contractAddr,
+                config.fallbackSource,
                 config.fallbackFn,
                 config.needsArg
             );
@@ -710,6 +523,7 @@ contract TokenRegistryOracle is
             }
         }
     }
+
     /**
      * @notice Get price from BTC-chained feeds
      */
@@ -737,6 +551,7 @@ contract TokenRegistryOracle is
         price = (tokenBtcPrice * btcEthPrice) / PRECISION;
         return (price, true);
     }
+
     /**
      * @notice Get price from contract call with maximum gas efficiency
      */
@@ -787,12 +602,13 @@ contract TokenRegistryOracle is
             }
         }
     }
+
     /**
      * @notice Get token price directly (for external calls)
      */
     function getTokenPrice(
         address token
-    ) external view override(IPriceOracle, ITokenRegistryOracle) returns (uint256) {
+    ) external view override(ITokenRegistryOracle) returns (uint256) {
         (uint256 price, bool success) = _getTokenPrice(token);
 
         if (success && price > 0) {

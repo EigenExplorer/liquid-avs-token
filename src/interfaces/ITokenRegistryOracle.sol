@@ -6,16 +6,18 @@ import {ILiquidTokenManager} from "./ILiquidTokenManager.sol";
 
 /// @title ITokenRegistryOracle Interface
 /// @notice Interface for the TokenRegistryOracle contract
-/// @dev Reflects the actual implementation with specialized configuration methods
+/// @dev Provides price oracle functionality with primary and fallback sources
 interface ITokenRegistryOracle {
     /// @notice Struct to hold initialization parameters
     /// @param initialOwner The initial owner of the contract
     /// @param priceUpdater The address of the price updater
     /// @param liquidTokenManager The LiquidTokenManager contract
+    /// @param btcEthFeed The BTC/ETH price feed address for BTC-denominated tokens
     struct Init {
         address initialOwner;
         address priceUpdater;
         ILiquidTokenManager liquidTokenManager;
+        address btcEthFeed;
     }
 
     /// @notice Emitted when a token's rate is updated
@@ -39,7 +41,7 @@ interface ITokenRegistryOracle {
     error InvalidUpdater(address sender);
 
     /// @notice Initializes the TokenRegistryOracle contract
-    /// @param init Struct containing initial owner and price updater addresses
+    /// @param init Struct containing initialization parameters
     function initialize(Init memory init) external;
 
     /// @notice Configure a token with its primary and fallback sources
@@ -47,27 +49,28 @@ interface ITokenRegistryOracle {
     /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
     /// @param primarySource Primary source address
     /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
     /// @param fallbackFn Function selector for fallback
     function configureToken(
         address token,
         uint8 primaryType,
         address primarySource,
         uint8 needsArg,
+        address fallbackSource,
         bytes4 fallbackFn
     ) external;
 
     /// @notice Configure BTC-denominated token with chained feeds
     /// @param token BTC-denominated token
     /// @param btcFeed Token/BTC price feed
+    /// @param fallbackSource Address of the fallback source contract
     /// @param fallbackFn Fallback function selector
     function configureBtcToken(
         address token,
         address btcFeed,
+        address fallbackSource,
         bytes4 fallbackFn
     ) external;
-
-    /// @notice Sets up all tokens with their primary/fallback sources
-    function configureAllTokens() external;
 
     /// @notice Updates the rate for a single token
     /// @param token The address of the token to update
@@ -99,5 +102,8 @@ interface ITokenRegistryOracle {
     /// @param interval New interval in seconds
     function setPriceUpdateInterval(uint256 interval) external;
 
+    /// @notice Get the current price of a token in ETH terms
+    /// @param token Token address to get price for
+    /// @return The current price with 18 decimals precision
     function getTokenPrice(address token) external view returns (uint256);
 }

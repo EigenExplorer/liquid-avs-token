@@ -160,7 +160,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType - 0 means uninitialized
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         // Verify that the token was successfully added
@@ -216,7 +221,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -236,7 +246,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -253,7 +268,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            IStrategy(address(0))
+            IStrategy(address(0)),
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -279,7 +299,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            duplicateStrategy
+            duplicateStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -296,7 +321,12 @@ contract LiquidTokenManagerTest is BaseTest {
             0,
             initialPrice,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -313,7 +343,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             price,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -329,7 +364,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             price,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
@@ -350,7 +390,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             0,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -368,7 +413,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             price,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
     }
 
@@ -422,7 +472,12 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             initialPrice,
             volatilityThreshold,
-            newStrategy
+            newStrategy,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
 
         // Verify token was added
@@ -1646,6 +1701,91 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
     }
     */
+    function testMultipleTokenStrategyManagement() public {
+        // Create a new token and strategy for testing
+        MockERC20 token3 = new MockERC20("Test Token 3", "TEST3");
+        MockERC20 token4 = new MockERC20("Test Token 4", "TEST4");
+        MockStrategy strategy3 = new MockStrategy(
+            strategyManager,
+            IERC20(address(token3))
+        );
+        MockStrategy strategy4 = new MockStrategy(
+            strategyManager,
+            IERC20(address(token4))
+        );
+
+        vm.startPrank(admin);
+        // Add first token with its strategy
+        liquidTokenManager.addToken(
+            IERC20(address(token3)),
+            18,
+            1e18,
+            0,
+            strategy3,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
+        );
+
+        // Add second token with its strategy
+        liquidTokenManager.addToken(
+            IERC20(address(token4)),
+            18,
+            1e18,
+            0,
+            strategy4,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
+        );
+
+        // Verify both tokens are enabled
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
+            "Token3 should be supported"
+        );
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
+            "Token4 should be supported"
+        );
+
+        // Remove second token (which has no shares)
+        liquidTokenManager.removeToken(IERC20(address(token4)));
+
+        // Verify states
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
+            "Token3 should still be supported"
+        );
+        assertFalse(
+            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
+            "Token4 should not be supported"
+        );
+
+        // Try to get token info for removed token (should fail)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenNotSupported.selector,
+                address(token4)
+            )
+        );
+        liquidTokenManager.getTokenInfo(IERC20(address(token4)));
+
+        // Try to get strategy for removed token (should fail)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyNotFound.selector,
+                address(token4)
+            )
+        );
+        liquidTokenManager.getTokenStrategy(IERC20(address(token4)));
+
+        vm.stopPrank();
+    }
 
     function testTokenStrategyShareValueConsistency() public {
         // Create new tokens and strategies for testing (use completely different names)
@@ -1667,14 +1807,24 @@ contract LiquidTokenManagerTest is BaseTest {
             18,
             1e18,
             0,
-            strategyM
+            strategyM,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
         liquidTokenManager.addToken(
             IERC20(address(tokenN)),
             18,
             1e18,
             0,
-            strategyN
+            strategyN,
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
         );
         vm.stopPrank();
 
@@ -1811,141 +1961,6 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
     }
     */
-
-    function testMultipleTokenStrategyManagement() public {
-        // Create a new token and strategy for testing
-        MockERC20 token3 = new MockERC20("Test Token 3", "TEST3");
-        MockERC20 token4 = new MockERC20("Test Token 4", "TEST4");
-        MockStrategy strategy3 = new MockStrategy(
-            strategyManager,
-            IERC20(address(token3))
-        );
-        MockStrategy strategy4 = new MockStrategy(
-            strategyManager,
-            IERC20(address(token4))
-        );
-
-        vm.startPrank(admin);
-        // Add first token with its strategy
-        liquidTokenManager.addToken(
-            IERC20(address(token3)),
-            18,
-            1e18,
-            0,
-            strategy3
-        );
-
-        // Add second token with its strategy
-        liquidTokenManager.addToken(
-            IERC20(address(token4)),
-            18,
-            1e18,
-            0,
-            strategy4
-        );
-
-        // Verify both tokens are enabled
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
-            "Token3 should be supported"
-        );
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
-            "Token4 should be supported"
-        );
-
-        // Remove second token (which has no shares)
-        liquidTokenManager.removeToken(IERC20(address(token4)));
-
-        // Verify states
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(token3))),
-            "Token3 should still be supported"
-        );
-        assertFalse(
-            liquidTokenManager.tokenIsSupported(IERC20(address(token4))),
-            "Token4 should not be supported"
-        );
-
-        // Try to get token info for removed token (should fail)
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidTokenManager.TokenNotSupported.selector,
-                address(token4)
-            )
-        );
-        liquidTokenManager.getTokenInfo(IERC20(address(token4)));
-
-        // Try to get strategy for removed token (should fail)
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidTokenManager.StrategyNotFound.selector,
-                address(token4)
-            )
-        );
-        liquidTokenManager.getTokenStrategy(IERC20(address(token4)));
-
-        vm.stopPrank();
-    }
-
-    function testStrategyShareValueConsistency() public {
-        // Setup initial state with two strategies
-        MockERC20 tokenM = new MockERC20("Test Token M", "TESTM");
-        MockStrategy strategyM = new MockStrategy(
-            strategyManager,
-            IERC20(address(tokenM))
-        );
-
-        vm.startPrank(admin);
-        // Add first token with its strategy
-        liquidTokenManager.addToken(
-            IERC20(address(tokenM)),
-            18,
-            1e18,
-            0,
-            strategyM
-        );
-        vm.stopPrank();
-
-        // Create deposits
-        IERC20[] memory assets = new IERC20[](1);
-        assets[0] = IERC20(address(tokenM));
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 100 ether;
-
-        vm.startPrank(user1);
-        tokenM.mint(user1, 100 ether);
-        tokenM.approve(address(liquidToken), type(uint256).max);
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1);
-        vm.stopPrank();
-
-        // Record share values
-        uint256 initialTotalSupply = liquidToken.totalSupply();
-        uint256 initialUser1Balance = liquidToken.balanceOf(user1);
-
-        // Try to remove token (should fail due to active shares)
-        vm.startPrank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidTokenManager.TokenInUse.selector,
-                address(tokenM)
-            )
-        );
-        liquidTokenManager.removeToken(IERC20(address(tokenM)));
-
-        // Verify share value consistency
-        assertEq(
-            liquidToken.totalSupply(),
-            initialTotalSupply,
-            "Total supply should not change"
-        );
-        assertEq(
-            liquidToken.balanceOf(user1),
-            initialUser1Balance,
-            "User balance should not change"
-        );
-        vm.stopPrank();
-    }
 
     // Helper function to convert IERC20[] to IERC20Upgradeable[]
     function _convertToUpgradeable(
