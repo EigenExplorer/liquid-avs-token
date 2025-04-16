@@ -39,7 +39,11 @@ interface ITokenRegistryOracle {
 
     /// @notice Error thrown when an unauthorized address attempts to update prices
     error InvalidUpdater(address sender);
-
+    /**
+     * @notice Emitted when a token is removed from configuration
+     * @param token Address of the removed token
+     */
+    event TokenRemoved(address token);
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
     function initialize(Init memory init) external;
@@ -76,7 +80,11 @@ interface ITokenRegistryOracle {
     /// @param token The address of the token to update
     /// @param newRate The new rate for the token
     function updateRate(IERC20 token, uint256 newRate) external;
-
+    /**
+     * @notice Remove a token configuration from the registry
+     * @param token Address of the token to remove
+     */
+    function removeToken(address token) external;
     /// @notice Updates rates for multiple tokens in a single transaction
     /// @param tokens An array of token addresses to update
     /// @param newRates An array of new rates corresponding to the tokens

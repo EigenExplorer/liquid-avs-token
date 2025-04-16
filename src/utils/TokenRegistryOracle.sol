@@ -178,7 +178,36 @@ contract TokenRegistryOracle is
 
         emit TokenSourceSet(token, btcFeed);
     }
+    /**
+     * @notice Remove a token configuration from the registry
+     * @param token Address of the token to remove
+     */
+    function removeToken(address token) external onlyRole(ORACLE_ADMIN_ROLE) {
+        // Check if token is configured
+        if (!isConfigured[token]) {
+            return; // Not configured, nothing to remove
+        }
 
+        // Clear token configuration
+        delete tokenConfigs[token];
+        delete btcTokenPairs[token];
+
+        // Remove from configured tokens array
+        uint256 len = configuredTokens.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (configuredTokens[i] == token) {
+                // Swap with last element and pop
+                configuredTokens[i] = configuredTokens[len - 1];
+                configuredTokens.pop();
+                break;
+            }
+        }
+
+        // Mark token as not configured
+        isConfigured[token] = false;
+
+        emit TokenRemoved(token);
+    }
     /**
      * @notice Updates a token's rate manually
      */
@@ -355,6 +384,14 @@ contract TokenRegistryOracle is
         }
 
         return (0, false);
+    }
+
+    /**
+     * @notice Set the BTC/ETH Chainlink price feed
+     * @param feed Address of the BTC/ETH Chainlink price feed
+     */
+    function setBtcEthFeed(address feed) external onlyRole(ORACLE_ADMIN_ROLE) {
+        BTCETHFEED = feed;
     }
 
     /**
