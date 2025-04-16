@@ -32,12 +32,14 @@ async function dailyResponsibilities(retryCount = 0) {
 
     console.timeEnd("[Manager] Completed all responsibilities in");
   } catch (error) {
-    console.log(`Failed to perform daily responsibilities at: ${Date.now()}`);
+    console.log(
+      `[Manager] Failed to perform daily responsibilities at: ${Date.now()}`
+    );
     console.log(error);
 
     if (retryCount < MAX_RETRIES) {
       console.log(
-        `Retrying in 15 minutes... (Attempt ${
+        `[Manager] Retrying in 15 minutes... (Attempt ${
           retryCount + 1
         } of ${MAX_RETRIES})`
       );
@@ -47,7 +49,7 @@ async function dailyResponsibilities(retryCount = 0) {
       );
     } else {
       console.log(
-        "Max retries reached. Performing daily repsonsibilities failed."
+        "[Manager] Max retries reached. Performing daily repsonsibilities failed."
       );
     }
   }
@@ -72,18 +74,20 @@ async function priceUpdater(retryCount = 0) {
 
       console.timeEnd("[Price Updater] Updated prices in");
     } catch (error) {
-      console.log("Failed to update prices at:", Date.now());
+      console.log("[Price Updater] Failed to update prices at:", Date.now());
       console.log(error);
 
       if (retryCount < MAX_RETRIES) {
         console.log(
-          `Retrying in 15 minutes... (Attempt ${
+          `[Price Updater] Retrying in 15 minutes... (Attempt ${
             retryCount + 1
           } of ${MAX_RETRIES})`
         );
         setTimeout(() => priceUpdater(retryCount + 1), RETRY_DELAY * 1000);
       } else {
-        console.log("Max retries reached. Updating prices failed.");
+        console.log(
+          "[Price Updater] Max retries reached. Updating prices failed."
+        );
       }
     }
     await delay(PRICE_UPDATE_FREQUENCY);

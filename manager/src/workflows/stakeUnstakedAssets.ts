@@ -1,4 +1,8 @@
-import { LIQUID_TOKEN_ADDRESS, NETWORK } from "../utils/forge";
+import {
+  getPendingProposals,
+  LIQUID_TOKEN_ADDRESS,
+  NETWORK,
+} from "../utils/forge";
 import {
   type NodeAllocation,
   stakeAssetsToNodes,
@@ -48,6 +52,14 @@ const MIN_ALLOCATION_ETH = NETWORK === "holesky" ? 0.01 : 1;
  */
 export async function stakeUnstakedAssets() {
   try {
+    // Check if the multisig has any pending proposals
+    const pendingProposalsCount = (await getPendingProposals()).length;
+    if (pendingProposalsCount > 0) {
+      throw new Error(
+        `Cannot execute workflow due to ${pendingProposalsCount} pending proposals on Admin multisig`
+      );
+    }
+
     // LAT API: Fetch unstaked assets and amounts
     const latResponse = await fetch(
       `${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}`
@@ -152,6 +164,7 @@ export async function stakeUnstakedAssets() {
 
     console.log("[Manager] Stake unstaked assets complete");
   } catch (error) {
-    console.log("Error: ", error);
+    console.log("[Manager] Error: ", error);
+    throw error;
   }
 }

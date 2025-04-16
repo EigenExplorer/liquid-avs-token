@@ -224,3 +224,18 @@ export async function refreshDeploymentAddresses() {
     console.log("Error: ", error);
   }
 }
+
+/**
+ * Returns all pending transaction proposals for the given multisig
+ *
+ * @param multisig
+ * @returns
+ */
+export async function getPendingProposals(
+  multisig: "admin" | "pauser" = "admin"
+) {
+  const multisigAddress = multisig === "admin" ? ADMIN : PAUSER;
+
+  if (!multisigAddress) throw new Error("Env vars not set correctly.");
+  return (await apiKit.getPendingTransactions(multisigAddress)).results;
+}
