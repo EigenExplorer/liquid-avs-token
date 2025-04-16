@@ -91,6 +91,6 @@ export async function updateAllTokenPrices() {
 
     await batchUpdateRates(addresses, prices);
   } catch (error) {
-    console.log("Error: ", error);
+    console.log("[Manager] Error: ", error);
   }
 }
