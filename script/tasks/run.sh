@@ -7,11 +7,12 @@
 # With this script, we simulate a staker depositing funds and the re-staking manager (admin) deploying them
 # to EigenLayer with the following steps:
 #  1. Deploy all LAT contracts with stETH & rETH token/strategy registered
-#  2. Restaking manager creates five staker nodes
-#  3. Restaking manager delegates all nodes to an EigenLayer Operator
-#  4. Update token prices via price updater
-#  5. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
-#  6. Restaking manager stakes the users' funds to the first three nodes
+#  2. Configure ALL token sources in one transaction (stETH, rETH, cbETH, wstETH, etc.) via TokenRegistryOracle
+#  3. Restaking manager creates five staker nodes
+#  4. Restaking manager delegates all nodes to an EigenLayer Operator
+#  5. Update token prices via price updater
+#  6. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
+#  7. Restaking manager stakes the users' funds to the first three nodes
 
 # End-state verification:
 #  1. All nodes are delegated
@@ -22,11 +23,12 @@
 #  6. Each token had 2 price updates each
 
 # Task files tested:
-#  1. SNC_CreateStakerNodes
-#  2. LTM_DelegateNodes
-#  3. LTM_StakeAssetsToNodes
-#  4. LTM_StakeAssetsToNode
-#  5. TRO_UpdatePrices
+#  1. LTM_ConfigureAllTokens
+#  2. SNC_CreateStakerNodes
+#  3. LTM_DelegateNodes
+#  4. LTM_StakeAssetsToNodes
+#  5. LTM_StakeAssetsToNode
+#  6. TRO_UpdatePrices
 
 # Task files not tested:
 #  1. LTM_DelegateNodes (out of scope for v1)
@@ -72,6 +74,19 @@ forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:De
     --private-key $DEPLOYER_PRIVATE_KEY \
     --sig "run(string,string)" \
     -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
+
+#-----------------------------------------------------------------------------------------------------
+# CONFIGURE ALL TOKENS
+#-----------------------------------------------------------------------------------------------------
+
+echo "Configuring all tokens in TokenRegistryOracle..."
+forge script --via-ir script/tasks/LTM_ConfigureAllTokens.s.sol:ConfigureAllTokens \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $ADMIN_PRIVATE_KEY \
+    --sig "run(string)" \
+    -- $OUTPUT_FILE
+
+echo "Token configuration complete!"
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION
