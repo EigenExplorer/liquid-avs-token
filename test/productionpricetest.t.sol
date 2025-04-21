@@ -17,8 +17,8 @@ import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 
 contract RealWorldTokenPriceTest is BaseTest {
-    // Mainnet fork
-    uint256 mainnetFork;
+    // Network detection
+    bool private isHolesky;
 
     // Mock token for deposit tests
     MockERC20 public mockDepositToken;
@@ -26,20 +26,32 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     // Common token addresses on Ethereum mainnet
     // ETH tokens
-    address constant RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
-    address constant STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
-    address constant CBETH = 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704;
-    address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
-    address constant METH = 0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f;
-    address constant OSETH = 0x2A261e60FB14586B474C208b1B7AC6D0f5000306;
-    address constant ETHx = 0xF64bAe65f6f2a5277571143A24FaaFDFC0C2a737;
-    address constant SWETH = 0xf951E335afb289353dc249e82926178EaC7DEd78;
-    address constant LSETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
-    address constant ANKR_ETH = 0xE95A203B1a91a908F9B9CE46459d101078c2c3cb;
+    address constant MAINNET_RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
+    address constant MAINNET_STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+    address constant MAINNET_CBETH = 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704;
+    address constant MAINNET_WSTETH =
+        0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
+    address constant MAINNET_METH = 0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f;
+    address constant MAINNET_OSETH = 0x2A261e60FB14586B474C208b1B7AC6D0f5000306;
+    address constant MAINNET_ETHx = 0xF64bAe65f6f2a5277571143A24FaaFDFC0C2a737;
+    address constant MAINNET_SWETH = 0xf951E335afb289353dc249e82926178EaC7DEd78;
+    address constant MAINNET_LSETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
+    address constant MAINNET_ANKR_ETH =
+        0xE95A203B1a91a908F9B9CE46459d101078c2c3cb;
 
     // BTC tokens
-    address constant UNIBTC = 0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
-    address constant STBTC = 0xf6718b2701D4a6498eF77D7c152b2137Ab28b8A3;
+    address constant MAINNET_UNIBTC =
+        0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
+    address constant MAINNET_STBTC = 0xf6718b2701D4a6498eF77D7c152b2137Ab28b8A3;
+
+    // Holesky token addresses
+    address constant HOLESKY_RETH = 0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1;
+    address constant HOLESKY_STETH = 0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034;
+    address constant HOLESKY_LSETH = 0x1d8b30cC38Dba8aBce1ac29Ea27d9cFd05379A09;
+    address constant HOLESKY_ANKR_ETH =
+        0x8783C9C904e1bdC87d9168AE703c8481E8a477Fd;
+    address constant HOLESKY_SFRXETH =
+        0xa63f56985F9C7F3bc9fFc5685535649e0C1a55f3;
 
     // Chainlink feed addresses
     address constant CHAINLINK_RETH_ETH =
@@ -117,13 +129,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         keccak256("RATE_UPDATER_ROLE");
 
     function setUp() public override {
-        // Create mainnet fork using public nodes
-        string memory rpcUrl = vm.envOr(
-            "ETH_RPC_URL",
-            string("https://ethereum-rpc.publicnode.com")
-        );
-        mainnetFork = vm.createFork(rpcUrl, 19900000); // Using a specific block for consistency
-        vm.selectFork(mainnetFork);
+        // Detect network before doing anything else
+        _detectNetwork();
 
         // Now call parent setup (which initializes all contracts)
         super.setUp();
@@ -158,10 +165,12 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         vm.stopPrank();
 
-        // Setup the BTC/ETH feed
-        vm.startPrank(admin);
-        tokenRegistryOracle.setBtcEthFeed(CHAINLINK_BTC_ETH);
-        vm.stopPrank();
+        // Configure BTC/ETH feed if on mainnet
+        if (!isHolesky) {
+            vm.startPrank(admin);
+            tokenRegistryOracle.setBtcEthFeed(CHAINLINK_BTC_ETH);
+            vm.stopPrank();
+        }
 
         // Create mock deposit token and mock strategy for testing
         mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
@@ -171,8 +180,14 @@ contract RealWorldTokenPriceTest is BaseTest {
             IERC20(address(mockDepositToken))
         );
 
-        // Set up token categories and lists
-        _setupTokenLists();
+        // Set up token categories and lists based on detected network
+        if (isHolesky) {
+            _setupHoleskyTokenLists();
+            console.log("\n=== RUNNING TESTS ON HOLESKY TESTNET ===\n");
+        } else {
+            _setupTokenLists(); // Original mainnet setup
+            console.log("\n=== RUNNING TESTS ON ETHEREUM MAINNET ===\n");
+        }
 
         // Add tokens to LiquidTokenManager
         _addTokensToManager();
@@ -221,76 +236,92 @@ contract RealWorldTokenPriceTest is BaseTest {
         );
     }
 
+    // Simplified network detection that just checks the chain ID
+    function _detectNetwork() internal {
+        uint256 chainId = block.chainid;
+        console.log("Current chain ID: %d", chainId);
+
+        // Holesky testnet has chain ID 17000
+        isHolesky = (chainId == 17000);
+
+        if (isHolesky) {
+            console.log("Detected Holesky testnet");
+        } else {
+            console.log("Detected Ethereum mainnet or other network");
+        }
+    }
+
     function _setupTokenLists() internal {
+        // Original mainnet setup - unchanged
         // Chainlink tokens
-        chainlinkTokens.push(RETH);
-        chainlinkTokens.push(STETH);
-        chainlinkTokens.push(CBETH);
-        chainlinkTokens.push(METH);
+        chainlinkTokens.push(MAINNET_RETH);
+        chainlinkTokens.push(MAINNET_STETH);
+        chainlinkTokens.push(MAINNET_CBETH);
+        chainlinkTokens.push(MAINNET_METH);
 
         // Curve tokens
-        curveTokens.push(LSETH);
-        curveTokens.push(ETHx);
-        curveTokens.push(ANKR_ETH);
-        curveTokens.push(OSETH); // Note: OSETH uses Curve pool
-        curveTokens.push(SWETH);
+        curveTokens.push(MAINNET_LSETH);
+        curveTokens.push(MAINNET_ETHx);
+        curveTokens.push(MAINNET_ANKR_ETH);
+        curveTokens.push(MAINNET_OSETH); // Note: OSETH uses Curve pool
+        curveTokens.push(MAINNET_SWETH);
 
         // Protocol tokens
-        protocolTokens.push(RETH); // getExchangeRate
-        protocolTokens.push(STETH); // getPooledEthByShares
-        protocolTokens.push(CBETH); // exchangeRate
-        protocolTokens.push(ETHx); // convertToAssets
-        protocolTokens.push(WSTETH); // stEthPerToken
-        protocolTokens.push(SWETH); // swETHToETHRate
-        protocolTokens.push(METH); // mETHToETH
+        protocolTokens.push(MAINNET_RETH); // getExchangeRate
+        protocolTokens.push(MAINNET_STETH); // getPooledEthByShares
+        protocolTokens.push(MAINNET_CBETH); // exchangeRate
+        protocolTokens.push(MAINNET_ETHx); // convertToAssets
+        protocolTokens.push(MAINNET_WSTETH); // stEthPerToken
+        protocolTokens.push(MAINNET_SWETH); // swETHToETHRate
+        protocolTokens.push(MAINNET_METH); // mETHToETH
 
         // BTC tokens
-        btcTokens.push(UNIBTC);
-        btcTokens.push(STBTC);
+        btcTokens.push(MAINNET_UNIBTC);
+        btcTokens.push(MAINNET_STBTC);
 
         // Build the all tokens list
-        allTokens.push(RETH);
-        allTokens.push(STETH);
-        allTokens.push(CBETH);
-        allTokens.push(WSTETH);
-        allTokens.push(METH);
-        allTokens.push(OSETH);
-        allTokens.push(ETHx);
-        allTokens.push(SWETH);
-        allTokens.push(LSETH);
-        allTokens.push(ANKR_ETH);
-        allTokens.push(UNIBTC);
-        allTokens.push(STBTC);
+        allTokens.push(MAINNET_RETH);
+        allTokens.push(MAINNET_STETH);
+        allTokens.push(MAINNET_CBETH);
+        allTokens.push(MAINNET_WSTETH);
+        allTokens.push(MAINNET_METH);
+        allTokens.push(MAINNET_OSETH);
+        allTokens.push(MAINNET_ETHx);
+        allTokens.push(MAINNET_SWETH);
+        allTokens.push(MAINNET_LSETH);
+        allTokens.push(MAINNET_ANKR_ETH);
+        allTokens.push(MAINNET_UNIBTC);
+        allTokens.push(MAINNET_STBTC);
 
         // Map tokens to their primary sources
         // Chainlink
-        primarySource[RETH] = CHAINLINK_RETH_ETH;
-        primarySource[STETH] = CHAINLINK_STETH_ETH;
-        primarySource[CBETH] = CHAINLINK_CBETH_ETH;
-        primarySource[METH] = CHAINLINK_METH_ETH;
+        primarySource[MAINNET_RETH] = CHAINLINK_RETH_ETH;
+        primarySource[MAINNET_STETH] = CHAINLINK_STETH_ETH;
+        primarySource[MAINNET_CBETH] = CHAINLINK_CBETH_ETH;
+        primarySource[MAINNET_METH] = CHAINLINK_METH_ETH;
 
         // Curve
-        primarySource[LSETH] = LSETH_CURVE_POOL;
-        primarySource[ETHx] = ETHx_CURVE_POOL;
-        primarySource[ANKR_ETH] = ANKR_ETH_CURVE_POOL;
-        primarySource[OSETH] = OSETH_CURVE_POOL;
-        primarySource[SWETH] = SWETH_CURVE_POOL;
+        primarySource[MAINNET_LSETH] = LSETH_CURVE_POOL;
+        primarySource[MAINNET_ETHx] = ETHx_CURVE_POOL;
+        primarySource[MAINNET_ANKR_ETH] = ANKR_ETH_CURVE_POOL;
+        primarySource[MAINNET_OSETH] = OSETH_CURVE_POOL;
+        primarySource[MAINNET_SWETH] = SWETH_CURVE_POOL;
 
         // BTC tokens
-        primarySource[UNIBTC] = CHAINLINK_UNIBTC_BTC;
-        primarySource[STBTC] = CHAINLINK_STBTC_BTC;
+        primarySource[MAINNET_UNIBTC] = CHAINLINK_UNIBTC_BTC;
+        primarySource[MAINNET_STBTC] = CHAINLINK_STBTC_BTC;
 
         // Configure protocol function selectors
-        fallbackSelector[RETH] = SELECTOR_GET_EXCHANGE_RATE;
-        fallbackSelector[STETH] = SELECTOR_GET_POOLED_ETH_BY_SHARES;
-        needsArg[STETH] = true;
-        fallbackSelector[CBETH] = SELECTOR_EXCHANGE_RATE;
-        fallbackSelector[ETHx] = SELECTOR_CONVERT_TO_ASSETS;
-        needsArg[ETHx] = true;
-        fallbackSelector[WSTETH] = SELECTOR_STETH_PER_TOKEN;
-        fallbackSelector[SWETH] = SELECTOR_SWETH_TO_ETH_RATE;
-        fallbackSelector[METH] = SELECTOR_METH_TO_ETH;
-        needsArg[METH] = true;
+        fallbackSelector[MAINNET_RETH] = SELECTOR_GET_EXCHANGE_RATE;
+        fallbackSelector[MAINNET_STETH] = SELECTOR_GET_POOLED_ETH_BY_SHARES;
+        needsArg[MAINNET_STETH] = true;
+        fallbackSelector[MAINNET_CBETH] = SELECTOR_EXCHANGE_RATE;
+        fallbackSelector[MAINNET_ETHx] = SELECTOR_CONVERT_TO_ASSETS;
+        needsArg[MAINNET_ETHx] = true;
+        fallbackSelector[MAINNET_WSTETH] = SELECTOR_STETH_PER_TOKEN;
+        fallbackSelector[MAINNET_SWETH] = SELECTOR_SWETH_TO_ETH_RATE;
+        fallbackSelector[MAINNET_METH] = SELECTOR_METH_TO_ETH;
+        needsArg[MAINNET_METH] = true;
 
         // Record source types
         for (uint i = 0; i < chainlinkTokens.length; i++) {
@@ -310,9 +341,70 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
     }
 
+    function _setupHoleskyTokenLists() internal {
+        // Clear existing lists to avoid contamination
+        delete chainlinkTokens;
+        delete curveTokens;
+        delete protocolTokens;
+        delete btcTokens;
+        delete allTokens;
+
+        // On Holesky, we only use protocol sources
+        protocolTokens.push(HOLESKY_RETH);
+        protocolTokens.push(HOLESKY_STETH);
+        protocolTokens.push(HOLESKY_LSETH);
+        protocolTokens.push(HOLESKY_ANKR_ETH);
+        protocolTokens.push(HOLESKY_SFRXETH);
+
+        // Build the all tokens list
+        allTokens.push(HOLESKY_RETH);
+        allTokens.push(HOLESKY_STETH);
+        allTokens.push(HOLESKY_LSETH);
+        allTokens.push(HOLESKY_ANKR_ETH);
+        allTokens.push(HOLESKY_SFRXETH);
+
+        // Configure function selectors
+        fallbackSelector[HOLESKY_RETH] = SELECTOR_GET_EXCHANGE_RATE;
+        needsArg[HOLESKY_RETH] = false;
+
+        fallbackSelector[HOLESKY_STETH] = SELECTOR_GET_POOLED_ETH_BY_SHARES;
+        needsArg[HOLESKY_STETH] = true;
+
+        fallbackSelector[
+            HOLESKY_LSETH
+        ] = SELECTOR_UNDERLYING_BALANCE_FROM_SHARES;
+        needsArg[HOLESKY_LSETH] = true;
+
+        fallbackSelector[HOLESKY_ANKR_ETH] = SELECTOR_RATIO;
+        needsArg[HOLESKY_ANKR_ETH] = false;
+
+        fallbackSelector[HOLESKY_SFRXETH] = SELECTOR_CONVERT_TO_ASSETS;
+        needsArg[HOLESKY_SFRXETH] = true;
+
+        // For Holesky, both primary source and fallback are the tokens themselves
+        for (uint i = 0; i < allTokens.length; i++) {
+            address token = allTokens[i];
+            primarySource[token] = token;
+            sourceType[token] = SOURCE_TYPE_PROTOCOL;
+        }
+    }
+
     function _addTokensToManager() internal {
         vm.startPrank(admin);
-        console.log("======= Adding Tokens to LiquidTokenManager =======");
+
+        if (isHolesky) {
+            _addHoleskyTokensToManager();
+        } else {
+            _addMainnetTokensToManager();
+        }
+
+        vm.stopPrank();
+    }
+
+    function _addMainnetTokensToManager() internal {
+        console.log(
+            "======= Adding Mainnet Tokens to LiquidTokenManager ======="
+        );
 
         // We'll try to add tokens selectively to ensure we have at least some working examples
         // Try to add 2-3 tokens from different categories that are most likely to work
@@ -320,26 +412,26 @@ contract RealWorldTokenPriceTest is BaseTest {
         // Create strategies for tokens
         MockStrategy rethStrategy = new MockStrategy(
             strategyManager,
-            IERC20(RETH)
+            IERC20(MAINNET_RETH)
         );
         MockStrategy stethStrategy = new MockStrategy(
             strategyManager,
-            IERC20(STETH)
+            IERC20(MAINNET_STETH)
         );
         MockStrategy cbethStrategy = new MockStrategy(
             strategyManager,
-            IERC20(CBETH)
+            IERC20(MAINNET_CBETH)
         );
         MockStrategy osethStrategy = new MockStrategy(
             strategyManager,
-            IERC20(OSETH)
+            IERC20(MAINNET_OSETH)
         );
 
         // Add RETH (Chainlink example)
         console.log("Adding RETH with Chainlink feed...");
         try
             liquidTokenManager.addToken(
-                IERC20(RETH),
+                IERC20(MAINNET_RETH),
                 18,
                 1e18,
                 0,
@@ -347,12 +439,12 @@ contract RealWorldTokenPriceTest is BaseTest {
                 SOURCE_TYPE_CHAINLINK,
                 CHAINLINK_RETH_ETH,
                 0, // No arg needed
-                RETH, // Fallback to protocol source
+                MAINNET_RETH, // Fallback to protocol source
                 SELECTOR_GET_EXCHANGE_RATE
             )
         {
             console.log("  RETH added successfully");
-            tokenAdded[RETH] = true;
+            tokenAdded[MAINNET_RETH] = true;
         } catch Error(string memory reason) {
             console.log("  Failed to add RETH: %s", reason);
         } catch {
@@ -365,7 +457,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         );
         try
             liquidTokenManager.addToken(
-                IERC20(STETH),
+                IERC20(MAINNET_STETH),
                 18,
                 1e18,
                 0,
@@ -373,12 +465,12 @@ contract RealWorldTokenPriceTest is BaseTest {
                 SOURCE_TYPE_CHAINLINK,
                 CHAINLINK_STETH_ETH,
                 0, // No arg for Chainlink
-                STETH, // Fallback to protocol source
+                MAINNET_STETH, // Fallback to protocol source
                 SELECTOR_GET_POOLED_ETH_BY_SHARES
             )
         {
             console.log("  stETH added successfully");
-            tokenAdded[STETH] = true;
+            tokenAdded[MAINNET_STETH] = true;
         } catch Error(string memory reason) {
             console.log("  Failed to add stETH: %s", reason);
         } catch {
@@ -389,7 +481,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         console.log("Adding cbETH with Chainlink feed...");
         try
             liquidTokenManager.addToken(
-                IERC20(CBETH),
+                IERC20(MAINNET_CBETH),
                 18,
                 1e18,
                 0,
@@ -397,12 +489,12 @@ contract RealWorldTokenPriceTest is BaseTest {
                 SOURCE_TYPE_CHAINLINK,
                 CHAINLINK_CBETH_ETH,
                 0, // No arg needed
-                CBETH, // Fallback to protocol source
+                MAINNET_CBETH, // Fallback to protocol source
                 SELECTOR_EXCHANGE_RATE
             )
         {
             console.log("  cbETH added successfully");
-            tokenAdded[CBETH] = true;
+            tokenAdded[MAINNET_CBETH] = true;
         } catch Error(string memory reason) {
             console.log("  Failed to add cbETH: %s", reason);
         } catch {
@@ -413,7 +505,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         console.log("Adding osETH with Curve pool...");
         try
             liquidTokenManager.addToken(
-                IERC20(OSETH),
+                IERC20(MAINNET_OSETH),
                 18,
                 1e18,
                 0,
@@ -426,14 +518,171 @@ contract RealWorldTokenPriceTest is BaseTest {
             )
         {
             console.log("  osETH added successfully");
-            tokenAdded[OSETH] = true;
+            tokenAdded[MAINNET_OSETH] = true;
         } catch Error(string memory reason) {
             console.log("  Failed to add osETH: %s", reason);
         } catch {
             console.log("  Failed to add osETH (unknown error)");
         }
+    }
 
-        vm.stopPrank();
+    function _addHoleskyTokensToManager() internal {
+        console.log(
+            "======= Adding Holesky Tokens to LiquidTokenManager ======="
+        );
+
+        // Setup initial price values based on our observed rates - make sure they're explicitly uint256
+        uint256[5] memory initialPrices;
+        initialPrices[0] = 967200000000000000; // rETH 0.9672 ETH
+        initialPrices[1] = 848500000000000000; // stETH 0.8485 ETH
+        initialPrices[2] = 1020100000000000000; // lsETH 1.0201 ETH
+        initialPrices[3] = 1000000000000000000; // ankrETH 1.0000 ETH
+        initialPrices[4] = 1138000000000000000; // sfrxETH 1.1380 ETH
+
+        // Create strategies for tokens
+        MockStrategy rethStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(HOLESKY_RETH)
+        );
+        MockStrategy stethStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(HOLESKY_STETH)
+        );
+        MockStrategy lsethStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(HOLESKY_LSETH)
+        );
+        MockStrategy ankrEthStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(HOLESKY_ANKR_ETH)
+        );
+        MockStrategy sfrxEthStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(HOLESKY_SFRXETH)
+        );
+
+        // Common volatility threshold
+        uint256 volatilityThreshold = 5e16; // 5%
+
+        // Add rETH
+        console.log("Adding rETH with protocol source...");
+        try
+            liquidTokenManager.addToken(
+                IERC20(HOLESKY_RETH),
+                18,
+                initialPrices[0],
+                volatilityThreshold,
+                rethStrategy,
+                SOURCE_TYPE_PROTOCOL,
+                HOLESKY_RETH,
+                0, // No arg needed
+                HOLESKY_RETH, // Same as primary
+                SELECTOR_GET_EXCHANGE_RATE
+            )
+        {
+            console.log("  rETH added successfully");
+            tokenAdded[HOLESKY_RETH] = true;
+        } catch Error(string memory reason) {
+            console.log("  Failed to add rETH: %s", reason);
+        } catch {
+            console.log("  Failed to add rETH (unknown error)");
+        }
+
+        // Add stETH
+        console.log("Adding stETH with protocol source...");
+        try
+            liquidTokenManager.addToken(
+                IERC20(HOLESKY_STETH),
+                18,
+                initialPrices[1],
+                volatilityThreshold,
+                stethStrategy,
+                SOURCE_TYPE_PROTOCOL,
+                HOLESKY_STETH,
+                1, // Requires arg
+                HOLESKY_STETH, // Same as primary
+                SELECTOR_GET_POOLED_ETH_BY_SHARES
+            )
+        {
+            console.log("  stETH added successfully");
+            tokenAdded[HOLESKY_STETH] = true;
+        } catch Error(string memory reason) {
+            console.log("  Failed to add stETH: %s", reason);
+        } catch {
+            console.log("  Failed to add stETH (unknown error)");
+        }
+
+        // Add lsETH
+        console.log("Adding lsETH with protocol source...");
+        try
+            liquidTokenManager.addToken(
+                IERC20(HOLESKY_LSETH),
+                18,
+                initialPrices[2],
+                volatilityThreshold,
+                lsethStrategy,
+                SOURCE_TYPE_PROTOCOL,
+                HOLESKY_LSETH,
+                1, // Requires arg
+                HOLESKY_LSETH, // Same as primary
+                SELECTOR_UNDERLYING_BALANCE_FROM_SHARES
+            )
+        {
+            console.log("  lsETH added successfully");
+            tokenAdded[HOLESKY_LSETH] = true;
+        } catch Error(string memory reason) {
+            console.log("  Failed to add lsETH: %s", reason);
+        } catch {
+            console.log("  Failed to add lsETH (unknown error)");
+        }
+
+        // Add ankrETH
+        console.log("Adding ankrETH with protocol source...");
+        try
+            liquidTokenManager.addToken(
+                IERC20(HOLESKY_ANKR_ETH),
+                18,
+                initialPrices[3],
+                volatilityThreshold,
+                ankrEthStrategy,
+                SOURCE_TYPE_PROTOCOL,
+                HOLESKY_ANKR_ETH,
+                0, // No arg needed
+                HOLESKY_ANKR_ETH, // Same as primary
+                SELECTOR_RATIO
+            )
+        {
+            console.log("  ankrETH added successfully");
+            tokenAdded[HOLESKY_ANKR_ETH] = true;
+        } catch Error(string memory reason) {
+            console.log("  Failed to add ankrETH: %s", reason);
+        } catch {
+            console.log("  Failed to add ankrETH (unknown error)");
+        }
+
+        // Add sfrxETH
+        console.log("Adding sfrxETH with protocol source...");
+        try
+            liquidTokenManager.addToken(
+                IERC20(HOLESKY_SFRXETH),
+                18,
+                initialPrices[4],
+                volatilityThreshold,
+                sfrxEthStrategy,
+                SOURCE_TYPE_PROTOCOL,
+                HOLESKY_SFRXETH,
+                1, // Requires arg
+                HOLESKY_SFRXETH, // Same as primary
+                SELECTOR_CONVERT_TO_ASSETS
+            )
+        {
+            console.log("  sfrxETH added successfully");
+            tokenAdded[HOLESKY_SFRXETH] = true;
+        } catch Error(string memory reason) {
+            console.log("  Failed to add sfrxETH: %s", reason);
+        } catch {
+            console.log("  Failed to add sfrxETH (unknown error)");
+        }
     }
 
     function _createTokenStatusReport() internal {
@@ -461,14 +710,9 @@ contract RealWorldTokenPriceTest is BaseTest {
         tokenStatuses.push(mockStatus);
 
         // Check real-world tokens that were added
-        address[] memory tokensToCheck = new address[](4);
-        tokensToCheck[0] = RETH;
-        tokensToCheck[1] = STETH;
-        tokensToCheck[2] = CBETH;
-        tokensToCheck[3] = OSETH;
-
-        for (uint i = 0; i < tokensToCheck.length; i++) {
-            address token = tokensToCheck[i];
+        for (uint i = 0; i < allTokens.length; i++) {
+            address token = allTokens[i];
+            if (!tokenAdded[token]) continue;
 
             TokenStatus memory status;
             status.token = token;
@@ -539,14 +783,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         // Try to get prices for real tokens we added
-        address[] memory tokensToCheck = new address[](4);
-        tokensToCheck[0] = RETH;
-        tokensToCheck[1] = STETH;
-        tokensToCheck[2] = CBETH;
-        tokensToCheck[3] = OSETH;
-
-        for (uint i = 0; i < tokensToCheck.length; i++) {
-            address token = tokensToCheck[i];
+        for (uint i = 0; i < allTokens.length; i++) {
+            address token = allTokens[i];
             if (!tokenAdded[token]) continue;
 
             totalTokens++;
@@ -626,7 +864,12 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     function testRealTokenIntegration() public {
         // Skip if no real tokens added
-        if (!tokenAdded[STETH] && !tokenAdded[RETH] && !tokenAdded[CBETH]) {
+        uint256 tokensAdded = 0;
+        for (uint i = 0; i < allTokens.length; i++) {
+            if (tokenAdded[allTokens[i]]) tokensAdded++;
+        }
+
+        if (tokensAdded == 0) {
             console.log(
                 "No real tokens were successfully added, skipping real token test"
             );
@@ -634,13 +877,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         // Try each of the real tokens we attempted to add
-        address[] memory tokensToTest = new address[](3);
-        tokensToTest[0] = STETH;
-        tokensToTest[1] = RETH;
-        tokensToTest[2] = CBETH;
-
-        for (uint i = 0; i < tokensToTest.length; i++) {
-            address token = tokensToTest[i];
+        for (uint i = 0; i < allTokens.length; i++) {
+            address token = allTokens[i];
             if (!tokenAdded[token]) continue;
 
             string memory symbol = "Unknown";
@@ -689,5 +927,126 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
     }
 
-    
+    // Helper function to run tests on Holesky specifically
+    function testHoleskyTokens() public {
+        if (!isHolesky) {
+            console.log(
+                "Not running on Holesky, skipping Holesky-specific test"
+            );
+            return;
+        }
+
+        console.log("\n======= Testing Holesky Token Integration =======");
+
+        // Verify the successful configuration of each Holesky token
+        address[5] memory holeskyTokens = [
+            HOLESKY_RETH,
+            HOLESKY_STETH,
+            HOLESKY_LSETH,
+            HOLESKY_ANKR_ETH,
+            HOLESKY_SFRXETH
+        ];
+
+        for (uint i = 0; i < holeskyTokens.length; i++) {
+            address token = holeskyTokens[i];
+
+            string memory symbol;
+            try ERC20(token).symbol() returns (string memory s) {
+                symbol = s;
+            } catch {
+                symbol = "Unknown";
+            }
+
+            console.log("Testing %s (%s)...", symbol, addressToString(token));
+
+            if (tokenAdded[token]) {
+                try tokenRegistryOracle.getTokenPrice(token) returns (
+                    uint256 price
+                ) {
+                    console.log("  Price: %s ETH", formatEth(price));
+                    assertTrue(price > 0, "Price should be greater than 0");
+
+                    bytes4 selector = fallbackSelector[token];
+                    bool requiresArg = needsArg[token];
+                    console.log(
+                        "  Using selector: %s, Needs arg: %s",
+                        bytes4ToString(selector),
+                        requiresArg ? "Yes" : "No"
+                    );
+
+                    // Check if price is in reasonable range (0.7 - 1.3 ETH)
+                    assertTrue(
+                        price >= 0.7e18 && price <= 1.3e18,
+                        "Price should be in reasonable range"
+                    );
+                } catch Error(string memory reason) {
+                    console.log("  Failed to get price: %s", reason);
+                    assertTrue(false, "Should be able to get price for token");
+                } catch {
+                    console.log("  Failed to get price (unknown error)");
+                    assertTrue(false, "Should be able to get price for token");
+                }
+            } else {
+                console.log("  Token not added to LiquidTokenManager");
+            }
+        }
+    }
+
+    // Helper functions for formatting
+    function formatEth(uint256 amount) internal pure returns (string memory) {
+        if (amount == 0) return "0.0000";
+
+        uint256 whole = amount / 1e18;
+        uint256 fraction = (amount % 1e18) / 1e14;
+        return
+            string(
+                abi.encodePacked(
+                    vm.toString(whole),
+                    ".",
+                    fraction < 10
+                        ? "000"
+                        : fraction < 100
+                            ? "00"
+                            : fraction < 1000
+                                ? "0"
+                                : "",
+                    vm.toString(fraction)
+                )
+            );
+    }
+
+    function addressToString(
+        address _addr
+    ) internal pure returns (string memory) {
+        bytes memory result = new bytes(42);
+        result[0] = 0x30; // ASCII for '0'
+        result[1] = 0x78; // ASCII for 'x'
+
+        bytes memory alphabet = "0123456789abcdef";
+        uint160 addr = uint160(_addr);
+        for (uint i = 0; i < 20; i++) {
+            uint8 value = uint8(addr & 0xff);
+            result[2 + i * 2] = alphabet[value >> 4];
+            result[2 + i * 2 + 1] = alphabet[value & 0x0f];
+            addr = addr >> 8;
+        }
+
+        return string(result);
+    }
+
+    function bytes4ToString(
+        bytes4 _bytes
+    ) internal pure returns (string memory) {
+        bytes memory bytesArray = new bytes(10);
+        bytesArray[0] = "0";
+        bytesArray[1] = "x";
+
+        bytes memory HEX = "0123456789abcdef";
+        for (uint i = 0; i < 4; i++) {
+            bytesArray[2 + i * 2] = HEX[uint8(_bytes[i] >> 4)];
+            bytesArray[3 + i * 2] = HEX[uint8(_bytes[i] & 0x0f)];
+        }
+
+        return string(bytesArray);
+    }
 }
