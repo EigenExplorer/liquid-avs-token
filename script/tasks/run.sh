@@ -27,7 +27,6 @@
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
 #  5. TRO_UpdatePrices
-#  6. LTM_ConfigureAllTokens
 
 # Task files not tested:
 #  1. LTM_DelegateNodes (out of scope for v1)
@@ -73,20 +72,6 @@ forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:De
     --private-key $DEPLOYER_PRIVATE_KEY \
     --sig "run(string,string)" \
     -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
-
-
-#-----------------------------------------------------------------------------------------------------
-# CONFIGURE ALL TOKENS
-#-----------------------------------------------------------------------------------------------------
-
-echo "Configuring all tokens in TokenRegistryOracle..."
-forge script --via-ir script/tasks/LTM_ConfigureAllTokens.s.sol:ConfigureAllTokens \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $ADMIN_PRIVATE_KEY \
-    --sig "run(string)" \
-    -- $OUTPUT_FILE
-
-echo "Token configuration complete!"
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION

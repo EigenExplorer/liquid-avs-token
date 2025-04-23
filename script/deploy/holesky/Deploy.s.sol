@@ -24,30 +24,40 @@ import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
 
-/// @dev To load env file:
-// source .env
+// -------------------- BEGIN CHANGED SECTION: Extended TokenConfig --------------------
+event RoleAssigned(string contractName, string role, address recipient);
 
-/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/holesky/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
+// Oracle config struct for per-token price source
+struct OracleConfig {
+    uint8 sourceType;
+    address primarySource;
+    uint8 needsArg;
+    address fallbackSource;
+    bytes4 fallbackSelector;
+}
+
+// Add name (optional) and oracle config to TokenConfig
+struct TokenAddresses {
+    address strategy;
+    address token;
+}
+
+struct TokenParams {
+    uint256 decimals;
+    uint256 pricePerUnit;
+    uint256 volatilityThreshold;
+}
+
+struct TokenConfig {
+    string name; // For logging/debugging
+    TokenAddresses addresses;
+    TokenParams params;
+    OracleConfig oracle;
+}
+// -------------------- END CHANGED SECTION --------------------
+
 contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
-
-    // Structs for token deployment config
-    struct TokenAddresses {
-        address strategy;
-        address token;
-    }
-
-    struct TokenParams {
-        uint256 decimals;
-        uint256 pricePerUnit;
-        uint256 volatilityThreshold;
-    }
-
-    struct TokenConfig {
-        TokenAddresses addresses;
-        TokenParams params;
-    }
 
     // Path to output file
     string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
@@ -128,6 +138,12 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+
+        // -------------------- BEGIN CHANGED SECTION: Configure Tokens w/ Oracle --------------------
+        configureTokens();
+        // -------------------- END CHANGED SECTION --------------------
+        configureRoles();
+
         transferOwnership();
 
         vm.stopBroadcast();
@@ -139,6 +155,7 @@ contract Deploy is Script, Test {
         writeDeploymentOutput();
     }
 
+    // -------------------- BEGIN CHANGED SECTION: loadConfig parses new oracle fields --------------------
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
         string memory networkConfigPath = "script/configs/holesky.json";
@@ -165,17 +182,13 @@ contract Deploy is Script, Test {
             )
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);
+
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(
             deployConfigData,
             ".roles.priceUpdater"
         );
-        tokens = abi.decode(
-            stdJson.parseRaw(deployConfigData, ".tokens"),
-            (TokenConfig[])
-        );
-
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(
             deployConfigData,
@@ -189,7 +202,90 @@ contract Deploy is Script, Test {
             deployConfigData,
             ".contracts.liquidToken.init.symbol"
         );
+
+        // Detect the number of tokens in the JSON array
+        uint256 numTokens = stdJson.readUint(deployConfigData, ".tokensCount");
+        tokens = new TokenConfig[](numTokens);
+        for (uint256 i = 0; i < numTokens; i++) {
+            string memory prefix = string.concat(
+                ".tokens[",
+                vm.toString(i),
+                "]"
+            );
+            // Addresses
+            TokenAddresses memory addrs;
+            addrs.token = stdJson.readAddress(
+                deployConfigData,
+                string.concat(prefix, ".addresses.token")
+            );
+            addrs.strategy = stdJson.readAddress(
+                deployConfigData,
+                string.concat(prefix, ".addresses.strategy")
+            );
+            // Params
+            TokenParams memory params;
+            params.decimals = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.decimals")
+            );
+            params.pricePerUnit = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.pricePerUnit")
+            );
+            params.volatilityThreshold = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.volatilityThreshold")
+            );
+            // Oracle
+            OracleConfig memory oracle;
+            string memory op = string.concat(prefix, ".oracle");
+            oracle.sourceType = uint8(
+                stdJson.readUint(
+                    deployConfigData,
+                    string.concat(op, ".sourceType")
+                )
+            );
+            oracle.primarySource = stdJson.readAddress(
+                deployConfigData,
+                string.concat(op, ".primarySource")
+            );
+            oracle.needsArg = uint8(
+                stdJson.readUint(
+                    deployConfigData,
+                    string.concat(op, ".needsArg")
+                )
+            );
+            oracle.fallbackSource = stdJson.readAddress(
+                deployConfigData,
+                string.concat(op, ".fallbackSource")
+            );
+            // fallbackSelector is a hex string, parse as bytes4
+            string memory selStr = stdJson.readString(
+                deployConfigData,
+                string.concat(op, ".fallbackSelector")
+            );
+            bytes memory selBytes = vm.parseBytes(selStr);
+            require(selBytes.length == 4, "Invalid fallbackSelector");
+            bytes4 fallbackSelector;
+            assembly {
+                fallbackSelector := mload(add(selBytes, 32))
+            }
+            oracle.fallbackSelector = fallbackSelector;
+            // Name (optional)
+            string memory name = stdJson.readString(
+                deployConfigData,
+                string.concat(prefix, ".name")
+            );
+
+            tokens[i] = TokenConfig({
+                name: name,
+                addresses: addrs,
+                params: params,
+                oracle: oracle
+            });
+        }
     }
+    // -------------------- END CHANGED SECTION --------------------
 
     function deployInfrastructure() internal {
         proxyAdminDeployBlock = block.number;
@@ -286,9 +382,11 @@ contract Deploy is Script, Test {
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 ),
-                btcEthFeed: address(0) // BTC/ETH feed address (can be set to 0 initially)
+                btcEthFeed: address(0)
             })
         );
+
+        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
     }
 
     function _initializeLiquidTokenManager() internal {
@@ -324,7 +422,7 @@ contract Deploy is Script, Test {
                 stakerNodeCoordinator: stakerNodeCoordinator,
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
-                ), // Add this line
+                ),
                 initialOwner: admin,
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)
@@ -364,10 +462,52 @@ contract Deploy is Script, Test {
                 ),
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
-                ) // Added this line
+                )
             })
         );
     }
+
+    // -------------------- BEGIN CHANGED SECTION: configureTokens() --------------------
+    function configureTokens() internal {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            // Skip tokens that already exist
+            if (
+                liquidTokenManager.tokenIsSupported(
+                    IERC20(tokens[i].addresses.token)
+                )
+            ) {
+                continue;
+            }
+
+            TokenConfig memory t = tokens[i];
+            if (t.oracle.sourceType == 3) {
+                liquidTokenManager.addBtcToken(
+                    IERC20(t.addresses.token),
+                    uint8(t.params.decimals),
+                    uint256(t.params.pricePerUnit),
+                    uint256(t.params.volatilityThreshold),
+                    IStrategy(t.addresses.strategy),
+                    t.oracle.primarySource, // btcFeed
+                    t.oracle.fallbackSource,
+                    t.oracle.fallbackSelector
+                );
+            } else {
+                liquidTokenManager.addToken(
+                    IERC20(t.addresses.token),
+                    uint8(t.params.decimals),
+                    uint256(t.params.pricePerUnit),
+                    uint256(t.params.volatilityThreshold),
+                    IStrategy(t.addresses.strategy),
+                    t.oracle.sourceType,
+                    t.oracle.primarySource,
+                    t.oracle.needsArg,
+                    t.oracle.fallbackSource,
+                    t.oracle.fallbackSelector
+                );
+            }
+        }
+    }
+    // -------------------- END CHANGED SECTION --------------------
 
     function transferOwnership() internal {
         proxyAdmin.transferOwnership(admin);
@@ -586,6 +726,20 @@ contract Deploy is Script, Test {
                 priceUpdater
             ),
             "Rate Updater role not assigned in TokenRegistryOracle"
+        );
+    }
+    function configureRoles() internal {
+        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            address(liquidToken)
+        );
+
+        // Log the role assignment to help with verification
+        emit RoleAssigned(
+            "TokenRegistryOracle",
+            "RATE_UPDATER_ROLE",
+            address(liquidToken)
         );
     }
 

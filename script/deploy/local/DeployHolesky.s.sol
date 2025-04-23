@@ -24,37 +24,43 @@ import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
 
-/// @dev To load env file:
-// source .env
+// -------------------- BEGIN CHANGED SECTION: Extended TokenConfig --------------------
+event RoleAssigned(string contractName, string role, address recipient);
 
-/// @dev To setup a local node (on a separate terminal instance):
-// anvil --fork-url $RPC_URL
+// Oracle config struct for per-token price source
+struct OracleConfig {
+    uint8 sourceType;
+    address primarySource;
+    uint8 needsArg;
+    address fallbackSource;
+    bytes4 fallbackSelector;
+}
 
-/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployHolesky.s.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "holesky.json" "xeigenda_holesky.anvil.config.json" -vvvv
-contract DeployHolesky is Script, Test {
+// Add name (optional) and oracle config to TokenConfig
+struct TokenAddresses {
+    address strategy;
+    address token;
+}
+
+struct TokenParams {
+    uint256 decimals;
+    uint256 pricePerUnit;
+    uint256 volatilityThreshold;
+}
+
+struct TokenConfig {
+    string name; // For logging/debugging
+    TokenAddresses addresses;
+    TokenParams params;
+    OracleConfig oracle;
+}
+// -------------------- END CHANGED SECTION --------------------
+
+contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
-    // Structs for token deployment config
-    struct TokenAddresses {
-        address strategy;
-        address token;
-    }
-
-    struct TokenParams {
-        uint256 decimals;
-        uint256 pricePerUnit;
-        uint256 volatilityThreshold;
-    }
-
-    struct TokenConfig {
-        TokenAddresses addresses;
-        TokenParams params;
-    }
-
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/local/deployment_data.json";
-    string constant ABI_DIR_PATH = "script/outputs/local/abi";
+    string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
 
     // Network-level config
     address public strategyManager;
@@ -121,12 +127,9 @@ contract DeployHolesky is Script, Test {
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
 
-    function run(
-        string memory networkConfigFileName,
-        string memory deployConfigFileName
-    ) external {
+    function run(string memory deployConfigFileName) external {
         // Load config files
-        loadConfig(networkConfigFileName, deployConfigFileName);
+        loadConfig(deployConfigFileName);
 
         // Core deployment
         vm.startBroadcast();
@@ -135,6 +138,12 @@ contract DeployHolesky is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+
+        // -------------------- BEGIN CHANGED SECTION: Configure Tokens w/ Oracle --------------------
+        configureTokens();
+        // -------------------- END CHANGED SECTION --------------------
+        configureRoles();
+
         transferOwnership();
 
         vm.stopBroadcast();
@@ -146,14 +155,10 @@ contract DeployHolesky is Script, Test {
         writeDeploymentOutput();
     }
 
-    function loadConfig(
-        string memory networkConfigFileName,
-        string memory deployConfigFileName
-    ) internal {
+    // -------------------- BEGIN CHANGED SECTION: loadConfig parses new oracle fields --------------------
+    function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
-        string memory networkConfigPath = string(
-            bytes(string.concat("script/configs/", networkConfigFileName))
-        );
+        string memory networkConfigPath = "script/configs/holesky.json";
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(
             stdJson.readUint(networkConfigData, ".network.chainId") ==
@@ -172,20 +177,18 @@ contract DeployHolesky is Script, Test {
 
         // Load deployment-specific config
         string memory deployConfigPath = string(
-            bytes(string.concat("script/configs/local/", deployConfigFileName))
+            bytes(
+                string.concat("script/configs/holesky/", deployConfigFileName)
+            )
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);
+
         admin = stdJson.readAddress(deployConfigData, ".roles.admin");
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(
             deployConfigData,
             ".roles.priceUpdater"
         );
-        tokens = abi.decode(
-            stdJson.parseRaw(deployConfigData, ".tokens"),
-            (TokenConfig[])
-        );
-
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(
             deployConfigData,
@@ -199,7 +202,90 @@ contract DeployHolesky is Script, Test {
             deployConfigData,
             ".contracts.liquidToken.init.symbol"
         );
+
+        // Detect the number of tokens in the JSON array
+        uint256 numTokens = stdJson.readUint(deployConfigData, ".tokensCount");
+        tokens = new TokenConfig[](numTokens);
+        for (uint256 i = 0; i < numTokens; i++) {
+            string memory prefix = string.concat(
+                ".tokens[",
+                vm.toString(i),
+                "]"
+            );
+            // Addresses
+            TokenAddresses memory addrs;
+            addrs.token = stdJson.readAddress(
+                deployConfigData,
+                string.concat(prefix, ".addresses.token")
+            );
+            addrs.strategy = stdJson.readAddress(
+                deployConfigData,
+                string.concat(prefix, ".addresses.strategy")
+            );
+            // Params
+            TokenParams memory params;
+            params.decimals = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.decimals")
+            );
+            params.pricePerUnit = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.pricePerUnit")
+            );
+            params.volatilityThreshold = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.volatilityThreshold")
+            );
+            // Oracle
+            OracleConfig memory oracle;
+            string memory op = string.concat(prefix, ".oracle");
+            oracle.sourceType = uint8(
+                stdJson.readUint(
+                    deployConfigData,
+                    string.concat(op, ".sourceType")
+                )
+            );
+            oracle.primarySource = stdJson.readAddress(
+                deployConfigData,
+                string.concat(op, ".primarySource")
+            );
+            oracle.needsArg = uint8(
+                stdJson.readUint(
+                    deployConfigData,
+                    string.concat(op, ".needsArg")
+                )
+            );
+            oracle.fallbackSource = stdJson.readAddress(
+                deployConfigData,
+                string.concat(op, ".fallbackSource")
+            );
+            // fallbackSelector is a hex string, parse as bytes4
+            string memory selStr = stdJson.readString(
+                deployConfigData,
+                string.concat(op, ".fallbackSelector")
+            );
+            bytes memory selBytes = vm.parseBytes(selStr);
+            require(selBytes.length == 4, "Invalid fallbackSelector");
+            bytes4 fallbackSelector;
+            assembly {
+                fallbackSelector := mload(add(selBytes, 32))
+            }
+            oracle.fallbackSelector = fallbackSelector;
+            // Name (optional)
+            string memory name = stdJson.readString(
+                deployConfigData,
+                string.concat(prefix, ".name")
+            );
+
+            tokens[i] = TokenConfig({
+                name: name,
+                addresses: addrs,
+                params: params,
+                oracle: oracle
+            });
+        }
     }
+    // -------------------- END CHANGED SECTION --------------------
 
     function deployInfrastructure() internal {
         proxyAdminDeployBlock = block.number;
@@ -296,9 +382,11 @@ contract DeployHolesky is Script, Test {
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 ),
-                btcEthFeed: address(0) // BTC/ETH feed address (can be set to 0 initially)
+                btcEthFeed: address(0)
             })
         );
+
+        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
     }
 
     function _initializeLiquidTokenManager() internal {
@@ -334,7 +422,7 @@ contract DeployHolesky is Script, Test {
                 stakerNodeCoordinator: stakerNodeCoordinator,
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
-                ), // Add this line
+                ),
                 initialOwner: admin,
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)
@@ -374,10 +462,52 @@ contract DeployHolesky is Script, Test {
                 ),
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
-                ) // Added this line
+                )
             })
         );
     }
+
+    // -------------------- BEGIN CHANGED SECTION: configureTokens() --------------------
+    function configureTokens() internal {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            // Skip tokens that already exist
+            if (
+                liquidTokenManager.tokenIsSupported(
+                    IERC20(tokens[i].addresses.token)
+                )
+            ) {
+                continue;
+            }
+
+            TokenConfig memory t = tokens[i];
+            if (t.oracle.sourceType == 3) {
+                liquidTokenManager.addBtcToken(
+                    IERC20(t.addresses.token),
+                    uint8(t.params.decimals),
+                    uint256(t.params.pricePerUnit),
+                    uint256(t.params.volatilityThreshold),
+                    IStrategy(t.addresses.strategy),
+                    t.oracle.primarySource, // btcFeed
+                    t.oracle.fallbackSource,
+                    t.oracle.fallbackSelector
+                );
+            } else {
+                liquidTokenManager.addToken(
+                    IERC20(t.addresses.token),
+                    uint8(t.params.decimals),
+                    uint256(t.params.pricePerUnit),
+                    uint256(t.params.volatilityThreshold),
+                    IStrategy(t.addresses.strategy),
+                    t.oracle.sourceType,
+                    t.oracle.primarySource,
+                    t.oracle.needsArg,
+                    t.oracle.fallbackSource,
+                    t.oracle.fallbackSelector
+                );
+            }
+        }
+    }
+    // -------------------- END CHANGED SECTION --------------------
 
     function transferOwnership() internal {
         proxyAdmin.transferOwnership(admin);
@@ -596,6 +726,20 @@ contract DeployHolesky is Script, Test {
                 priceUpdater
             ),
             "Rate Updater role not assigned in TokenRegistryOracle"
+        );
+    }
+    function configureRoles() internal {
+        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            address(liquidToken)
+        );
+
+        // Log the role assignment to help with verification
+        emit RoleAssigned(
+            "TokenRegistryOracle",
+            "RATE_UPDATER_ROLE",
+            address(liquidToken)
         );
     }
 
@@ -887,16 +1031,9 @@ contract DeployHolesky is Script, Test {
 
         // Write the final JSON to output file
         vm.writeJson(finalJson, OUTPUT_PATH);
-
-        // Save contract ABIs with contract names
-        _saveContractABIs();
     }
 
     // --- Helper functions ---
-    /**
-     * @dev Returns implementation address for a given proxy
-     *
-     */
     function _getImplementationFromProxy(
         address proxy
     ) internal view returns (address) {
@@ -911,64 +1048,5 @@ contract DeployHolesky is Script, Test {
                     )
                 )
             );
-    }
-
-    /**
-     * @dev Extracts and saves contract ABIs with the same names as the contracts
-     */
-    function _saveContractABIs() internal {
-        _saveContractABI("LiquidToken", address(liquidToken), ABI_DIR_PATH);
-        _saveContractABI(
-            "LiquidTokenManager",
-            address(liquidTokenManager),
-            ABI_DIR_PATH
-        );
-        _saveContractABI(
-            "TokenRegistryOracle",
-            address(tokenRegistryOracle),
-            ABI_DIR_PATH
-        );
-        _saveContractABI(
-            "StakerNodeCoordinator",
-            address(stakerNodeCoordinator),
-            ABI_DIR_PATH
-        );
-        _saveContractABI("StakerNode", address(0), ABI_DIR_PATH);
-    }
-
-    /**
-     * @dev Saves a contract's ABI to a file
-     * @param contractName The name of the contract
-     * @param contractAddress The address of the contract
-     * @param abiDir The directory to save the ABI in
-     */
-    function _saveContractABI(
-        string memory contractName,
-        address contractAddress,
-        string memory abiDir
-    ) internal {
-        string memory filePath = string.concat(
-            abiDir,
-            "/",
-            contractName,
-            ".json"
-        );
-        string memory artifactPath = string.concat(
-            "out/",
-            contractName,
-            ".sol/",
-            contractName,
-            ".json"
-        );
-
-        try vm.readFile(artifactPath) returns (string memory artifactJson) {
-            vm.writeFile(filePath, artifactJson);
-        } catch {
-            console.log(
-                "  Could not find artifact for %s at %s",
-                contractName,
-                artifactPath
-            );
-        }
     }
 }
