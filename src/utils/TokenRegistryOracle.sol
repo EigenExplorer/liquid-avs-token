@@ -21,6 +21,8 @@ contract TokenRegistryOracle is
     // Constants
     bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
     bytes32 public constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 public constant TOKEN_CONFIGURATOR_ROLE =
+        keccak256("TOKEN_CONFIGURATOR_ROLE");
     uint256 private constant PRECISION = 1e18;
     uint256 private constant STALENESS_PERIOD = 24 hours;
 
@@ -77,7 +79,7 @@ contract TokenRegistryOracle is
 
         liquidTokenManager = init.liquidTokenManager;
         lastGlobalPriceUpdate = uint64(block.timestamp);
-
+        _grantRole(TOKEN_CONFIGURATOR_ROLE, address(init.liquidTokenManager));
         // Set up BTC price feed for BTC-denominated tokens
         BTCETHFEED = init.btcEthFeed;
     }
@@ -98,7 +100,7 @@ contract TokenRegistryOracle is
         uint8 needsArg,
         address fallbackSource,
         bytes4 fallbackFn
-    ) external onlyRole(ORACLE_ADMIN_ROLE) {
+    ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         require(token != address(0), "Token cannot be zero address");
         require(
             primarySource != address(0),
@@ -143,13 +145,11 @@ contract TokenRegistryOracle is
         address btcFeed,
         address fallbackSource,
         bytes4 fallbackFn
-    ) external onlyRole(ORACLE_ADMIN_ROLE) {
+    ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         require(
             token != address(0) && btcFeed != address(0),
             "Invalid address"
         );
-        require(BTCETHFEED != address(0), "BTC/ETH feed not set");
-
         if (fallbackFn != bytes4(0)) {
             require(
                 fallbackSource != address(0),
@@ -182,7 +182,9 @@ contract TokenRegistryOracle is
      * @notice Remove a token configuration from the registry
      * @param token Address of the token to remove
      */
-    function removeToken(address token) external onlyRole(ORACLE_ADMIN_ROLE) {
+    function removeToken(
+        address token
+    ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         // Check if token is configured
         if (!isConfigured[token]) {
             return; // Not configured, nothing to remove
@@ -387,14 +389,6 @@ contract TokenRegistryOracle is
     }
 
     /**
-     * @notice Set the BTC/ETH Chainlink price feed
-     * @param feed Address of the BTC/ETH Chainlink price feed
-     */
-    function setBtcEthFeed(address feed) external onlyRole(ORACLE_ADMIN_ROLE) {
-        BTCETHFEED = feed;
-    }
-
-    /**
      * @notice Get token price from fallback source (protocol call)
      */
     function _getFallbackPrice(
@@ -568,25 +562,14 @@ contract TokenRegistryOracle is
         address token,
         address btcFeed
     ) internal view returns (uint256 price, bool success) {
-        if (btcFeed == address(0) || BTCETHFEED == address(0)) {
+        if (btcFeed == address(0)) {
             return (0, false);
         }
-
-        // Get token-BTC price
         (uint256 tokenBtcPrice, bool success1) = _getChainlinkPrice(btcFeed);
         if (!success1 || tokenBtcPrice == 0) {
             return (0, false);
         }
-
-        // Get BTC-ETH price
-        (uint256 btcEthPrice, bool success2) = _getChainlinkPrice(BTCETHFEED);
-        if (!success2 || btcEthPrice == 0) {
-            return (0, false);
-        }
-
-        // Calculate: tokenBtcPrice * btcEthPrice / PRECISION
-        price = (tokenBtcPrice * btcEthPrice) / PRECISION;
-        return (price, true);
+        return (tokenBtcPrice, true);
     }
 
     /**

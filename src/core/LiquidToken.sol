@@ -71,16 +71,16 @@ contract LiquidToken is
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
-
+        if (address(init.tokenRegistryOracle) == address(0)) {
+            revert("TokenRegistryOracle cannot be the zero address");
+        }
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
         // Set token registry oracle if provided
-        if (address(init.tokenRegistryOracle) != address(0)) {
-            tokenRegistryOracle = init.tokenRegistryOracle;
-            emit TokenRegistryOracleSet(address(init.tokenRegistryOracle));
-        }
+        tokenRegistryOracle = init.tokenRegistryOracle;
+        emit TokenRegistryOracleSet(address(init.tokenRegistryOracle));
     }
 
     /// @notice Allows users to deposit multiple assets and receive shares
@@ -96,10 +96,7 @@ contract LiquidToken is
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
         // Check if prices need update
-        if (
-            address(tokenRegistryOracle) != address(0) &&
-            tokenRegistryOracle.arePricesStale()
-        ) {
+        if (tokenRegistryOracle.arePricesStale()) {
             // Attempt price update with minimal try/catch
             bool updated;
             try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
@@ -121,13 +118,11 @@ contract LiquidToken is
         }
 
         // Always check token prices regardless of staleness (enhanced security)
-        if (address(tokenRegistryOracle) != address(0)) {
-            for (uint256 i = 0; i < assets.length; i++) {
-                address assetAddr = address(assets[i]);
-                if (liquidTokenManager.tokenIsSupported(IERC20(assetAddr))) {
-                    if (tokenRegistryOracle.getTokenPrice(assetAddr) == 0) {
-                        revert AssetPriceInvalid(assetAddr);
-                    }
+        for (uint256 i = 0; i < assets.length; i++) {
+            address assetAddr = address(assets[i]);
+            if (liquidTokenManager.tokenIsSupported(IERC20(assetAddr))) {
+                if (tokenRegistryOracle.getTokenPrice(assetAddr) == 0) {
+                    revert AssetPriceInvalid(assetAddr);
                 }
             }
         }
