@@ -80,7 +80,8 @@ contract LiquidTokenManager is
             address(init.delegationManager) == address(0) ||
             address(init.liquidToken) == address(0) ||
             address(init.initialOwner) == address(0) ||
-            address(init.priceUpdater) == address(0)
+            address(init.priceUpdater) == address(0) ||
+            address(init.tokenRegistryOracle) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -181,21 +182,18 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         // Price source validation and configuration
-        if (address(tokenRegistryOracle) != address(0)) {
-            // If oracle is set, validate price source parameters
-            if (primaryType < 1 || primaryType > 4) revert InvalidPriceSource();
-            if (primarySource == address(0)) revert InvalidPriceSource();
+        if (primaryType < 1 || primaryType > 4) revert InvalidPriceSource();
+        if (primarySource == address(0)) revert InvalidPriceSource();
 
-            // Configure token in oracle
-            tokenRegistryOracle.configureToken(
-                address(token),
-                primaryType,
-                primarySource,
-                needsArg,
-                fallbackSource,
-                fallbackFn
-            );
-        }
+        // Configure token in oracle
+        tokenRegistryOracle.configureToken(
+            address(token),
+            primaryType,
+            primarySource,
+            needsArg,
+            fallbackSource,
+            fallbackFn
+        );
 
         try IERC20Metadata(address(token)).decimals() returns (
             uint8 decimalsFromContract
@@ -254,18 +252,16 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         // Price source validation and configuration
-        if (address(tokenRegistryOracle) != address(0)) {
-            // If oracle is set, validate BTC feed
-            if (btcFeed == address(0)) revert InvalidPriceSource();
+        // If oracle is set, validate BTC feed
+        if (btcFeed == address(0)) revert InvalidPriceSource();
 
-            // Configure BTC-denominated token in oracle
-            tokenRegistryOracle.configureBtcToken(
-                address(token),
-                btcFeed,
-                fallbackSource,
-                fallbackFn
-            );
-        }
+        // Configure BTC-denominated token in oracle
+        tokenRegistryOracle.configureBtcToken(
+            address(token),
+            btcFeed,
+            fallbackSource,
+            fallbackFn
+        );
 
         try IERC20Metadata(address(token)).decimals() returns (
             uint8 decimalsFromContract
@@ -678,4 +674,36 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @dev OUT OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        // Fetch and add all asset balances from the node to queued balances
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+
+            // Convert supportedTokens to IERC20Upgradeable array
+            IERC20Upgradeable[]
+                memory upgradeableTokens = new IERC20Upgradeable[](
+                    supportedTokens.length
+                );
+            for (uint256 j = 0; j < supportedTokens.length; j++) {
+                upgradeableTokens[j] = IERC20Upgradeable(
+                    address(supportedTokens[j])
+                );
+            }
+
+            liquidToken.creditQueuedAssetBalances(
+                upgradeableTokens,
+                _getAllStakedAssetBalancesNode(node)
+            );
+
+            node.undelegate();
+        }
+    }
+    */
 }
