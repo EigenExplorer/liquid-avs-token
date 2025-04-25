@@ -1,8 +1,4 @@
-import {
-  getPendingProposals,
-  LIQUID_TOKEN_ADDRESS,
-  NETWORK,
-} from "../utils/forge";
+import { getPendingProposals, LIQUID_TOKEN_ADDRESS } from "../utils/forge";
 import {
   type NodeAllocation,
   stakeAssetsToNodes,
@@ -19,7 +15,6 @@ interface TokensResponse {
     strategyAddress: string;
     decimals: number;
     pricePerUnit: string;
-    volatilityThreshold: string;
   }[];
 }
 
@@ -29,24 +24,17 @@ interface StakerNodesResponse {
     nodeId: number;
     operatorDelegation: string;
     assets: {
-      nodeAddress: string;
       asset: string;
-      strategy: string;
-      stakedAmount: string;
-      eigenLayerShares: string;
     }[];
   }[];
 }
 
 const LAT_API_URL = process.env.LAT_API_URL;
-const MIN_ALLOCATION_ETH = NETWORK === "holesky" ? 0.01 : 1;
 
 /**
  * Workflow for staking unstaked assets in the `LiquidToken` contract across nodes
- * Rules:
- * - Use 80% of funds for staking and leave 20% for withdrawals
+ * Policy:
  * - Even split of all asset amounts across all nodes
- * - Min allocation of 0.5 of the asset
  *
  * @returns
  */
@@ -120,22 +108,13 @@ export async function stakeUnstakedAssets() {
 
       if (!tokenInfo) continue;
 
-      // Allocate 80% of the available balance for staking
       const balance = BigInt(asset.balance);
-      const stakingAmount = (balance * BigInt(80)) / BigInt(100);
+      const stakingAmount = (balance * BigInt(995)) / BigInt(1000); // allow 0.5% margin of error
 
       if (stakingAmount <= 0) continue;
 
       // Calculate even distribution across all nodes
       const amountPerNode = stakingAmount / BigInt(delegatedNodes.length);
-
-      // Calculate minimum allocation
-      const minAllocationWei = BigInt(
-        Math.floor(MIN_ALLOCATION_ETH * 10 ** tokenInfo.decimals)
-      );
-
-      // Check if amount per node is below minimum allocation
-      if (amountPerNode < minAllocationWei) continue;
 
       // Create allocations for all nodes
       for (const node of delegatedNodes) {
