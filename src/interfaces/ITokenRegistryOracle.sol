@@ -12,12 +12,10 @@ interface ITokenRegistryOracle {
     /// @param initialOwner The initial owner of the contract
     /// @param priceUpdater The address of the price updater
     /// @param liquidTokenManager The LiquidTokenManager contract
-    /// @param btcEthFeed The BTC/ETH price feed address for BTC-denominated tokens
     struct Init {
         address initialOwner;
         address priceUpdater;
         ILiquidTokenManager liquidTokenManager;
-        address btcEthFeed;
     }
 
     /// @notice Emitted when a token's rate is updated
@@ -60,18 +58,6 @@ interface ITokenRegistryOracle {
         uint8 primaryType,
         address primarySource,
         uint8 needsArg,
-        address fallbackSource,
-        bytes4 fallbackFn
-    ) external;
-
-    /// @notice Configure BTC-denominated token with chained feeds
-    /// @param token BTC-denominated token
-    /// @param btcFeed Token/BTC price feed
-    /// @param fallbackSource Address of the fallback source contract
-    /// @param fallbackFn Fallback function selector
-    function configureBtcToken(
-        address token,
-        address btcFeed,
         address fallbackSource,
         bytes4 fallbackFn
     ) external;

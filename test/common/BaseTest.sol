@@ -56,7 +56,6 @@ contract BaseTest is Test {
     MockStrategy public mockStrategy2;
 
     // Mock price feeds for basic test tokens
-    MockChainlinkFeed public btcEthFeed;
     MockChainlinkFeed public testTokenFeed;
     MockChainlinkFeed public testToken2Feed;
 
@@ -368,7 +367,6 @@ contract BaseTest is Test {
         );
 
         // Deploy price feed mocks with realistic values for test tokens
-        btcEthFeed = new MockChainlinkFeed(int256(3000000000), 8); // 30 ETH per BTC (8 decimals)
         testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
         testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
     }
@@ -423,9 +421,6 @@ contract BaseTest is Test {
     function _setupOracleSources() private {
         vm.startPrank(admin);
 
-        // Configure BTC/ETH feed in TokenRegistryOracle
-        tokenRegistryOracle.setBtcEthFeed(address(btcEthFeed));
-
         // Configure test tokens with Chainlink sources
         tokenRegistryOracle.configureToken(
             address(testToken),
@@ -455,20 +450,53 @@ contract BaseTest is Test {
         _initializeLiquidToken();
 
         // Grant admin role to the admin address for all contracts
-        _grantRolesToAdmin();
+        //_grantRolesToAdmin();
     }
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
-            initialOwner: deployer,
+            initialOwner: deployer, // Step 1: deployer is admin
             priceUpdater: user2,
-            liquidTokenManager: ILiquidTokenManager(
-                address(liquidTokenManager)
-            ),
-            btcEthFeed: address(btcEthFeed) // Initialize with BTC/ETH feed
+            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
+
         vm.prank(deployer);
         tokenRegistryOracle.initialize(init);
+
+        // Step 2: As deployer, grant admin/configurator roles to address(this)
+        vm.startPrank(deployer);
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            address(this)
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            address(this)
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            address(this)
+        );
+        // user2 gets RATE_UPDATER_ROLE (already granted in init, but can re-grant for safety)
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            user2
+        );
+
+        // Step 3: Deployer renounces
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            deployer
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            deployer
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            deployer
+        );
+        vm.stopPrank();
     }
 
     function _initializeLiquidTokenManager() private {
@@ -483,7 +511,7 @@ contract BaseTest is Test {
             tokenRegistryOracle: ITokenRegistryOracle(
                 address(tokenRegistryOracle)
             ),
-            initialOwner: deployer,
+            initialOwner: deployer, // Step 1: deployer is admin
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
         });
@@ -496,7 +524,7 @@ contract BaseTest is Test {
         });
         init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
             decimals: 18,
-            pricePerUnit: 0.5e18, // Match with testToken2Feed value
+            pricePerUnit: 0.5e18,
             volatilityThreshold: 0
         });
         init.strategies[0] = IStrategy(address(mockStrategy));
@@ -504,13 +532,34 @@ contract BaseTest is Test {
 
         vm.prank(deployer);
         liquidTokenManager.initialize(init);
+
+        // Step 2: As deployer, grant roles to address(this)
+        vm.startPrank(deployer);
+        liquidTokenManager.grantRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            address(this)
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+            address(this)
+        );
+        // Step 3: Deployer renounces
+        liquidTokenManager.renounceRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            deployer
+        );
+        liquidTokenManager.renounceRole(
+            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+            deployer
+        );
+        vm.stopPrank();
     }
 
     function _initializeLiquidToken() private {
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
-            initialOwner: deployer,
+            initialOwner: deployer, // Step 1: deployer is admin
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(
                 address(liquidTokenManager)
@@ -522,6 +571,15 @@ contract BaseTest is Test {
 
         vm.prank(deployer);
         liquidToken.initialize(init);
+
+        // Step 2: As deployer, grant roles to address(this)/pauser
+        vm.startPrank(deployer);
+        liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), address(this));
+        liquidToken.grantRole(liquidToken.PAUSER_ROLE(), pauser);
+        // Step 3: Deployer renounces
+        liquidToken.renounceRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer);
+        liquidToken.renounceRole(liquidToken.PAUSER_ROLE(), deployer);
+        vm.stopPrank();
     }
 
     function _initializeStakerNodeCoordinator() private {
@@ -530,7 +588,7 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
-            initialOwner: deployer,
+            initialOwner: deployer, // Step 1: deployer is admin
             pauser: pauser,
             stakerNodeCreator: deployer,
             stakerNodesDelegator: deployer,
@@ -539,8 +597,39 @@ contract BaseTest is Test {
 
         vm.prank(deployer);
         stakerNodeCoordinator.initialize(init);
-    }
 
+        // Step 2: As deployer, grant roles to address(this) and pauser
+        vm.startPrank(deployer);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+            address(this)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            address(this)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(this)
+        );
+
+        // Step 3: Deployer renounces
+        stakerNodeCoordinator.renounceRole(
+            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+            deployer
+        );
+        stakerNodeCoordinator.renounceRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            deployer
+        );
+        stakerNodeCoordinator.renounceRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            deployer
+        );
+
+        vm.stopPrank();
+    }
+    /*
     function _grantRolesToAdmin() private {
         vm.startPrank(deployer);
 
@@ -587,6 +676,7 @@ contract BaseTest is Test {
 
         vm.stopPrank();
     }
+    */
 
     function _setupTestTokens() private {
         testToken.mint(user1, 100 ether);

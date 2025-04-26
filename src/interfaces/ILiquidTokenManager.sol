@@ -172,26 +172,6 @@ interface ILiquidTokenManager {
         bytes4 fallbackFn
     ) external;
 
-    /// @notice Adds a new BTC-denominated token to the registry
-    /// @param token Address of the BTC-denominated token to add
-    /// @param decimals Number of decimals for the token
-    /// @param initialPrice Initial price for the token
-    /// @param volatilityThreshold Volatility threshold for price updates
-    /// @param strategy Strategy corresponding to the token
-    /// @param btcFeed Token/BTC price feed
-    /// @param fallbackSource Address of the fallback source contract
-    /// @param fallbackFn Fallback function selector
-    function addBtcToken(
-        IERC20 token,
-        uint8 decimals,
-        uint256 initialPrice,
-        uint256 volatilityThreshold,
-        IStrategy strategy,
-        address btcFeed,
-        address fallbackSource,
-        bytes4 fallbackFn
-    ) external;
-
     /// @notice Removes a token from the registry
     /// @param token The address of the token to remove
     function removeToken(IERC20 token) external;
@@ -266,6 +246,15 @@ interface ILiquidTokenManager {
             calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) external;
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @dev Out OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external;
+    */
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for

@@ -75,14 +75,6 @@ contract TokenRateProviderTest is BaseTest {
         tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
         vm.stopPrank();
 
-        // Explicitly create a new BTC/ETH feed to ensure it exists
-        btcEthFeed = _createMockPriceFeed(int256(3000000000), 8); // 30 ETH per BTC
-
-        // Set the BTC/ETH feed in the oracle
-        vm.startPrank(admin);
-        tokenRegistryOracle.setBtcEthFeed(address(btcEthFeed));
-        vm.stopPrank();
-
         // Create mock tokens with realistic names
         rethToken = new MockERC20("Rocket Pool ETH", "rETH");
         stethToken = new MockERC20("Lido Staked ETH", "stETH");

@@ -165,13 +165,6 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         vm.stopPrank();
 
-        // Configure BTC/ETH feed if on mainnet
-        if (!isHolesky) {
-            vm.startPrank(admin);
-            tokenRegistryOracle.setBtcEthFeed(CHAINLINK_BTC_ETH);
-            vm.stopPrank();
-        }
-
         // Create mock deposit token and mock strategy for testing
         mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
         mockDepositToken.mint(user1, 1000 ether);

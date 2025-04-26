@@ -204,8 +204,12 @@ contract Deploy is Script, Test {
         );
 
         // Detect the number of tokens in the JSON array
-        uint256 numTokens = stdJson.readUint(deployConfigData, ".tokensCount");
+        uint256 numTokens = stdJson.readUint(
+            deployConfigData,
+            ".tokens.length"
+        );
         tokens = new TokenConfig[](numTokens);
+
         for (uint256 i = 0; i < numTokens; i++) {
             string memory prefix = string.concat(
                 ".tokens[",
@@ -381,12 +385,9 @@ contract Deploy is Script, Test {
                 priceUpdater: priceUpdater,
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
-                ),
-                btcEthFeed: address(0)
+                )
             })
         );
-
-        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
     }
 
     function _initializeLiquidTokenManager() internal {

@@ -29,8 +29,7 @@ contract TokenRegistryOracle is
     // Source types
     uint8 public constant SOURCE_TYPE_CHAINLINK = 1;
     uint8 public constant SOURCE_TYPE_CURVE = 2;
-    uint8 public constant SOURCE_TYPE_BTC_CHAINED = 3;
-    uint8 public constant SOURCE_TYPE_PROTOCOL = 4;
+    uint8 public constant SOURCE_TYPE_PROTOCOL = 3;
 
     // Core dependencies
     ILiquidTokenManager public liquidTokenManager;
@@ -41,7 +40,7 @@ contract TokenRegistryOracle is
 
     // Gas-optimized token configuration: packed into single storage slot
     struct TokenConfig {
-        uint8 primaryType; // 1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol
+        uint8 primaryType; // 1=Chainlink, 2=Curve, , 3=Protocol
         uint8 needsArg; // 0=No arg, 1=Needs arg
         uint16 reserved; // For future use
         address primarySource; // Primary price source address
@@ -55,10 +54,6 @@ contract TokenRegistryOracle is
     // List of all configured tokens - for batch updates
     address[] public configuredTokens;
     mapping(address => bool) public isConfigured;
-
-    // Chainlink specific storage
-    mapping(address => address) public btcTokenPairs; // For BTC-denominated tokens
-    address public BTCETHFEED;
 
     /**
      * @notice Initialize the contract
@@ -80,8 +75,6 @@ contract TokenRegistryOracle is
         liquidTokenManager = init.liquidTokenManager;
         lastGlobalPriceUpdate = uint64(block.timestamp);
         _grantRole(TOKEN_CONFIGURATOR_ROLE, address(init.liquidTokenManager));
-        // Set up BTC price feed for BTC-denominated tokens
-        BTCETHFEED = init.btcEthFeed;
     }
 
     /**
@@ -134,51 +127,6 @@ contract TokenRegistryOracle is
     }
 
     /**
-     * @notice Configure BTC-denominated token with chained feeds
-     * @param token BTC-denominated token
-     * @param btcFeed Token/BTC price feed
-     * @param fallbackSource Address of the fallback source contract
-     * @param fallbackFn Fallback function selector
-     */
-    function configureBtcToken(
-        address token,
-        address btcFeed,
-        address fallbackSource,
-        bytes4 fallbackFn
-    ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
-        require(
-            token != address(0) && btcFeed != address(0),
-            "Invalid address"
-        );
-        if (fallbackFn != bytes4(0)) {
-            require(
-                fallbackSource != address(0),
-                "Fallback source required when fallback function provided"
-            );
-        }
-
-        // Set up token configuration as BTC-chained
-        tokenConfigs[token] = TokenConfig({
-            primaryType: SOURCE_TYPE_BTC_CHAINED,
-            needsArg: 0,
-            reserved: 0,
-            primarySource: btcFeed,
-            fallbackSource: fallbackSource,
-            fallbackFn: fallbackFn
-        });
-
-        // Store BTC pair for lookup
-        btcTokenPairs[token] = btcFeed;
-
-        // Add to configured tokens
-        if (!isConfigured[token]) {
-            configuredTokens.push(token);
-            isConfigured[token] = true;
-        }
-
-        emit TokenSourceSet(token, btcFeed);
-    }
-    /**
      * @notice Remove a token configuration from the registry
      * @param token Address of the token to remove
      */
@@ -192,7 +140,7 @@ contract TokenRegistryOracle is
 
         // Clear token configuration
         delete tokenConfigs[token];
-        delete btcTokenPairs[token];
+        //delete btcTokenPairs[token];
 
         // Remove from configured tokens array
         uint256 len = configuredTokens.length;
@@ -372,8 +320,6 @@ contract TokenRegistryOracle is
             return _getChainlinkPrice(config.primarySource);
         } else if (config.primaryType == SOURCE_TYPE_CURVE) {
             return _getCurvePrice(config.primarySource);
-        } else if (config.primaryType == SOURCE_TYPE_BTC_CHAINED) {
-            return _getBtcChainedPrice(token, config.primarySource);
         } else if (config.primaryType == SOURCE_TYPE_PROTOCOL) {
             // Use protocol rate directly
             return
@@ -556,23 +502,6 @@ contract TokenRegistryOracle is
     }
 
     /**
-     * @notice Get price from BTC-chained feeds
-     */
-    function _getBtcChainedPrice(
-        address token,
-        address btcFeed
-    ) internal view returns (uint256 price, bool success) {
-        if (btcFeed == address(0)) {
-            return (0, false);
-        }
-        (uint256 tokenBtcPrice, bool success1) = _getChainlinkPrice(btcFeed);
-        if (!success1 || tokenBtcPrice == 0) {
-            return (0, false);
-        }
-        return (tokenBtcPrice, true);
-    }
-
-    /**
      * @notice Get price from contract call with maximum gas efficiency
      */
     function _getContractCallPrice(
@@ -675,21 +604,6 @@ contract TokenRegistryOracle is
         address token
     ) external view returns (uint256 price, bool success) {
         return _getFallbackPrice(token);
-    }
-
-    /**
-     * @notice TEST ONLY: Get price for BTC-denominated token
-     * @dev This function exposes the internal _getBtcChainedPrice for testing purposes
-     * @param token The BTC-denominated token address
-     * @param btcFeed The BTC price feed address
-     * @return price The price in ETH terms (18 decimals)
-     * @return success Whether the price fetch was successful
-     */
-    function _getBtcChainedPrice_exposed(
-        address token,
-        address btcFeed
-    ) external view returns (uint256 price, bool success) {
-        return _getBtcChainedPrice(token, btcFeed);
     }
 
     /**
