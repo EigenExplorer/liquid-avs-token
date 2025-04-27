@@ -498,31 +498,18 @@ contract Deploy is Script, Test {
             }
 
             TokenConfig memory t = tokens[i];
-            if (t.oracle.sourceType == 3) {
-                liquidTokenManager.addBtcToken(
-                    IERC20(t.addresses.token),
-                    uint8(t.params.decimals),
-                    uint256(t.params.pricePerUnit),
-                    uint256(t.params.volatilityThreshold),
-                    IStrategy(t.addresses.strategy),
-                    t.oracle.primarySource, // btcFeed
-                    t.oracle.fallbackSource,
-                    t.oracle.fallbackSelector
-                );
-            } else {
-                liquidTokenManager.addToken(
-                    IERC20(t.addresses.token),
-                    uint8(t.params.decimals),
-                    uint256(t.params.pricePerUnit),
-                    uint256(t.params.volatilityThreshold),
-                    IStrategy(t.addresses.strategy),
-                    t.oracle.sourceType,
-                    t.oracle.primarySource,
-                    t.oracle.needsArg,
-                    t.oracle.fallbackSource,
-                    t.oracle.fallbackSelector
-                );
-            }
+            liquidTokenManager.addToken(
+                IERC20(t.addresses.token),
+                uint8(t.params.decimals),
+                uint256(t.params.pricePerUnit),
+                uint256(t.params.volatilityThreshold),
+                IStrategy(t.addresses.strategy),
+                t.oracle.sourceType,
+                t.oracle.primarySource,
+                t.oracle.needsArg,
+                t.oracle.fallbackSource,
+                t.oracle.fallbackSelector
+            );
         }
     }
 

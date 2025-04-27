@@ -26,7 +26,7 @@
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 4,
+        "sourceType": 3,
         "primarySource": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
         "needsArg": 1,
         "fallbackSource": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
@@ -45,7 +45,7 @@
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 4,
+        "sourceType": 3,
         "primarySource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
         "needsArg": 0,
         "fallbackSource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
@@ -64,7 +64,7 @@
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 4,
+        "sourceType": 3,
         "primarySource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
         "needsArg": 1,
         "fallbackSource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
@@ -83,11 +83,30 @@
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 4,
+        "sourceType": 3,
         "primarySource": "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3",
         "needsArg": 1,
         "fallbackSource": "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3",
         "fallbackSelector": "0x07a2d13a"
+      }
+    },
+    {
+      "name": "EigenInu",
+      "addresses": {
+        "token": "0xdeeeee2b48c121e6728ed95c860e296177849932",
+        "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
+      },
+      "params": {
+        "pricePerUnit": "1000000000000000000",
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
       }
     },
     {
@@ -102,7 +121,7 @@
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 4,
+        "sourceType": 3,
         "primarySource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
         "needsArg": 0,
         "fallbackSource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",

@@ -32,7 +32,6 @@ contract BaseTest is Test {
     // Source type constants
     uint8 constant SOURCE_TYPE_CHAINLINK = 1;
     uint8 constant SOURCE_TYPE_CURVE = 2;
-    uint8 constant SOURCE_TYPE_BTC_CHAINED = 3;
     uint8 constant SOURCE_TYPE_PROTOCOL = 4;
 
     // Price freshness constants
@@ -698,16 +697,18 @@ contract BaseTest is Test {
 
     /**
      * @dev Updates prices for all configured tokens
+     * Note: This function is now marked virtual so derived contracts can override it
      */
-    function _updateAllPrices() internal {
+    function _updateAllPrices() internal virtual {
         vm.prank(user2); // user2 has RATE_UPDATER_ROLE
         tokenRegistryOracle.updateAllPricesIfNeeded();
     }
 
     /**
      * @dev Makes prices stale by advancing time past the freshness period
+     * Note: This function is now marked virtual so derived contracts can override it
      */
-    function _makePricesStale() internal {
+    function _makePricesStale() internal virtual {
         vm.warp(block.timestamp + PRICE_FRESHNESS_PERIOD + 1 hours);
     }
 
@@ -758,24 +759,6 @@ contract BaseTest is Test {
             0, // No args needed
             address(0), // No fallback
             bytes4(0) // No fallback function
-        );
-    }
-
-    /**
-     * @dev Configures a BTC-chained token (e.g., uniBTC)
-     */
-    function _setupBtcToken(
-        address token,
-        address feed,
-        address fallbackSource,
-        bytes4 fallbackFn
-    ) internal {
-        vm.prank(admin);
-        tokenRegistryOracle.configureBtcToken(
-            token,
-            feed,
-            fallbackSource,
-            fallbackFn
         );
     }
 

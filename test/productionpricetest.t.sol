@@ -23,7 +23,9 @@ contract RealWorldTokenPriceTest is BaseTest {
     // Mock token for deposit tests
     MockERC20 public mockDepositToken;
     MockStrategy public mockTokenStrategy;
-
+    // Native token for testing
+    MockERC20 public mockNativeToken;
+    MockStrategy public nativeTokenStrategy;
     // Common token addresses on Ethereum mainnet
     // ETH tokens
     address constant MAINNET_RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
@@ -227,6 +229,35 @@ contract RealWorldTokenPriceTest is BaseTest {
                 foundryInternalCaller
             )
         );
+        mockNativeToken = new MockERC20("EigenInu Token", "EINU");
+        mockNativeToken.mint(user1, 1000 ether);
+
+        // Create strategy for native token
+        nativeTokenStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(mockNativeToken))
+        );
+
+        // Approve native token for LiquidToken contract
+        vm.startPrank(user1);
+        mockNativeToken.approve(address(liquidToken), type(uint256).max);
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        liquidTokenManager.addToken(
+            IERC20(address(mockNativeToken)),
+            18,
+            1e18, // Price is always 1:1 for native tokens
+            0, // No volatility threshold
+            nativeTokenStrategy,
+            0, // SOURCE_TYPE_NATIVE = 0
+            address(0), // No price source (critical)
+            0, // No args
+            address(0), // No fallback
+            bytes4(0) // No fallback selector
+        );
+        tokenAdded[address(mockNativeToken)] = true;
+        vm.stopPrank();
     }
 
     // Simplified network detection that just checks the chain ID
@@ -324,7 +355,7 @@ contract RealWorldTokenPriceTest is BaseTest {
             sourceType[curveTokens[i]] = SOURCE_TYPE_CURVE;
         }
         for (uint i = 0; i < btcTokens.length; i++) {
-            sourceType[btcTokens[i]] = SOURCE_TYPE_BTC_CHAINED;
+            sourceType[btcTokens[i]] = SOURCE_TYPE_CHAINLINK;
         }
         // Only set protocol source type for tokens that don't have another source type
         for (uint i = 0; i < protocolTokens.length; i++) {
@@ -420,6 +451,11 @@ contract RealWorldTokenPriceTest is BaseTest {
             IERC20(MAINNET_OSETH)
         );
 
+        MockStrategy unibtcStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(MAINNET_UNIBTC)
+        );
+
         // Add RETH (Chainlink example)
         console.log("Adding RETH with Chainlink feed...");
         try
@@ -469,6 +505,24 @@ contract RealWorldTokenPriceTest is BaseTest {
         } catch {
             console.log("  Failed to add stETH (unknown error)");
         }
+
+        // Add uniBTC (BTC LST, now using Chainlink)
+        try
+            liquidTokenManager.addToken(
+                IERC20(MAINNET_UNIBTC),
+                18,
+                29.7e18,
+                0,
+                unibtcStrategy,
+                SOURCE_TYPE_CHAINLINK, // Now unified!
+                CHAINLINK_UNIBTC_BTC,
+                0,
+                address(0),
+                bytes4(0)
+            )
+        {
+            tokenAdded[MAINNET_UNIBTC] = true;
+        } catch {}
 
         // Add cbETH (Chainlink example)
         console.log("Adding cbETH with Chainlink feed...");
@@ -747,6 +801,34 @@ contract RealWorldTokenPriceTest is BaseTest {
 
             tokenStatuses.push(status);
         }
+
+        //add native
+        TokenStatus memory nativeStatus;
+        nativeStatus.token = address(mockNativeToken);
+        nativeStatus.name = "EigenInu Token";
+        nativeStatus.symbol = "EINU";
+        nativeStatus.added = tokenAdded[address(mockNativeToken)];
+
+        if (nativeStatus.added) {
+            try
+                liquidTokenManager.getTokenInfo(
+                    IERC20(address(mockNativeToken))
+                )
+            returns (ILiquidTokenManager.TokenInfo memory tokenInfo) {
+                nativeStatus.price = tokenInfo.pricePerUnit;
+                nativeStatus.priceWorks = true;
+                nativeStatus.configured = true;
+                console.log(
+                    "EigenInu Token (Native): Price=%s ETH (fixed)",
+                    nativeStatus.price / 1e18
+                );
+            } catch {
+                nativeStatus.priceWorks = false;
+                console.log("EigenInu Token (Native): Price=FAILED");
+            }
+        }
+
+        tokenStatuses.push(nativeStatus);
     }
 
     // ========== PRICE FETCHING TESTS ==========
@@ -809,6 +891,39 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         // Test should pass if at least one token works (we at least have our mock token)
         assertTrue(successCount > 0, "At least one token price should work");
+
+        for (uint i = 0; i < btcTokens.length; i++) {
+            address token = btcTokens[i];
+            if (!tokenAdded[token]) continue;
+
+            totalTokens++;
+            string memory symbol;
+            try ERC20(token).symbol() returns (string memory s) {
+                symbol = s;
+            } catch {
+                symbol = "Unknown";
+            }
+
+            try tokenRegistryOracle.getTokenPrice(token) returns (
+                uint256 price
+            ) {
+                console.log(
+                    "%s (BTC-valued token): %s ETH",
+                    symbol,
+                    price / 1e18
+                );
+                successCount++;
+                // BTC tokens should have a price around 29 ETH
+                assertTrue(
+                    price > 20e18,
+                    "BTC token price should be significantly higher than ETH"
+                );
+            } catch Error(string memory reason) {
+                console.log("%s: Failed to get price - %s", symbol, reason);
+            } catch {
+                console.log("%s: Failed to get price (unknown error)", symbol);
+            }
+        }
     }
 
     // ========== DEPOSIT WITH MOCK TOKEN TEST ==========
@@ -852,7 +967,61 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         vm.stopPrank();
     }
+    // ========== native TOKEN TESTS ==========
 
+    function testNativeTokenPricing() public {
+        console.log("\n======= Testing Native Token Price =======");
+
+        // First check the token status in LiquidTokenManager
+        ILiquidTokenManager.TokenInfo memory info;
+        try
+            liquidTokenManager.getTokenInfo(IERC20(address(mockNativeToken)))
+        returns (ILiquidTokenManager.TokenInfo memory tokenInfo) {
+            info = tokenInfo;
+            console.log("Native token info retrieved successfully");
+            assertEq(
+                info.pricePerUnit,
+                1e18,
+                "Native token price should be 1e18"
+            );
+        } catch {
+            console.log("Failed to get native token info");
+            assertTrue(false, "Should be able to get native token info");
+        }
+
+        // Unlike other tokens, native tokens don't go through the Oracle
+        // Their price is directly managed by LiquidTokenManager
+
+        // Test depositing with native token
+        vm.startPrank(user1);
+        uint256 depositAmount = 10e18; // 10 tokens
+
+        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
+        tokens[0] = IERC20Upgradeable(address(mockNativeToken));
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = depositAmount;
+
+        liquidToken.deposit(tokens, amounts, user1);
+
+        uint256 userLstBalance = liquidToken.balanceOf(user1);
+
+        console.log(
+            "User deposited %s native tokens worth %s ETH",
+            depositAmount / 1e18,
+            depositAmount / 1e18
+        );
+        console.log("User received %s LST tokens", userLstBalance / 1e18);
+
+        // Since native tokens have 1:1 ratio, the user should get exactly the deposit amount
+        assertEq(
+            userLstBalance,
+            depositAmount,
+            "User should receive LST tokens exactly equal to deposit amount for native tokens"
+        );
+
+        vm.stopPrank();
+    }
     // ========== REAL WORLD TOKEN TESTS ==========
 
     function testRealTokenIntegration() public {
