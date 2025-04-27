@@ -182,12 +182,12 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         // Price source validation and configuration
-        if (primaryType < 1 || primaryType > 4) revert InvalidPriceSource();
         // Allow native tokens (price always 1) to skip price source config
         bool isNative = (primaryType == 0 && primarySource == address(0));
+        if (!isNative && (primaryType < 1 || primaryType > 4))
+            revert InvalidPriceSource();
         if (!isNative && primarySource == address(0))
             revert InvalidPriceSource();
-        // Configure token in oracle
         if (!isNative) {
             tokenRegistryOracle.configureToken(
                 address(token),
@@ -208,7 +208,7 @@ contract LiquidTokenManager is
 
         tokens[token] = TokenInfo({
             decimals: decimals,
-            pricePerUnit: isNative ? 1 : initialPrice,
+            pricePerUnit: isNative ? 1e18 : initialPrice,
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
@@ -519,7 +519,7 @@ contract LiquidTokenManager is
         }
     }
 
-        /// @notice Undelegate a set of staker nodes from their operators
+    /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
     /// @dev OUT OF SCOPE FOR V1
     /**

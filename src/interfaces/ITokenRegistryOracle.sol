@@ -35,13 +35,17 @@ interface ITokenRegistryOracle {
     /// @notice Emitted when all prices are updated
     event GlobalPricesUpdated(address indexed updater, uint256 timestamp);
 
-    /// @notice Error thrown when an unauthorized address attempts to update prices
-    error InvalidUpdater(address sender);
     /**
      * @notice Emitted when a token is removed from configuration
      * @param token Address of the removed token
      */
     event TokenRemoved(address token);
+
+    /// @notice Error thrown when no valid prices fetched by primary&fallbacks sources
+    error NoFreshPrice(address token);
+    /// @notice Error thrown when an unauthorized address attempts to update prices
+    error InvalidUpdater(address sender);
+    
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
     function initialize(Init memory init) external;

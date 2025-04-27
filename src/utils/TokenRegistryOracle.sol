@@ -96,6 +96,11 @@ contract TokenRegistryOracle is
     ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         require(token != address(0), "Token cannot be zero address");
         require(
+            !(primaryType == 0 && primarySource == address(0)),
+            "Native tokens must not be configured in Oracle"
+        );
+
+        require(
             primarySource != address(0),
             "Primary source cannot be zero address"
         );
@@ -269,6 +274,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Fetch and update prices for all configured tokens
      */
+
     function _updateAllPrices() internal {
         uint256 len = configuredTokens.length;
 
@@ -286,8 +292,10 @@ contract TokenRegistryOracle is
                 ) = _getFallbackPrice(token);
                 if (fallbackSuccess && fallbackPrice > 0) {
                     _updateTokenRate(IERC20(token), fallbackPrice);
+                } else {
+                    // Revert if both fail
+                    revert NoFreshPrice(token);
                 }
-                // Otherwise, keep existing price
             }
         }
     }
