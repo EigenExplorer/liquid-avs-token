@@ -43,9 +43,6 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @notice Emitted when a price update fails during deposit
     event PriceUpdateFailedDuringDeposit(address indexed depositor);
 
-    /// @notice Emitted when token registry oracle is set
-    event TokenRegistryOracleSet(address indexed tokenRegistryOracle);
-
     /// @notice Emitted when an asset is deposited
     event AssetDeposited(
         address indexed sender,

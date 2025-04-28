@@ -276,11 +276,8 @@ contract LiquidTokenManager is
             }
         }
 
-        // Remove token from price oracle if oracle is set
-        if (address(tokenRegistryOracle) != address(0)) {
-            // Call tokenRegistryOracle's removeToken function
-            tokenRegistryOracle.removeToken(address(token));
-        }
+        // Call tokenRegistryOracle's removeToken function
+        tokenRegistryOracle.removeToken(address(token));
 
         delete tokens[token];
         delete tokenStrategies[token];
@@ -642,4 +639,5 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
+
 }

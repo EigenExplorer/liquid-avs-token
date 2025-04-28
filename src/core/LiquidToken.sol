@@ -80,7 +80,6 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
         // Set token registry oracle if provided
         tokenRegistryOracle = init.tokenRegistryOracle;
-        emit TokenRegistryOracleSet(address(init.tokenRegistryOracle));
     }
 
     /// @notice Allows users to deposit multiple assets and receive shares

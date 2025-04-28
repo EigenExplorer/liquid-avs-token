@@ -24,7 +24,6 @@ import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
 
-// -------------------- BEGIN CHANGED SECTION: Extended TokenConfig --------------------
 event RoleAssigned(string contractName, string role, address recipient);
 
 // Oracle config struct for per-token price source
@@ -54,7 +53,6 @@ struct TokenConfig {
     TokenParams params;
     OracleConfig oracle;
 }
-// -------------------- END CHANGED SECTION --------------------
 
 contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
@@ -139,10 +137,8 @@ contract Deploy is Script, Test {
         deployProxies();
         initializeProxies();
 
-        // -------------------- BEGIN CHANGED SECTION: Configure Tokens w/ Oracle --------------------
         configureTokens();
-        // -------------------- END CHANGED SECTION --------------------
-        configureRoles();
+        //configureRoles();
 
         transferOwnership();
 
@@ -289,7 +285,6 @@ contract Deploy is Script, Test {
             });
         }
     }
-    // -------------------- END CHANGED SECTION --------------------
 
     function deployInfrastructure() internal {
         proxyAdminDeployBlock = block.number;
@@ -382,14 +377,13 @@ contract Deploy is Script, Test {
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
                 initialOwner: admin,
-                priceUpdater: priceUpdater,
+                priceUpdater: address(liquidToken), // <<====== Grant to LiquidToken at init time
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )
             })
         );
     }
-
     function _initializeLiquidTokenManager() internal {
         liquidTokenManagerInitBlock = block.number;
         liquidTokenManagerInitTimestamp = block.timestamp;
@@ -712,11 +706,12 @@ contract Deploy is Script, Test {
         require(
             tokenRegistryOracle.hasRole(
                 tokenRegistryOracle.RATE_UPDATER_ROLE(),
-                priceUpdater
+                address(liquidToken)
             ),
             "Rate Updater role not assigned in TokenRegistryOracle"
         );
     }
+    /*
     function configureRoles() internal {
         // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
         tokenRegistryOracle.grantRole(
@@ -731,6 +726,7 @@ contract Deploy is Script, Test {
             address(liquidToken)
         );
     }
+    */
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";

@@ -137,7 +137,7 @@ contract Deploy is Script, Test {
         initializeProxies();
 
         configureTokens();
-        configureRoles();
+        //configureRoles();
 
         transferOwnership();
 
@@ -399,8 +399,8 @@ contract Deploy is Script, Test {
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner: msg.sender,
-                priceUpdater: priceUpdater,
+                initialOwner: admin,
+                priceUpdater: address(liquidToken), // <<====== Grant to LiquidToken at init time
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )
@@ -727,11 +727,12 @@ contract Deploy is Script, Test {
         require(
             tokenRegistryOracle.hasRole(
                 tokenRegistryOracle.RATE_UPDATER_ROLE(),
-                priceUpdater
+                address(liquidToken)
             ),
             "Rate Updater role not assigned in TokenRegistryOracle"
         );
     }
+    /*
     function configureRoles() internal {
         // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
         tokenRegistryOracle.grantRole(
@@ -750,6 +751,7 @@ contract Deploy is Script, Test {
             address(liquidToken)
         );
     }
+    */
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";
