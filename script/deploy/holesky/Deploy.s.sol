@@ -24,6 +24,12 @@ import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
 
+/// @dev To load env file:
+// source .env
+
+/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script script/deploy/holesky/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
+
 event RoleAssigned(string contractName, string role, address recipient);
 
 // Oracle config struct for per-token price source
@@ -400,7 +406,8 @@ contract Deploy is Script, Test {
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
                 initialOwner: admin,
-                priceUpdater: address(liquidToken), // <<====== Grant to LiquidToken at init time
+                priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
+                liquidToken: address(liquidToken), // <-- on-chain contract
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )
@@ -727,9 +734,16 @@ contract Deploy is Script, Test {
         require(
             tokenRegistryOracle.hasRole(
                 tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                priceUpdater
+            ),
+            "Rate Updater role not assigned to priceUpdater in TokenRegistryOracle"
+        );
+        require(
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
                 address(liquidToken)
             ),
-            "Rate Updater role not assigned in TokenRegistryOracle"
+            "Rate Updater role not assigned to LiquidToken in TokenRegistryOracle"
         );
     }
     /*

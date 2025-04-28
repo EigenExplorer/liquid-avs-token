@@ -454,8 +454,9 @@ contract BaseTest is Test {
 
     function _initializeTokenRegistryOracle() private {
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
-            initialOwner: deployer, // Step 1: deployer is admin
+            initialOwner: deployer,
             priceUpdater: user2,
+            liquidToken: address(liquidToken), // <-- ADD THIS to match our new changes in role mngmnt
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
 

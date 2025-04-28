@@ -111,9 +111,6 @@ interface ILiquidToken is IERC20Upgradeable {
     error DuplicateRequestId(bytes32 requestId);
     */
 
-    /// @notice Error for unsupported asset
-    error AssetNotSupported(IERC20Upgradeable asset);
-
     /// @notice Error for mismatched array lengths
     error ArrayLengthMismatch();
 

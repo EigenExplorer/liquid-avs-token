@@ -64,17 +64,22 @@ contract TokenRegistryOracle is
         require(
             init.initialOwner != address(0) &&
                 init.priceUpdater != address(0) &&
-                address(init.liquidTokenManager) != address(0),
+                address(init.liquidTokenManager) != address(0) &&
+                init.liquidToken != address(0), // <-- add this check to double check new role managnemnt
             "Invalid zero address"
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(ORACLE_ADMIN_ROLE, init.initialOwner);
+
+        // Grant RATE_UPDATER_ROLE to both priceUpdater and LiquidToken
         _grantRole(RATE_UPDATER_ROLE, init.priceUpdater);
+        _grantRole(RATE_UPDATER_ROLE, init.liquidToken);
+
+        _grantRole(TOKEN_CONFIGURATOR_ROLE, address(init.liquidTokenManager));
 
         liquidTokenManager = init.liquidTokenManager;
         lastGlobalPriceUpdate = uint64(block.timestamp);
-        _grantRole(TOKEN_CONFIGURATOR_ROLE, address(init.liquidTokenManager));
     }
 
     /**

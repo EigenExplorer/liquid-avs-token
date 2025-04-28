@@ -24,6 +24,15 @@ import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
 
+/// @dev To load env file:
+// source .env
+
+/// @dev To setup a local node (on a separate terminal instance):
+// anvil --fork-url $RPC_URL
+
+/// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
+// forge script script/deploy/local/DeployHolesky.s.sol:DeployHolesky --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "holesky.json" "xeigenda_holesky.anvil.config.json" -vvvv
+
 event RoleAssigned(string contractName, string role, address recipient);
 
 // Oracle config struct for per-token price source
@@ -377,7 +386,8 @@ contract Deploy is Script, Test {
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
                 initialOwner: admin,
-                priceUpdater: address(liquidToken), // <<====== Grant to LiquidToken at init time
+                priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
+                liquidToken: address(liquidToken), // <-- on-chain contract
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )

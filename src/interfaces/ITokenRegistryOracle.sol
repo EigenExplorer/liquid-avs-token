@@ -11,10 +11,12 @@ interface ITokenRegistryOracle {
     /// @notice Struct to hold initialization parameters
     /// @param initialOwner The initial owner of the contract
     /// @param priceUpdater The address of the price updater
+    /// @param liquidtoken The LiquidToken contract
     /// @param liquidTokenManager The LiquidTokenManager contract
     struct Init {
         address initialOwner;
         address priceUpdater;
+        address liquidToken; // <-- Add this for proper role mngmnt now
         ILiquidTokenManager liquidTokenManager;
     }
 
@@ -45,7 +47,7 @@ interface ITokenRegistryOracle {
     error NoFreshPrice(address token);
     /// @notice Error thrown when an unauthorized address attempts to update prices
     error InvalidUpdater(address sender);
-    
+
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
     function initialize(Init memory init) external;
@@ -104,4 +106,12 @@ interface ITokenRegistryOracle {
     /// @param token Token address to get price for
     /// @return The current price with 18 decimals precision
     function getTokenPrice(address token) external view returns (uint256);
+
+    /// @notice Gets configured update interval
+    /// @return Interval in seconds
+    function priceUpdateInterval() external view returns (uint256);
+
+    /// @notice Get last price update timestamp
+    /// @return Timestamp of last price update
+    function lastPriceUpdate() external view returns (uint256);
 }
