@@ -19,6 +19,7 @@ import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
@@ -48,6 +49,8 @@ contract LiquidTokenManager is
     IStakerNodeCoordinator public stakerNodeCoordinator;
     /// @notice The LiquidToken contract
     ILiquidToken public liquidToken;
+    /// @notice The TokenRegistryOracle contract
+    ITokenRegistryOracle public tokenRegistryOracle;
 
     /// @notice Mapping of tokens to their corresponding token info
     mapping(IERC20 => TokenInfo) public tokens;
@@ -77,7 +80,8 @@ contract LiquidTokenManager is
             address(init.delegationManager) == address(0) ||
             address(init.liquidToken) == address(0) ||
             address(init.initialOwner) == address(0) ||
-            address(init.priceUpdater) == address(0)
+            address(init.priceUpdater) == address(0) ||
+            address(init.tokenRegistryOracle) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -98,6 +102,7 @@ contract LiquidTokenManager is
         stakerNodeCoordinator = init.stakerNodeCoordinator;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
+        tokenRegistryOracle = init.tokenRegistryOracle;
 
         // Initialize strategies for each asset
         uint256 len = init.assets.length;
@@ -142,17 +147,28 @@ contract LiquidTokenManager is
         }
     }
 
-    /// @notice Adds a new token to the registry
+    /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
     /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primarySource Primary source address
+    /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Function selector for fallback
     function addToken(
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
         uint256 volatilityThreshold,
-        IStrategy strategy
+        IStrategy strategy,
+        uint8 primaryType,
+        address primarySource,
+        uint8 needsArg,
+        address fallbackSource,
+        bytes4 fallbackFn
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(tokenStrategies[token]) != address(0))
             revert TokenExists(address(token));
@@ -165,6 +181,24 @@ contract LiquidTokenManager is
         ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
 
+        // Price source validation and configuration
+        // Allow native tokens (price always 1) to skip price source config
+        bool isNative = (primaryType == 0 && primarySource == address(0));
+        if (!isNative && (primaryType < 1 || primaryType > 4))
+            revert InvalidPriceSource();
+        if (!isNative && primarySource == address(0))
+            revert InvalidPriceSource();
+        if (!isNative) {
+            tokenRegistryOracle.configureToken(
+                address(token),
+                primaryType,
+                primarySource,
+                needsArg,
+                fallbackSource,
+                fallbackFn
+            );
+        }
+
         try IERC20Metadata(address(token)).decimals() returns (
             uint8 decimalsFromContract
         ) {
@@ -174,7 +208,7 @@ contract LiquidTokenManager is
 
         tokens[token] = TokenInfo({
             decimals: decimals,
-            pricePerUnit: initialPrice,
+            pricePerUnit: isNative ? 1e18 : initialPrice,
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
@@ -241,6 +275,9 @@ contract LiquidTokenManager is
                 break;
             }
         }
+
+        // Call tokenRegistryOracle's removeToken function
+        tokenRegistryOracle.removeToken(address(token));
 
         delete tokens[token];
         delete tokenStrategies[token];
@@ -602,4 +639,5 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
+
 }

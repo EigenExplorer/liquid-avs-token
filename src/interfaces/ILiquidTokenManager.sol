@@ -9,6 +9,7 @@ import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISigna
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
 
 /// @title ILiquidTokenManager Interface
 /// @notice Interface for the LiquidTokenManager contract
@@ -17,11 +18,12 @@ interface ILiquidTokenManager {
     struct Init {
         IERC20[] assets;
         TokenInfo[] tokenInfo;
-        IStrategy [] strategies;
+        IStrategy[] strategies;
         ILiquidToken liquidToken;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
+        ITokenRegistryOracle tokenRegistryOracle;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -91,17 +93,35 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when attempting to remove a token that is currently in use
     error TokenInUse(IERC20 token);
 
+    /// @notice Error thrown when price source configuration is invalid
+    error InvalidPriceSource();
+
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
     /// @notice Emitted when a token's price is updated
-    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
+    event TokenPriceUpdated(
+        IERC20 indexed token,
+        uint256 oldPrice,
+        uint256 newPrice,
+        address indexed updater
+    );
 
     /// @notice Emitted when the volatility threshold for an asset is updated
-    event VolatilityThresholdUpdated(IERC20 indexed asset, uint256 oldThreshold, uint256 newThreshold, address indexed updatedBy);
+    event VolatilityThresholdUpdated(
+        IERC20 indexed asset,
+        uint256 oldThreshold,
+        uint256 newThreshold,
+        address indexed updatedBy
+    );
 
     /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
-    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
+    event VolatilityCheckFailed(
+        IERC20 indexed token,
+        uint256 oldPrice,
+        uint256 newPrice,
+        uint256 changeRatio
+    );
 
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
@@ -128,17 +148,28 @@ interface ILiquidTokenManager {
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
-    /// @notice Adds a new token to the registry
-    /// @param token The address of the token to add
-    /// @param decimals The number of decimals for the token
-    /// @param volatilityThreshold The volatility threshold for the token in 1e18
-    /// @param initialPrice The initial price for the token
+    /// @notice Adds a new token to the registry and configures its price sources
+    /// @param token Address of the token to add
+    /// @param decimals Number of decimals for the token
+    /// @param initialPrice Initial price for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
+    /// @param strategy Strategy corresponding to the token
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primarySource Primary source address
+    /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Function selector for fallback
     function addToken(
         IERC20 token,
         uint8 decimals,
         uint256 initialPrice,
         uint256 volatilityThreshold,
-        IStrategy strategy
+        IStrategy strategy,
+        uint8 primaryType,
+        address primarySource,
+        uint8 needsArg,
+        address fallbackSource,
+        bytes4 fallbackFn
     ) external;
 
     /// @notice Removes a token from the registry
@@ -159,13 +190,19 @@ interface ILiquidTokenManager {
     /// @param token The address of the token to convert
     /// @param amount The amount of tokens to convert
     /// @return The converted amount in the unit of account
-    function convertToUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
+    function convertToUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256);
 
     /// @notice Converts an amount in the unit of account to a token amount
     /// @param token The address of the token to convert to
     /// @param amount The amount in the unit of account to convert
     /// @return The converted amount in the specified token
-    function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
+    function convertFromUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256);
 
     /// @notice Retrieves the list of supported tokens
     /// @return An array of addresses of supported tokens
@@ -174,7 +211,9 @@ interface ILiquidTokenManager {
     /// @notice Retrieves the information for a specific token
     /// @param token The address of the token to get information for
     /// @return TokenInfo struct containing the token's information
-    function getTokenInfo(IERC20 token) external view returns (TokenInfo memory);
+    function getTokenInfo(
+        IERC20 token
+    ) external view returns (TokenInfo memory);
 
     /// @notice Returns the strategy for a given asset
     /// @param asset The asset to get the strategy for
@@ -203,7 +242,8 @@ interface ILiquidTokenManager {
     function delegateNodes(
         uint256[] calldata nodeIds,
         address[] calldata operators,
-        ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[]
+            calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) external;
 
@@ -219,18 +259,30 @@ interface ILiquidTokenManager {
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
     /// @return The total staked balance of the asset across all nodes
-    function getStakedAssetBalance(IERC20 asset) external view returns (uint256);
+    function getStakedAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256);
 
     /// @notice Gets the staked asset balance for a specific node
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the specific node
-    function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+    function getStakedAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId
+    ) external view returns (uint256);
 
     /// @notice Updates the volatility threshold for price updates
     /// @param asset The asset to update threshold for
     /// @param newThreshold The new volatility threshold (in 1e18 precision)
-    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external;
+    function setVolatilityThreshold(
+        IERC20 asset,
+        uint256 newThreshold
+    ) external;
+
+    /// @notice Returns the token registry oracle contract
+    /// @return The ITokenRegistryOracle interface
+    function tokenRegistryOracle() external view returns (ITokenRegistryOracle);
 
     /// @notice Returns the StrategyManager contract
     /// @return The IStrategyManager interface
