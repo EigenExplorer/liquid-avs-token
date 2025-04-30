@@ -336,10 +336,21 @@ export async function testAddToken() {
     let passing = true;
     const functionName = "addToken";
     const abi = parseAbi([
-      "function addToken(address,uint8,uint256,uint256,address)",
+      "function addToken(address,uint8,uint256,uint256,address,uint8,address,uint8,address,bytes4)",
     ]);
 
-    const args: [string, number, string, string, string] = [
+    const args: [
+      string,
+      number,
+      string,
+      string,
+      string,
+      number,
+      string,
+      number,
+      string,
+      `0x${string}`
+    ] = [
       NETWORK === "holesky"
         ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
         : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
@@ -349,6 +360,13 @@ export async function testAddToken() {
       NETWORK === "holesky"
         ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
         : "0x8ca7a5d6f3acd3a7a8bc468a8cd0fb14b6bd28b6",
+      3,
+      "0xac3E018457B222d93114458476f3E3416Abbe38F",
+      1,
+      NETWORK === "holesky"
+        ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3"
+        : "0xac3E018457B222d93114458476f3E3416Abbe38F",
+      "0x07a2d13a",
     ];
 
     await addToken(...args);
@@ -374,6 +392,13 @@ export async function testAddToken() {
         NETWORK === "holesky"
           ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
           : "0x8ca7a5d6f3acd3a7a8bc468a8cd0fb14b6bd28b6",
+        3,
+        "0xac3E018457B222d93114458476f3E3416Abbe38F",
+        1,
+        NETWORK === "holesky"
+          ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3"
+          : "0xac3E018457B222d93114458476f3E3416Abbe38F",
+        "0x07a2d13a",
       ],
     });
     passing = compareTxData(txData, expectedTxData, abi);

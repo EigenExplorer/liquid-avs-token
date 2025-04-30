@@ -18,11 +18,16 @@ async function manualAddToken() {
     // ------------------------------------------------------------------------------------
     // Function params, edit these!
     // ------------------------------------------------------------------------------------
-    const tokenAddress = "0x";
-    const decimals = 18;
-    const initialPrice = "1000000000000000000";
-    const volatilityThreshold = "50000000000000000";
-    const strategyAddress = "0x";
+    const tokenAddress: string = "0x";
+    const decimals: number = 18;
+    const initialPrice: string = "1000000000000000000";
+    const volatilityThreshold: string = "50000000000000000";
+    const strategyAddress: string = "0x";
+    const primaryType: number = 1;
+    const primarySource: string = "0x";
+    const needsArg: number = 0;
+    const fallbackSource: string = "0x";
+    const fallbackFn: `0x${string}` = "0x";
     // ------------------------------------------------------------------------------------
 
     await refreshDeployment();
@@ -31,7 +36,12 @@ async function manualAddToken() {
       decimals,
       initialPrice,
       volatilityThreshold,
-      strategyAddress
+      strategyAddress,
+      primaryType,
+      primarySource,
+      needsArg,
+      fallbackSource,
+      fallbackFn
     );
 
     const pendingTransactions = (
