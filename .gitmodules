@@ -10,7 +10,6 @@
 [submodule "lib/eigenlayer-contracts"]
 	path = lib/eigenlayer-contracts
 	url = https://github.com/Layr-Labs/eigenlayer-contracts
-	branch = dev
 [submodule "lib/foundry-chainlink-toolkit"]
 	path = lib/foundry-chainlink-toolkit
 	url = https://github.com/smartcontractkit/foundry-chainlink-toolkit

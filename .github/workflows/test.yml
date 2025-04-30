@@ -37,11 +37,7 @@ jobs:
           git submodule init
           git submodule update
 
-          cd lib/eigenlayer-contracts
-          git checkout dev
-          cd ../..
-
-          forge install --no-commit
+          forge install
 
       - name: Run Forge build
         run: |
@@ -52,7 +48,7 @@ jobs:
           chmod +x solc-static-linux
           ln -sf solc-static-linux solc
           export PATH="$PATH:$HOME/.cache/solidity"
-          
+
           forge --version
           forge build --sizes --optimizer-runs 200 --via-ir --use solc:0.8.27
         id: build
