@@ -160,7 +160,34 @@ contract Deploy is Script, Test {
         writeDeploymentOutput();
     }
 
-    // -------------------- BEGIN CHANGED SECTION: loadConfig parses new oracle fields --------------------
+    // Helper function to count array entries
+    function _countTokens(
+        string memory deployConfigData
+    ) internal returns (uint256) {
+        uint256 i = 0;
+        while (true) {
+            string memory prefix = string.concat(
+                ".tokens[",
+                vm.toString(i),
+                "].addresses.token"
+            );
+            try this._readAddress(deployConfigData, prefix) returns (address) {
+                i++;
+            } catch {
+                break;
+            }
+        }
+        return i;
+    }
+
+    // Helper for try/catch (must be external or public)
+    function _readAddress(
+        string memory deployConfigData,
+        string memory jsonPath
+    ) external pure returns (address) {
+        return stdJson.readAddress(deployConfigData, jsonPath);
+    }
+
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
         string memory networkConfigPath = "script/configs/holesky.json";
@@ -183,7 +210,7 @@ contract Deploy is Script, Test {
         // Load deployment-specific config
         string memory deployConfigPath = string(
             bytes(
-                string.concat("script/configs/holesky/", deployConfigFileName)
+                string.concat("script/configs/local/", deployConfigFileName)
             )
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);
@@ -209,10 +236,7 @@ contract Deploy is Script, Test {
         );
 
         // Detect the number of tokens in the JSON array
-        uint256 numTokens = stdJson.readUint(
-            deployConfigData,
-            ".tokens.length"
-        );
+        uint256 numTokens = _countTokens(deployConfigData);
         tokens = new TokenConfig[](numTokens);
 
         for (uint256 i = 0; i < numTokens; i++) {
