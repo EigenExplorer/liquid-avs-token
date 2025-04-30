@@ -183,6 +183,7 @@ contract Deploy is Script, Test {
     ) external pure returns (address) {
         return stdJson.readAddress(deployConfigData, jsonPath);
     }
+    
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
         string memory networkConfigPath = "script/configs/holesky.json";

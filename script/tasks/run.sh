@@ -29,7 +29,7 @@
 #  5. TRO_UpdatePrices
 
 # Task files not tested:
-#  1. LTM_DelegateNodes (out of scope for v1)
+#  1. LTM_UndelegateNodes (out of scope for v1)
 
 # Instructions:
 # To load env file: source .env
@@ -67,11 +67,11 @@ OUTPUT_FILE="/local/deployment_data.json"
 RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb" # mainnet: "0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
 
 # Deploy contracts (replace Mainnet <> Holesky to switch chains)
-forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:DeployHolesky \
+forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:Deploy \
     --rpc-url $RPC_URL --broadcast \
     --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string,string)" \
-    -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
+    --sig "run(string)" \
+    -- $DEPLOYMENT_CONFIG_FILE
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION
