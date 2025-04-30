@@ -23,6 +23,7 @@ export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY;
 export let LIQUID_TOKEN_ADDRESS = "";
 export let LIQUID_TOKEN_MANAGER_ADDRESS = "";
 export let STAKER_NODE_COORDINATOR_ADDRESS = "";
+export let TOKEN_REGISTRY_ORACLE_ADDRESS = "";
 export let PRICE_UPDATER = "";
 export let ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY; // Updates from deployment data if not local
 export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY; // Updates from deployment data if not local
@@ -216,6 +217,9 @@ export async function refreshDeploymentAddresses() {
     );
     STAKER_NODE_COORDINATOR_ADDRESS = String(
       output.contractDeployments.proxy.stakerNodeCoordinator.address
+    );
+    TOKEN_REGISTRY_ORACLE_ADDRESS = String(
+      output.contractDeployments.proxy.tokenRegistryOracle.address
     );
     ADMIN = String(output.roles.admin);
     PAUSER = String(output.roles.pauser);
