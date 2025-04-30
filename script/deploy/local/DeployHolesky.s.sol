@@ -67,7 +67,7 @@ contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/local/deployment_data.json";
 
     // Network-level config
     address public strategyManager;

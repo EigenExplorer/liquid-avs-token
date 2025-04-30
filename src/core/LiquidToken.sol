@@ -78,7 +78,6 @@ contract LiquidToken is
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
-        // Set token registry oracle if provided
         tokenRegistryOracle = init.tokenRegistryOracle;
     }
 

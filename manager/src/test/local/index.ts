@@ -11,6 +11,8 @@ import {
   testSetVolatilityThreshold,
   testUnpauseLiquidToken,
   testUpgradeStakerNodeImplementation,
+  testBatchUpdateRates,
+  testUpdateAllPricesIfNeeded,
 } from "./tasks";
 
 /**
@@ -35,6 +37,8 @@ async function testAllTasks() {
     await testSetVolatilityThreshold();
     await testUnpauseLiquidToken();
     await testUpgradeStakerNodeImplementation();
+    await testUpdateAllPricesIfNeeded();
+    await testBatchUpdateRates();
   } catch {}
 }
 
