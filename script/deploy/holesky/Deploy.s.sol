@@ -142,17 +142,25 @@ contract Deploy is Script, Test {
         deployProxies();
         initializeProxies();
 
-        configureTokens();
-        //configureRoles();
+        // Grant role to script for oracle config
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
+
+        configureOracle();
+        tokenRegistryOracle.revokeRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
 
         transferOwnership();
 
         vm.stopBroadcast();
 
-        // Post-deployment verification
         verifyDeployment();
 
-        // Write deployment results
         writeDeploymentOutput();
     }
 
@@ -493,29 +501,23 @@ contract Deploy is Script, Test {
         );
     }
 
-    function configureTokens() internal {
+    function configureOracle() internal {
         for (uint256 i = 0; i < tokens.length; i++) {
-            // Skip tokens that already exist
+            // Skip native tokens (sourceType==0 and primarySource==0)
             if (
-                liquidTokenManager.tokenIsSupported(
-                    IERC20(tokens[i].addresses.token)
-                )
+                tokens[i].oracle.sourceType == 0 &&
+                 tokens[i].oracle.primarySource == address(0)
             ) {
                 continue;
             }
 
-            TokenConfig memory t = tokens[i];
-            liquidTokenManager.addToken(
-                IERC20(t.addresses.token),
-                uint8(t.params.decimals),
-                uint256(t.params.pricePerUnit),
-                uint256(t.params.volatilityThreshold),
-                IStrategy(t.addresses.strategy),
-                t.oracle.sourceType,
-                t.oracle.primarySource,
-                t.oracle.needsArg,
-                t.oracle.fallbackSource,
-                t.oracle.fallbackSelector
+            tokenRegistryOracle.configureToken(
+                address(tokens[i].addresses.token),
+                tokens[i].oracle.sourceType,
+                tokens[i].oracle.primarySource,
+                tokens[i].oracle.needsArg,
+                tokens[i].oracle.fallbackSource,
+                tokens[i].oracle.fallbackSelector
             );
         }
     }
