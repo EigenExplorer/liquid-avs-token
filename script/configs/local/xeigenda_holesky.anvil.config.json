@@ -22,14 +22,14 @@
       },
       "params": {
         "pricePerUnit": "1030000000000000000",
-        "volatilityThreshold": "50000000000000000",
+        "volatilityThreshold": "500000000000000000",
         "decimals": 18
       },
       "oracle": {
         "sourceType": 1,
         "primarySource": "0x86392dC19c0b719886221c78AB11eb8Cf5c52812",
         "needsArg": 1,
-        "fallbackSource": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "fallbackSource": "0x3f1c547b21f65e10480de3ad8e19faac46c95034",
         "fallbackSelector": "0x7a28fb88"
       }
     },
@@ -40,16 +40,16 @@
         "strategy": "0x3a8fbdf9e77dfc25d09741f51d3e181b25d0c4e0"
       },
       "params": {
-        "pricePerUnit": "1080000000000000000",
-        "volatilityThreshold": "50000000000000000",
+        "pricePerUnit": "967200000000000000",
+        "volatilityThreshold": "500000000000000000",
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 1,
-        "primarySource": "0x536218f9E9Eb48863970252233c8F271f554C2d0",
+        "sourceType": 3,
+        "primarySource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
         "needsArg": 0,
-        "fallbackSource": "0xae78736Cd615f374D3085123A210448E74Fc6393",
-        "fallbackSelector": "0x8af07e89"
+        "fallbackSource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
+        "fallbackSelector": "0xe6aa216c"
       }
     }
   ],

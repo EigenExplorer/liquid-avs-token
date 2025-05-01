@@ -141,24 +141,12 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
-
-        // Grant role to script for oracle config
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
         configureOracle();
-        tokenRegistryOracle.revokeRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
-
         transferOwnership();
 
         vm.stopBroadcast();
 
         verifyDeployment();
-
         writeDeploymentOutput();
     }
 
@@ -412,7 +400,7 @@ contract Deploy is Script, Test {
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner: admin,
+                initialOwner:  msg.sender, // <-- transferred to admin later on
                 priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
                 liquidToken: address(liquidToken), // <-- on-chain contract
                 liquidTokenManager: ILiquidTokenManager(
@@ -501,6 +489,11 @@ contract Deploy is Script, Test {
     }
 
     function configureOracle() internal {
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
         for (uint256 i = 0; i < tokens.length; i++) {
             // Skip native tokens (sourceType==0 and primarySource==0)
             if (
@@ -519,6 +512,11 @@ contract Deploy is Script, Test {
                 tokens[i].oracle.fallbackSelector
             );
         }
+
+        tokenRegistryOracle.revokeRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
     }
 
     function transferOwnership() internal {
@@ -527,6 +525,10 @@ contract Deploy is Script, Test {
             proxyAdmin.owner() == admin,
             "Proxy admin ownership transfer failed"
         );
+
+        // Transfer TokenRegistryOracle admin role
+        tokenRegistryOracle.grantRole(0x00, admin);
+        tokenRegistryOracle.revokeRole(0x00, msg.sender);
     }
 
     function verifyDeployment() internal view {
