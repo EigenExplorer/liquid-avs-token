@@ -141,18 +141,12 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
-
-        configureTokens();
-        //configureRoles();
-
+        configureOracle();
         transferOwnership();
 
         vm.stopBroadcast();
 
-        // Post-deployment verification
         verifyDeployment();
-
-        // Write deployment results
         writeDeploymentOutput();
     }
 
@@ -406,7 +400,7 @@ contract Deploy is Script, Test {
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner: admin,
+                initialOwner:  msg.sender, // <-- transferred to admin later on
                 priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
                 liquidToken: address(liquidToken), // <-- on-chain contract
                 liquidTokenManager: ILiquidTokenManager(
@@ -494,31 +488,35 @@ contract Deploy is Script, Test {
         );
     }
 
-    function configureTokens() internal {
+    function configureOracle() internal {
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
         for (uint256 i = 0; i < tokens.length; i++) {
-            // Skip tokens that already exist
+            // Skip native tokens (sourceType==0 and primarySource==0)
             if (
-                liquidTokenManager.tokenIsSupported(
-                    IERC20(tokens[i].addresses.token)
-                )
+                tokens[i].oracle.sourceType == 0 &&
+                tokens[i].oracle.primarySource == address(0)
             ) {
                 continue;
             }
 
-            TokenConfig memory t = tokens[i];
-            liquidTokenManager.addToken(
-                IERC20(t.addresses.token),
-                uint8(t.params.decimals),
-                uint256(t.params.pricePerUnit),
-                uint256(t.params.volatilityThreshold),
-                IStrategy(t.addresses.strategy),
-                t.oracle.sourceType,
-                t.oracle.primarySource,
-                t.oracle.needsArg,
-                t.oracle.fallbackSource,
-                t.oracle.fallbackSelector
+            tokenRegistryOracle.configureToken(
+                address(tokens[i].addresses.token),
+                tokens[i].oracle.sourceType,
+                tokens[i].oracle.primarySource,
+                tokens[i].oracle.needsArg,
+                tokens[i].oracle.fallbackSource,
+                tokens[i].oracle.fallbackSelector
             );
         }
+
+        tokenRegistryOracle.revokeRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
     }
 
     function transferOwnership() internal {
@@ -527,6 +525,10 @@ contract Deploy is Script, Test {
             proxyAdmin.owner() == admin,
             "Proxy admin ownership transfer failed"
         );
+
+        // Transfer TokenRegistryOracle admin role
+        tokenRegistryOracle.grantRole(0x00, admin);
+        tokenRegistryOracle.revokeRole(0x00, msg.sender);
     }
 
     function verifyDeployment() internal view {
