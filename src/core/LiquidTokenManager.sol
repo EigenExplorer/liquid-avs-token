@@ -150,7 +150,6 @@ contract LiquidTokenManager is
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
-    /// @param initialPrice Initial price for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
     /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
@@ -161,7 +160,6 @@ contract LiquidTokenManager is
     function addToken(
         IERC20 token,
         uint8 decimals,
-        uint256 initialPrice,
         uint256 volatilityThreshold,
         IStrategy strategy,
         uint8 primaryType,
@@ -174,7 +172,6 @@ contract LiquidTokenManager is
             revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
-        if (initialPrice == 0) revert InvalidPrice();
         if (
             volatilityThreshold != 0 &&
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
@@ -182,7 +179,6 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         // Price source validation and configuration
-        // Allow native tokens (price always 1) to skip price source config
         bool isNative = (primaryType == 0 && primarySource == address(0));
         if (!isNative && (primaryType < 1 || primaryType > 4))
             revert InvalidPriceSource();
@@ -206,19 +202,27 @@ contract LiquidTokenManager is
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
+        uint256 fetchedPrice = isNative ? 1e18 : 0;
+        if (!isNative) {
+            // Call Oracle for the price immediately after configuration
+            (uint256 price, bool ok) = tokenRegistryOracle
+                ._getTokenPrice_getter(address(token));
+            require(ok && price > 0, "Token price fetch failed");
+            fetchedPrice = price;
+        }
+
         tokens[token] = TokenInfo({
             decimals: decimals,
-            pricePerUnit: isNative ? 1e18 : initialPrice,
+            pricePerUnit: fetchedPrice,
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
-
         supportedTokens.push(token);
 
         emit TokenAdded(
             token,
             decimals,
-            initialPrice,
+            fetchedPrice,
             volatilityThreshold,
             address(strategy),
             msg.sender
@@ -516,7 +520,7 @@ contract LiquidTokenManager is
         }
     }
 
-    /// @notice Undelegate a set of staker nodes from their operators
+        /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
     /// @dev OUT OF SCOPE FOR V1
     /**
@@ -639,5 +643,4 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
-
 }

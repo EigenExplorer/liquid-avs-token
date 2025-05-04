@@ -114,4 +114,9 @@ interface ITokenRegistryOracle {
     /// @notice Get last price update timestamp
     /// @return Timestamp of last price update
     function lastPriceUpdate() external view returns (uint256);
+    /// @notice Get price for a token
+    /// @return price of a token and success/failure of this
+    function _getTokenPrice_getter(
+        address token
+    ) external view returns (uint256 price, bool success);
 }

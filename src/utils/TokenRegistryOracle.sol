@@ -85,7 +85,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Configure a token with its primary and fallback sources
      * @param token Token address
-     * @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+     * @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol)
      * @param primarySource Primary source address
      * @param needsArg Whether fallback fn needs args
      * @param fallbackSource Address of the fallback source contract
@@ -589,22 +589,22 @@ contract TokenRegistryOracle is
         return liquidTokenManager.getTokenInfo(IERC20(token)).pricePerUnit;
     }
 
-    // =========================================================================
-    // TESTING FUNCTIONS - COMMENT OUT FOR PRODUCTION
-    // =========================================================================
-
     /**
-     * @notice TEST ONLY: Get token price from primary source
-     * @dev This function exposes the internal _getTokenPrice for testing purposes
+     * @notice helper for addtoken: Get token price from primary source
+     * @dev This function exposes the internal _getTokenPrice for testing/setting purposes
      * @param token The token address to get the price for
-     * @return price The price in ETH terms (18 decimals)
+     * @return price The price in based terms (18 decimals)
      * @return success Whether the price fetch was successful
      */
-    function _getTokenPrice_exposed(
+    function _getTokenPrice_getter(
         address token
     ) external view returns (uint256 price, bool success) {
         return _getTokenPrice(token);
     }
+
+    // =========================================================================
+    // TESTING FUNCTIONS - COMMENT OUT FOR PRODUCTION
+    // =========================================================================
 
     /**
      * @notice TEST ONLY: Get token price from fallback source

@@ -21,7 +21,7 @@
         "strategy": "0x7d704507b76571a51d9cae8addabbfd0ba0e63d3"
       },
       "params": {
-        "pricePerUnit": "848500000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -40,7 +40,7 @@
         "strategy": "0x3a8fbdf9e77dfc25d09741f51d3e181b25d0c4e0"
       },
       "params": {
-        "pricePerUnit": "967200000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -49,7 +49,7 @@
         "primarySource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
         "needsArg": 0,
         "fallbackSource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
-        "fallbackSelector": "0xe6aa216c"
+        "fallbackSelector": "0x8af07e89"
       }
     },
     {
@@ -59,7 +59,7 @@
         "strategy": "0x05037a81bd7b4c9e0f7b430f1f2a22c31a2fd943"
       },
       "params": {
-        "pricePerUnit": "1020100000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -78,7 +78,7 @@
         "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
       },
       "params": {
-        "pricePerUnit": "1138000000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -97,7 +97,7 @@
         "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
       },
       "params": {
-        "pricePerUnit": "1000000000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "0",
         "decimals": 18
       },
@@ -116,7 +116,7 @@
         "strategy": "0x7673a47463f80c6a3553db9e54c8cdcd5313d0ac"
       },
       "params": {
-        "pricePerUnit": "1000000000000000000",
+        "pricePerUnit": 0,
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -130,8 +130,8 @@
     }
   ],
   "roles": {
-    "admin": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534",
+    "admin": "0xff41629bd7f10dab1325271ffad4b39b265b76cd",
     "pauser": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
-    "priceUpdater": "0xfF41629BD7f10DAB1325271ffAD4b39b265b76cD"
+    "priceUpdater": "0xff41629bd7f10dab1325271ffad4b39b265b76cd"
   }
 }
