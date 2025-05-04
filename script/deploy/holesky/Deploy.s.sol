@@ -141,15 +141,52 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
-        configureOracle();
-        transferOwnership();
+        // 1. Grant all required roles, but DO NOT transfer admin yet
+        grantRequiredRoles();
 
-        vm.stopBroadcast();
+        // 2. Grant TOKEN_CONFIGURATOR_ROLE to msg.sender for token configuration
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
+        // 3. Configure tokens in oracle
+        configureOracle();
+
+        // 4. Revoke TOKEN_CONFIGURATOR_ROLE from msg.sender
+        tokenRegistryOracle.revokeRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
 
         verifyDeployment();
         writeDeploymentOutput();
+        // 5. Transfer admin role and renounce from deployer
+        transferOracleAdmin();
+
+        // 6. Transfer ProxyAdmin ownership
+        transferOwnership();
+        vm.stopBroadcast();
     }
 
+    function grantRequiredRoles() internal {
+        // Grant RATE_UPDATER_ROLE to LiquidToken
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            address(liquidToken)
+        );
+        emit RoleAssigned(
+            "TokenRegistryOracle",
+            "RATE_UPDATER_ROLE",
+            address(liquidToken)
+        );
+    }
+
+    function transferOracleAdmin() internal {
+        // Transfer DEFAULT_ADMIN_ROLE (0x00) to the final admin
+        tokenRegistryOracle.grantRole(0x00, admin);
+        tokenRegistryOracle.renounceRole(0x00, msg.sender);
+    }
     // Helper function to count array entries
     function _countTokens(
         string memory deployConfigData
@@ -177,7 +214,6 @@ contract Deploy is Script, Test {
     ) external pure returns (address) {
         return stdJson.readAddress(deployConfigData, jsonPath);
     }
-    
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
         string memory networkConfigPath = "script/configs/holesky.json";
@@ -400,7 +436,7 @@ contract Deploy is Script, Test {
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner:  msg.sender, // <-- transferred to admin later on
+                initialOwner: admin,
                 priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
                 liquidToken: address(liquidToken), // <-- on-chain contract
                 liquidTokenManager: ILiquidTokenManager(
@@ -489,11 +525,6 @@ contract Deploy is Script, Test {
     }
 
     function configureOracle() internal {
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
-
         for (uint256 i = 0; i < tokens.length; i++) {
             // Skip native tokens (sourceType==0 and primarySource==0)
             if (
@@ -502,7 +533,6 @@ contract Deploy is Script, Test {
             ) {
                 continue;
             }
-
             tokenRegistryOracle.configureToken(
                 address(tokens[i].addresses.token),
                 tokens[i].oracle.sourceType,
@@ -512,11 +542,6 @@ contract Deploy is Script, Test {
                 tokens[i].oracle.fallbackSelector
             );
         }
-
-        tokenRegistryOracle.revokeRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
     }
 
     function transferOwnership() internal {
@@ -525,10 +550,6 @@ contract Deploy is Script, Test {
             proxyAdmin.owner() == admin,
             "Proxy admin ownership transfer failed"
         );
-
-        // Transfer TokenRegistryOracle admin role
-        tokenRegistryOracle.grantRole(0x00, admin);
-        tokenRegistryOracle.revokeRole(0x00, msg.sender);
     }
 
     function verifyDeployment() internal view {
@@ -749,7 +770,7 @@ contract Deploy is Script, Test {
             "Rate Updater role not assigned to LiquidToken in TokenRegistryOracle"
         );
     }
-    /*
+
     function configureRoles() internal {
         // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
         tokenRegistryOracle.grantRole(
@@ -768,7 +789,6 @@ contract Deploy is Script, Test {
             address(liquidToken)
         );
     }
-    */
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";

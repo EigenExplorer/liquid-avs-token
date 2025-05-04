@@ -151,7 +151,6 @@ interface ILiquidTokenManager {
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
-    /// @param initialPrice Initial price for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
     /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
@@ -162,7 +161,6 @@ interface ILiquidTokenManager {
     function addToken(
         IERC20 token,
         uint8 decimals,
-        uint256 initialPrice,
         uint256 volatilityThreshold,
         IStrategy strategy,
         uint8 primaryType,
@@ -302,4 +300,5 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
+
 }
