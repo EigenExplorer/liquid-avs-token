@@ -141,6 +141,7 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+<<<<<<< HEAD
         // 1. Grant all required roles, but DO NOT transfer admin yet
         grantRequiredRoles();
 
@@ -152,6 +153,10 @@ contract Deploy is Script, Test {
 
         // 3. Configure tokens in oracle
         configureOracle();
+=======
+        configureOracle();
+        transferOwnership();
+>>>>>>> dev
 
         // 4. Revoke TOKEN_CONFIGURATOR_ROLE from msg.sender
         tokenRegistryOracle.revokeRole(
