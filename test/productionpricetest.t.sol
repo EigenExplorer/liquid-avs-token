@@ -130,135 +130,141 @@ contract RealWorldTokenPriceTest is BaseTest {
     bytes32 internal constant RATE_UPDATER_ROLE =
         keccak256("RATE_UPDATER_ROLE");
 
-    function setUp() public override {
-        // Detect network before doing anything else
-        _detectNetwork();
+   function setUp() public override {
+    // Detect network before doing anything else
+    _detectNetwork();
 
-        // Now call parent setup (which initializes all contracts)
-        super.setUp();
+    // Now call parent setup (which initializes all contracts)
+    super.setUp();
 
-        // CRITICAL FIX: Address that Foundry is using internally for test execution
-        address foundryInternalCaller = 0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7;
+    // CRITICAL FIX: Address that Foundry is using internally for test execution
+    address foundryInternalCaller = 0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7;
 
-        // Grant necessary roles to various accounts
-        vm.startPrank(admin);
+    // Grant necessary roles to various accounts
+    vm.startPrank(admin);
 
-        // LiquidTokenManager roles - include Foundry internal address
-        liquidTokenManager.grantRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.PRICE_UPDATER_ROLE(),
-            foundryInternalCaller
-        );
+    // LiquidTokenManager roles - include Foundry internal address
+    liquidTokenManager.grantRole(
+        liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+        foundryInternalCaller
+    );
+    liquidTokenManager.grantRole(
+        liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+        foundryInternalCaller
+    );
+    liquidTokenManager.grantRole(
+        liquidTokenManager.PRICE_UPDATER_ROLE(),
+        foundryInternalCaller
+    );
 
-        // TokenRegistryOracle roles - this is the critical part
-        tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
-        tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, foundryInternalCaller);
+    // TokenRegistryOracle roles - this is the critical part
+    tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
+    tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, foundryInternalCaller);
 
-        // Also grant roles to the test contract itself
-        tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, address(this));
-        tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
+    // Also grant roles to the test contract itself
+    tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, address(this));
+    tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
 
-        vm.stopPrank();
+    vm.stopPrank();
 
-        // Create mock deposit token and mock strategy for testing
-        mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
-        mockDepositToken.mint(user1, 1000 ether);
-        mockTokenStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(mockDepositToken))
-        );
+    // Create mock deposit token and mock strategy for testing
+    mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
+    mockDepositToken.mint(user1, 1000 ether);
+    mockTokenStrategy = new MockStrategy(
+        strategyManager,
+        IERC20(address(mockDepositToken))
+    );
 
-        // Set up token categories and lists based on detected network
-        if (isHolesky) {
-            _setupHoleskyTokenLists();
-            console.log("\n=== RUNNING TESTS ON HOLESKY TESTNET ===\n");
-        } else {
-            _setupTokenLists(); // Original mainnet setup
-            console.log("\n=== RUNNING TESTS ON ETHEREUM MAINNET ===\n");
-        }
-
-        // Add tokens to LiquidTokenManager
-        _addTokensToManager();
-
-        // Add mock token to LiquidTokenManager with proper configuration
-        vm.startPrank(admin);
-        liquidTokenManager.addToken(
-            IERC20(address(mockDepositToken)),
-            18,
-            1e18, // 1:1 with ETH
-            0,
-            mockTokenStrategy,
-            SOURCE_TYPE_CHAINLINK, // Use valid source type
-            address(1), // Use a dummy non-zero address to pass validation
-            0, // No arg needed
-            address(0), // No fallback
-            bytes4(0) // No fallback selector
-        );
-        tokenAdded[address(mockDepositToken)] = true;
-
-        // Manually set the mock token price
-        tokenRegistryOracle.updateRate(IERC20(address(mockDepositToken)), 1e18);
-        vm.stopPrank();
-
-        // Approve token for LiquidToken contract
-        vm.startPrank(user1);
-        mockDepositToken.approve(address(liquidToken), type(uint256).max);
-        vm.stopPrank();
-
-        // Create token status report
-        _createTokenStatusReport();
-
-        console.log(
-            "Foundry internal caller has ORACLE_ADMIN_ROLE:",
-            tokenRegistryOracle.hasRole(
-                ORACLE_ADMIN_ROLE,
-                foundryInternalCaller
-            )
-        );
-        console.log(
-            "Foundry internal caller has RATE_UPDATER_ROLE:",
-            tokenRegistryOracle.hasRole(
-                RATE_UPDATER_ROLE,
-                foundryInternalCaller
-            )
-        );
-        mockNativeToken = new MockERC20("EigenInu Token", "EINU");
-        mockNativeToken.mint(user1, 1000 ether);
-
-        // Create strategy for native token
-        nativeTokenStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(mockNativeToken))
-        );
-
-        // Approve native token for LiquidToken contract
-        vm.startPrank(user1);
-        mockNativeToken.approve(address(liquidToken), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(admin);
-        liquidTokenManager.addToken(
-            IERC20(address(mockNativeToken)),
-            18,
-            1e18, // Price is always 1:1 for native tokens
-            0, // No volatility threshold
-            nativeTokenStrategy,
-            0, // SOURCE_TYPE_NATIVE = 0
-            address(0), // No price source (critical)
-            0, // No args
-            address(0), // No fallback
-            bytes4(0) // No fallback selector
-        );
-        tokenAdded[address(mockNativeToken)] = true;
-        vm.stopPrank();
+    // Set up token categories and lists based on detected network
+    if (isHolesky) {
+        _setupHoleskyTokenLists();
+        console.log("\n=== RUNNING TESTS ON HOLESKY TESTNET ===\n");
+    } else {
+        _setupTokenLists(); // Original mainnet setup
+        console.log("\n=== RUNNING TESTS ON ETHEREUM MAINNET ===\n");
     }
+
+    // Add tokens to LiquidTokenManager
+    _addTokensToManager();
+
+    // Mock the oracle price getter - ADDED THIS
+    vm.mockCall(
+        address(tokenRegistryOracle),
+        abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(mockDepositToken)),
+        abi.encode(1e18, true) // price = 1e18, success = true
+    );
+
+    // Add mock token to LiquidTokenManager with proper configuration
+    vm.startPrank(admin);
+    liquidTokenManager.addToken(
+        IERC20(address(mockDepositToken)),
+        18,
+        0,
+        mockTokenStrategy,
+        SOURCE_TYPE_CHAINLINK, // Use valid source type
+        address(1), // Use a dummy non-zero address to pass validation
+        0, // No arg needed
+        address(0), // No fallback
+        bytes4(0) // No fallback selector
+    );
+    tokenAdded[address(mockDepositToken)] = true;
+
+    // Manually set the mock token price
+    tokenRegistryOracle.updateRate(IERC20(address(mockDepositToken)), 1e18);
+    vm.stopPrank();
+
+    // Approve token for LiquidToken contract
+    vm.startPrank(user1);
+    mockDepositToken.approve(address(liquidToken), type(uint256).max);
+    vm.stopPrank();
+
+    // Create token status report
+    _createTokenStatusReport();
+
+    console.log(
+        "Foundry internal caller has ORACLE_ADMIN_ROLE:",
+        tokenRegistryOracle.hasRole(
+            ORACLE_ADMIN_ROLE,
+            foundryInternalCaller
+        )
+    );
+    console.log(
+        "Foundry internal caller has RATE_UPDATER_ROLE:",
+        tokenRegistryOracle.hasRole(
+            RATE_UPDATER_ROLE,
+            foundryInternalCaller
+        )
+    );
+    mockNativeToken = new MockERC20("EigenInu Token", "EINU");
+    mockNativeToken.mint(user1, 1000 ether);
+
+    // Create strategy for native token
+    nativeTokenStrategy = new MockStrategy(
+        strategyManager,
+        IERC20(address(mockNativeToken))
+    );
+
+    // Approve native token for LiquidToken contract
+    vm.startPrank(user1);
+    mockNativeToken.approve(address(liquidToken), type(uint256).max);
+    vm.stopPrank();
+
+    // For native token, we don't need to mock Oracle calls since it uses fixed 1e18 price
+    vm.startPrank(admin);
+    liquidTokenManager.addToken(
+        IERC20(address(mockNativeToken)),
+        18,
+        0, // No volatility threshold
+        nativeTokenStrategy,
+        0, // SOURCE_TYPE_NATIVE = 0
+        address(0), // No price source (critical)
+        0, // No args
+        address(0), // No fallback
+        bytes4(0) // No fallback selector
+    );
+    tokenAdded[address(mockNativeToken)] = true;
+    vm.stopPrank();
+}
 
     // Simplified network detection that just checks the chain ID
     function _detectNetwork() internal {
@@ -462,7 +468,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(MAINNET_RETH),
                 18,
-                1e18,
                 0,
                 rethStrategy,
                 SOURCE_TYPE_CHAINLINK,
@@ -488,7 +493,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(MAINNET_STETH),
                 18,
-                1e18,
                 0,
                 stethStrategy,
                 SOURCE_TYPE_CHAINLINK,
@@ -511,7 +515,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(MAINNET_UNIBTC),
                 18,
-                29.7e18,
                 0,
                 unibtcStrategy,
                 SOURCE_TYPE_CHAINLINK, // Now unified!
@@ -530,7 +533,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(MAINNET_CBETH),
                 18,
-                1e18,
                 0,
                 cbethStrategy,
                 SOURCE_TYPE_CHAINLINK,
@@ -554,7 +556,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(MAINNET_OSETH),
                 18,
-                1e18,
                 0,
                 osethStrategy,
                 SOURCE_TYPE_CURVE,
@@ -617,7 +618,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(HOLESKY_RETH),
                 18,
-                initialPrices[0],
                 volatilityThreshold,
                 rethStrategy,
                 SOURCE_TYPE_PROTOCOL,
@@ -641,7 +641,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(HOLESKY_STETH),
                 18,
-                initialPrices[1],
                 volatilityThreshold,
                 stethStrategy,
                 SOURCE_TYPE_PROTOCOL,
@@ -665,7 +664,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(HOLESKY_LSETH),
                 18,
-                initialPrices[2],
                 volatilityThreshold,
                 lsethStrategy,
                 SOURCE_TYPE_PROTOCOL,
@@ -689,7 +687,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(HOLESKY_ANKR_ETH),
                 18,
-                initialPrices[3],
                 volatilityThreshold,
                 ankrEthStrategy,
                 SOURCE_TYPE_PROTOCOL,
@@ -713,7 +710,6 @@ contract RealWorldTokenPriceTest is BaseTest {
             liquidTokenManager.addToken(
                 IERC20(HOLESKY_SFRXETH),
                 18,
-                initialPrices[4],
                 volatilityThreshold,
                 sfrxEthStrategy,
                 SOURCE_TYPE_PROTOCOL,

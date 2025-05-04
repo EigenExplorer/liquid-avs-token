@@ -343,23 +343,17 @@ contract LiquidTokenManagerTest is BaseTest {
         ) = _setupTokenWithMockFeed("New Token", "NEW");
 
         uint8 decimals = 18;
-        uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 0;
+        uint256 expectedPrice = 1e18; // Expected price to be returned
 
-        // DEBUG: Check if the current account has the required role
-        console.log(
-            "Account has DEFAULT_ADMIN_ROLE:",
-            liquidTokenManager.hasRole(
-                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-                address(this)
-            )
-        );
-        console.log(
-            "Account has STRATEGY_CONTROLLER_ROLE:",
-            liquidTokenManager.hasRole(
-                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-                address(this)
-            )
+        // Mock the oracle price getter to return a successful price
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(newToken)
+            ),
+            abi.encode(expectedPrice, true) // price = 1e18, success = true
         );
 
         // Use deployer instead of test contract
@@ -367,7 +361,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             newToken,
             decimals,
-            initialPrice,
             volatilityThreshold,
             newStrategy,
             SOURCE_TYPE_CHAINLINK,
@@ -390,7 +383,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
         assertEq(
             tokenInfo.pricePerUnit,
-            initialPrice,
+            expectedPrice,
             "Incorrect initial price"
         );
         assertEq(address(strategy), address(newStrategy), "Incorrect strategy");
@@ -429,7 +422,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             newToken,
             decimals,
-            initialPrice,
             volatilityThreshold,
             newStrategy,
             0, // primaryType
@@ -454,7 +446,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(0)),
             decimals,
-            initialPrice,
             volatilityThreshold,
             newStrategy,
             0, // primaryType
@@ -476,7 +467,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             newToken,
             decimals,
-            initialPrice,
             volatilityThreshold,
             IStrategy(address(0)),
             0, // primaryType
@@ -507,7 +497,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(testToken)),
             decimals,
-            initialPrice,
             volatilityThreshold,
             duplicateStrategy,
             0, // primaryType
@@ -529,7 +518,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             newToken,
             0,
-            initialPrice,
             volatilityThreshold,
             newStrategy,
             0, // primaryType
@@ -562,7 +550,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(token)),
             decimals,
-            price,
             volatilityThreshold,
             strategy,
             SOURCE_TYPE_CHAINLINK,
@@ -575,18 +562,27 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenSuccessForNoDecimalsFunction() public {
-        // DEBUG: Track test progress
         console.log("Starting testAddTokenSuccessForNoDecimalsFunction");
 
         MockERC20NoDecimals noDecimalsToken = new MockERC20NoDecimals();
         uint8 decimals = 6;
-        uint256 price = 1e18;
         uint256 volatilityThreshold = 0;
+        uint256 expectedPrice = 1e18;
         MockStrategy newStrategy = new MockStrategy(
             strategyManager,
             IERC20(address(noDecimalsToken))
         );
         MockChainlinkFeed feed = _createMockPriceFeed(int256(100000000), 8);
+
+        // Mock the oracle price getter
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(noDecimalsToken)
+            ),
+            abi.encode(expectedPrice, true) // price = 1e18, success = true
+        );
 
         console.log("Using deployer with admin role");
 
@@ -595,7 +591,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(noDecimalsToken)),
             decimals,
-            price,
             volatilityThreshold,
             newStrategy,
             SOURCE_TYPE_CHAINLINK,
@@ -609,24 +604,36 @@ contract LiquidTokenManagerTest is BaseTest {
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
             .getTokenInfo(IERC20(address(noDecimalsToken)));
         assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(tokenInfo.pricePerUnit, expectedPrice, "Incorrect price");
     }
 
     function testAddTokenFailsForZeroInitialPrice() public {
+        // Create token and setup contract
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
         uint256 volatilityThreshold = 0;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 
+        // Mock the oracle to return zero price
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(newToken)
+            ),
+            abi.encode(0, true) // price = 0, success = true
+        );
+
+        // Since we're configured to check for price > 0 in addToken, it should revert
         vm.prank(deployer);
-        vm.expectRevert(ILiquidTokenManager.InvalidPrice.selector);
+        vm.expectRevert("Token price fetch failed");
         liquidTokenManager.addToken(
             newToken,
             decimals,
-            0,
             volatilityThreshold,
             newStrategy,
-            0, // primaryType
-            address(0), // primarySource
+            1, // SOURCE_TYPE_CHAINLINK
+            address(0x1), // primarySource - just needs a non-zero address
             0, // needsArg
             address(0), // fallbackSource
             bytes4(0) // fallbackFn
@@ -645,7 +652,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             newToken,
             decimals,
-            price,
             volatilityThreshold,
             newStrategy,
             0, // primaryType
@@ -704,14 +710,22 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Setup initial token info
         uint8 decimals = 18;
-        uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 5e17; // 50%
+
+        // Mock the oracle price getter
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenToRemove)
+            ),
+            abi.encode(1e18, true) // price = 1e18, success = true
+        );
 
         // Configure the token in the manager - use a mock oracle address that's already set up
         liquidTokenManager.addToken(
             IERC20(address(tokenToRemove)),
             decimals,
-            initialPrice,
             volatilityThreshold,
             IStrategy(address(mockStrategy)),
             1, // SOURCE_TYPE_CHAINLINK
@@ -1246,7 +1260,6 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testMultipleTokenStrategyManagement() public {
         console.log("Starting testMultipleTokenStrategyManagement");
-        console.log("Using deployer with admin role for token management");
 
         // Create first test token and strategy
         MockERC20 token1 = new MockERC20("Test Token 1", "TT1");
@@ -1262,13 +1275,32 @@ contract LiquidTokenManagerTest is BaseTest {
             IERC20(address(token2))
         );
 
+        // Mock the oracle price getter for first token
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(token1)
+            ),
+            abi.encode(1 ether, true) // price = 1 ether, success = true
+        );
+
+        // Mock the oracle price getter for second token
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(token2)
+            ),
+            abi.encode(2 ether, true) // price = 2 ether, success = true
+        );
+
         vm.startPrank(admin);
 
         // Add first token
         liquidTokenManager.addToken(
             IERC20(address(token1)),
             18, // decimals
-            1 ether, // initial price
             0.05 * 1e18, // 5% volatility threshold
             IStrategy(address(strategy1)),
             SOURCE_TYPE_CHAINLINK,
@@ -1283,7 +1315,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(token2)),
             18, // decimals
-            2 ether, // initial price (different from token1)
             0.05 * 1e18, // 5% volatility threshold
             IStrategy(address(strategy2)),
             SOURCE_TYPE_CHAINLINK,
@@ -1347,13 +1378,22 @@ contract LiquidTokenManagerTest is BaseTest {
             8
         ); // 1 ETH
 
+        // Mock the oracle price getter
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(mockToken)
+            ),
+            abi.encode(1 ether, true) // price = 1 ether, success = true
+        );
+
         vm.startPrank(admin);
 
         // Add token with volatility threshold of 5%
         liquidTokenManager.addToken(
             IERC20(address(mockToken)),
             18, // decimals
-            1 ether, // initial price
             0.05 * 1e18, // 5% volatility threshold
             IStrategy(address(mockTokenStrategy)),
             SOURCE_TYPE_CHAINLINK,
@@ -1407,10 +1447,20 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Create mock strategy for token
         MockStrategy mockStrategy = new MockStrategy(strategyManager, token);
+
         // Setup initial token info
         uint8 decimals = 18;
-        uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 5e17; // 50%
+
+        // Mock the oracle price getter
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(token)
+            ),
+            abi.encode(1e18, true) // price = 1e18, success = true
+        );
 
         // Configure the token using the addToken function
         // This automatically configures it in the oracle
@@ -1418,7 +1468,6 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.addToken(
             IERC20(address(token)),
             decimals,
-            initialPrice,
             volatilityThreshold,
             IStrategy(address(mockStrategy)),
             1, // SOURCE_TYPE_CHAINLINK
@@ -1519,16 +1568,25 @@ contract LiquidTokenManagerTest is BaseTest {
             strategyManager,
             tokenWithBalance
         );
+
         // Setup initial token info
         uint8 decimals = 18;
-        uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 5e17; // 50%
+
+        // Mock the oracle price getter
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenWithBalance)
+            ),
+            abi.encode(1e18, true) // price = 1e18, success = true
+        );
 
         // Configure the token in the manager
         liquidTokenManager.addToken(
             IERC20(address(tokenWithBalance)),
             decimals,
-            initialPrice,
             volatilityThreshold,
             IStrategy(address(mockStrategy)),
             1, // SOURCE_TYPE_CHAINLINK
