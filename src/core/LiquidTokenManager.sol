@@ -520,7 +520,7 @@ contract LiquidTokenManager is
         }
     }
 
-        /// @notice Undelegate a set of staker nodes from their operators
+    /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
     /// @dev OUT OF SCOPE FOR V1
     /**
@@ -643,5 +643,4 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
-
 }

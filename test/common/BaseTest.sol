@@ -36,6 +36,8 @@ contract BaseTest is Test {
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours; // Prices are stale after 12 hours
+    //random salt
+    uint256 internal constant SAMPLE_SALT = 0xabcdef1234567890;
 
     // EigenLayer Contracts
     IStrategyManager public strategyManager;
@@ -461,7 +463,7 @@ contract BaseTest is Test {
         });
 
         vm.prank(deployer);
-        tokenRegistryOracle.initialize(init);
+        tokenRegistryOracle.initialize(init, SAMPLE_SALT);
 
         // Step 2: As deployer, grant admin/configurator roles to address(this)
         vm.startPrank(deployer);

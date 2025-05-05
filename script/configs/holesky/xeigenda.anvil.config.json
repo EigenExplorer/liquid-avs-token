@@ -130,8 +130,8 @@
     }
   ],
   "roles": {
-    "admin": "0xff41629bd7f10dab1325271ffad4b39b265b76cd",
+    "admin": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
     "pauser": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
-    "priceUpdater": "0xff41629bd7f10dab1325271ffad4b39b265b76cd"
+    "priceUpdater": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534"
   }
 }

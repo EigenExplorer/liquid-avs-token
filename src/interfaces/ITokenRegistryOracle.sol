@@ -27,7 +27,7 @@ interface ITokenRegistryOracle {
         uint256 newRate,
         address indexed updater
     );
-
+    event EmergencyIntervalDisabled();
     /// @notice Emitted when a token's source is set
     event TokenSourceSet(address indexed token, address indexed source);
 
@@ -50,7 +50,7 @@ interface ITokenRegistryOracle {
 
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
-    function initialize(Init memory init) external;
+    function initialize(Init memory init, uint256 stalenessSalt) external;
 
     /// @notice Configure a token with its primary and fallback sources
     /// @param token Token address
@@ -107,14 +107,9 @@ interface ITokenRegistryOracle {
     /// @return The current price with 18 decimals precision
     function getTokenPrice(address token) external view returns (uint256);
 
-    /// @notice Gets configured update interval
-    /// @return Interval in seconds
-    function priceUpdateInterval() external view returns (uint256);
-
     /// @notice Get last price update timestamp
     /// @return Timestamp of last price update
     function lastPriceUpdate() external view returns (uint256);
-    
     /// @notice Get price for a token
     /// @return price of a token and success/failure of this
     function _getTokenPrice_getter(

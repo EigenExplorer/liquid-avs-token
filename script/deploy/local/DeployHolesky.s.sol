@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+this is my other script : // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
 import "forge-std/Script.sol";
@@ -133,11 +133,13 @@ contract Deploy is Script, Test {
     uint256 public liquidTokenManagerInitTimestamp;
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
-
+uint256 public oracleSalt;
     function run(string memory deployConfigFileName) external {
         // Load config files
         loadConfig(deployConfigFileName);
-
+        oracleSalt = vm.envUint("ORACLE_SALT");
+        require(admin != address(0), "Admin address must not be zero");
+        //require(admin != msg.sender, "Deployer and admin must be different");
         // Core deployment
         vm.startBroadcast();
 
@@ -146,6 +148,26 @@ contract Deploy is Script, Test {
         deployProxies();
         initializeProxies();
         configureOracle();
+        console.log(
+            "TokenRegistryOracle proxy address:",
+            address(tokenRegistryOracle)
+        );
+        console.log("Admin (from JSON):", admin);
+        console.log("Deployer (msg.sender):", msg.sender);
+        console.log(
+            "HasRole (admin, before transfer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "HasRole (deployer, before transfer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
         transferOwnership();
 
         vm.stopBroadcast();
@@ -153,7 +175,6 @@ contract Deploy is Script, Test {
         verifyDeployment();
         writeDeploymentOutput();
     }
-
     // Helper function to count array entries
     function _countTokens(
         string memory deployConfigData
@@ -398,18 +419,19 @@ contract Deploy is Script, Test {
         _initializeLiquidToken();
     }
 
-    function _initializeTokenRegistryOracle() internal {
+   function _initializeTokenRegistryOracle() internal {
         tokenRegistryOracleInitBlock = block.number;
         tokenRegistryOracleInitTimestamp = block.timestamp;
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner:  msg.sender, // <-- transferred to admin later on
-                priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
-                liquidToken: address(liquidToken), // <-- on-chain contract
+                initialOwner: msg.sender, // burner, will transfer to admin
+                priceUpdater: priceUpdater,
+                liquidToken: address(liquidToken),
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )
-            })
+            }),
+            oracleSalt // <-- new required argument
         );
     }
     function _initializeLiquidTokenManager() internal {
@@ -520,18 +542,136 @@ contract Deploy is Script, Test {
             msg.sender
         );
     }
-
-    function transferOwnership() internal {
+function transferOwnership() internal {
+        // Transfer ProxyAdmin ownership first
         proxyAdmin.transferOwnership(admin);
         require(
             proxyAdmin.owner() == admin,
             "Proxy admin ownership transfer failed"
         );
 
-        // Transfer TokenRegistryOracle admin role
-        tokenRegistryOracle.grantRole(0x00, admin);
-        tokenRegistryOracle.revokeRole(0x00, msg.sender);
+        console.log("[transferOwnership] Before grants:");
+        console.log("  admin:", admin);
+        console.log("  deployer (msg.sender):", msg.sender);
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
+
+        // --- TOKEN REGISTRY ORACLE ---
+        // Grant all roles to admin before renouncing from deployer
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            admin
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            priceUpdater
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            address(liquidToken)
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        // Log after grants
+        console.log("[transferOwnership] After grants:");
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
+        console.log(
+            "  HasRole (oracle admin, admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (rate updater, priceUpdater):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                priceUpdater
+            )
+        );
+        console.log(
+            "  HasRole (rate updater, liquidToken):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                address(liquidToken)
+            )
+        );
+        console.log(
+            "  HasRole (token configurator, liquidTokenManager):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                address(liquidTokenManager)
+            )
+        );
+
+        // Now renounce all roles from deployer/burner
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
+        // Log after renounce
+        console.log("[transferOwnership] After renounce:");
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
     }
+
 
     function verifyDeployment() internal view {
         _verifyProxyImplementations();
