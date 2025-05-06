@@ -577,7 +577,7 @@ contract TokenRateProviderTest is BaseTest {
         assertFalse(tokenRegistryOracle.arePricesStale());
 
         // Advance time to force staleness
-        uint256 warpTo = block.timestamp + 13 hours;
+        uint256 warpTo = block.timestamp + 18 hours;
         vm.warp(warpTo);
 
         // Update mocks with fresh values at the new timestamp

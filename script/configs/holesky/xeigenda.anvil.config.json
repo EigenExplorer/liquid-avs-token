@@ -49,7 +49,7 @@
         "primarySource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
         "needsArg": 0,
         "fallbackSource": "0x7322c24752f79c05ffd1e2a6fcb97020c1c264f1",
-        "fallbackSelector": "0x8af07e89"
+        "fallbackSelector": "0xe6aa216c"
       }
     },
     {
@@ -68,7 +68,7 @@
         "primarySource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
         "needsArg": 1,
         "fallbackSource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
-        "fallbackSelector": "0x0a8a5f53"
+        "fallbackSelector": "0xf79c3f02"
       }
     },
     {
@@ -125,13 +125,13 @@
         "primarySource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
         "needsArg": 0,
         "fallbackSource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
-        "fallbackSelector": "0xce1e09c0"
+        "fallbackSelector": "0x71ca337d"
       }
     }
   ],
   "roles": {
-    "admin": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
+    "admin": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534",
     "pauser": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
-    "priceUpdater": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534"
+    "priceUpdater": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf"
   }
 }
