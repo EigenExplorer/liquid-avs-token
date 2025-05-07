@@ -9,9 +9,8 @@
 #  1. Deploy all LAT contracts with stETH & rETH token/strategy registered
 #  2. Restaking manager creates five staker nodes
 #  3. Restaking manager delegates all nodes to an EigenLayer Operator
-#  4. Update token prices via price updater
-#  5. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
-#  6. Restaking manager stakes the users' funds to the first three nodes
+#  4. Two stakers deposit stETH & rETH by interfacing with `LiquidToken`
+#  5. Restaking manager stakes the users' funds to the first three nodes
 
 # End-state verification:
 #  1. All nodes are delegated
@@ -19,17 +18,15 @@
 #  3. Third node holds 30% of deposited funds, fourth and fifth hold none
 #  4. `LiquidToken` holds 20% of deposited funds
 #  5. Stakers hold no original tokens and equivalent LAT
-#  6. Each token had 2 price updates each
 
 # Task files tested:
 #  1. SNC_CreateStakerNodes
 #  2. LTM_DelegateNodes
 #  3. LTM_StakeAssetsToNodes
 #  4. LTM_StakeAssetsToNode
-#  5. TRO_UpdatePrices
 
 # Task files not tested:
-#  1. LTM_DelegateNodes (out of scope for v1)
+#  1. LTM_UndelegateNodes (out of scope for v1)
 
 # Instructions:
 # To load env file: source .env
@@ -67,11 +64,11 @@ OUTPUT_FILE="/local/deployment_data.json"
 RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb" # mainnet: "0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
 
 # Deploy contracts (replace Mainnet <> Holesky to switch chains)
-forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:DeployHolesky \
+forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:Deploy \
     --rpc-url $RPC_URL --broadcast \
     --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string,string)" \
-    -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
+    --sig "run(string)" \
+    -- $DEPLOYMENT_CONFIG_FILE
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION
@@ -101,54 +98,6 @@ forge script --via-ir script/tasks/LTM_DelegateNodes.s.sol:DelegateNodes \
     --sig "run(string,uint256[],address[],(bytes,uint256)[],bytes32[])" \
     -- $OUTPUT_FILE "[$NODE_IDS]" $OPERATORS "[]" "[]"
 
-# Update prices of stETH and rETH individually using TRO_UpdateRate task
-TOKEN_REGISTRY_ORACLE=$(jq -r '.contractDeployments.proxy.tokenRegistryOracle.address' $OUTPUT_PATH)
-STETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
-STETH_INITIAL_PRICE_CLEAN=$(echo $STETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-STETH_INITIAL_PRICE_ETH=$(cast --from-wei $STETH_INITIAL_PRICE_CLEAN)
-RETH_INITIAL_PRICE=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
-RETH_INITIAL_PRICE_CLEAN=$(echo $RETH_INITIAL_PRICE | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-RETH_INITIAL_PRICE_ETH=$(cast --from-wei $RETH_INITIAL_PRICE_CLEAN)
-
-# Update stETH price
-NEW_STETH_PRICE="1020000000000000000"
-forge script --via-ir script/tasks/TRO_UpdateRate.s.sol:UpdateRate \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $PRICE_UPDATER_PRIVATE_KEY \
-    --sig "run(string,address,uint256)" \
-    -- $OUTPUT_FILE $STETH_TOKEN $NEW_STETH_PRICE
-
-# Update rETH price
-NEW_RETH_PRICE="1070000000000000000"
-forge script --via-ir script/tasks/TRO_UpdateRate.s.sol:UpdateRate \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $PRICE_UPDATER_PRIVATE_KEY \
-    --sig "run(string,address,uint256)" \
-    -- $OUTPUT_FILE $RETH_TOKEN $NEW_RETH_PRICE
-
-STETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
-STETH_UPDATED_PRICE_1_CLEAN=$(echo $STETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-STETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_1_CLEAN)
-RETH_UPDATED_PRICE_1=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
-RETH_UPDATED_PRICE_1_CLEAN=$(echo $RETH_UPDATED_PRICE_1 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-RETH_UPDATED_PRICE_1_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_1_CLEAN)
-
-# Update prices of stETH and rETH in a single transaction
-NEW_STETH_PRICE_2="1030000000000000000"
-NEW_RETH_PRICE_2="1080000000000000000"
-forge script --via-ir script/tasks/TRO_BatchUpdateRates.s.sol:BatchUpdateRates \
-    --rpc-url $RPC_URL --broadcast \
-    --private-key $PRICE_UPDATER_PRIVATE_KEY \
-    --sig "run(string,address[],uint256[])" \
-    -- $OUTPUT_FILE "[$STETH_TOKEN,$RETH_TOKEN]" "[$NEW_STETH_PRICE_2,$NEW_RETH_PRICE_2]"
-
-STETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $STETH_TOKEN)
-STETH_UPDATED_PRICE_2_CLEAN=$(echo $STETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-STETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $STETH_UPDATED_PRICE_2_CLEAN)
-RETH_UPDATED_PRICE_2=$(cast call $TOKEN_REGISTRY_ORACLE "getRate(address)(uint256)" $RETH_TOKEN)
-RETH_UPDATED_PRICE_2_CLEAN=$(echo $RETH_UPDATED_PRICE_2 | tr -d '[]' | sed 's/e[0-9]*//' | awk '{print $1}')
-RETH_UPDATED_PRICE_2_ETH=$(cast --from-wei $RETH_UPDATED_PRICE_2_CLEAN)
-
 # Create two test users to play the role of staker
 TEST_USER_1_PRIVATE_KEY="${TEST_USER_1_PRIVATE_KEY:-0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6}"
 TEST_USER_1=$(cast wallet address --private-key $TEST_USER_1_PRIVATE_KEY)
@@ -170,7 +119,7 @@ STAKER_2_STETH_INITIAL_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint
 cast send $STETH_TOKEN --private-key $TEST_USER_2_PRIVATE_KEY "approve(address,uint256)" $LIQUID_TOKEN $STAKER_2_STETH_DEPOSIT_AMOUNT
 STAKER_2_RETH_DEPOSIT_AMOUNT=20000000000000000000
 cast rpc anvil_impersonateAccount $RETH_WHALE
-cast send $RETH_TOKEN --unlocked --from $RETH_WHALE "transfer(address,uint256)" $TEST_USER_2 $STAKER_2_RETH_DEPOSIT_AMOUNT * 10
+cast send $RETH_TOKEN --unlocked --from $RETH_WHALE "transfer(address,uint256)" $TEST_USER_2 $STAKER_2_RETH_DEPOSIT_AMOUNT
 cast rpc anvil_stopImpersonatingAccount $RETH_WHALE
 STAKER_2_RETH_INITIAL_BALANCE=$(cast call $RETH_TOKEN "balanceOf(address)(uint256)" $TEST_USER_2 | awk '{print $1}' | cast --from-wei)
 cast send $RETH_TOKEN --private-key $TEST_USER_2_PRIVATE_KEY "approve(address,uint256)" $LIQUID_TOKEN $STAKER_2_RETH_DEPOSIT_AMOUNT
@@ -296,8 +245,4 @@ echo "Staker 1 LAT balance: $STAKER_1_LAT_BALANCE"
 echo "Staker 2 stETH balance change: $STAKER_2_STETH_BALANCE_CHANGE"
 echo "Staker 2 rETH balance change: $STAKER_2_RETH_BALANCE_CHANGE"
 echo "Staker 2 LAT balance: $STAKER_2_LAT_BALANCE"
-echo 
-echo "6. Each token had 2 price updates each"
-echo "stETH: $STETH_INITIAL_PRICE_ETH → $STETH_UPDATED_PRICE_1_ETH → $STETH_UPDATED_PRICE_2_ETH ETH"
-echo "rETH:  $RETH_INITIAL_PRICE_ETH → $RETH_UPDATED_PRICE_1_ETH → $RETH_UPDATED_PRICE_2_ETH ETH"
 echo "------------------------------------------------------------------"

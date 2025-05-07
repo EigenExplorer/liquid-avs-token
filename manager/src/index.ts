@@ -1,8 +1,7 @@
 import "dotenv/config";
-import cron from "node-cron";
 
-import { stakeUnstakedAssets } from "./workflows/stakeUnstakedAssets";
 import { refreshDeployment } from "./workflows/refreshDeployment";
+import { stakeUnstakedAssets } from "./workflows/stakeUnstakedAssets";
 
 console.log("Initializing Restaking Manager ...");
 
@@ -49,5 +48,4 @@ async function dailyResponsibilities(retryCount = 0) {
   }
 }
 
-// 5 minutes past midnight every day
-cron.schedule("5 0 * * *", () => dailyResponsibilities());
+await dailyResponsibilities();

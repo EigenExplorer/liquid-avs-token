@@ -41,11 +41,11 @@ mkdir -p script/outputs/local/abi
 
 echo "[Deploy] Deploying ${LAT_NAME} on ${CHAIN}..."
 
-forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:DeployHolesky \
+forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:Deploy \
     --rpc-url $RPC_URL --broadcast \
     --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string,string)" \
-    -- $NETWORK_CONFIG_FILE $DEPLOYMENT_CONFIG_FILE
+    --sig "run(string)" \
+    -- $DEPLOYMENT_CONFIG_FILE
 
 #-----------------------------------------------------------------------------------------------------
 # GITHUB INTEGRATION
