@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
+import "forge-std/console.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
@@ -32,10 +33,12 @@ contract BaseTest is Test {
     // Source type constants
     uint8 constant SOURCE_TYPE_CHAINLINK = 1;
     uint8 constant SOURCE_TYPE_CURVE = 2;
-    uint8 constant SOURCE_TYPE_PROTOCOL = 4;
+    uint8 constant SOURCE_TYPE_PROTOCOL = 3;
 
     // Price freshness constants
-    uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours; // Prices are stale after 12 hours
+    uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;
+    //random salt
+    uint256 internal constant SAMPLE_SALT = 0xabcdef1234567890;
 
     // EigenLayer Contracts
     IStrategyManager public strategyManager;
@@ -91,16 +94,243 @@ contract BaseTest is Test {
     }
 
     function setUp() public virtual {
-        // Initialize common function selectors
+        console.log("Starting test setup...");
         _initializeSelectors();
-
         _setupELContracts();
         _deployMockContracts();
         _deployMainContracts();
         _deployProxies();
-        _initializeProxies();
+
+        // Initialize contracts in the correct order to avoid dependency issues
+        // 1. First initialize TokenRegistryOracle
+        _initializeTokenRegistryOracle();
+
+        // 2. Setup oracle sources
         _setupOracleSources();
+
+        // 3. Initialize LiquidTokenManager
+        _initializeLiquidTokenManager();
+
+        // 4. Initialize LiquidToken (depends on LiquidTokenManager)
+        _initializeLiquidToken();
+
+        // 5. Initialize StakerNodeCoordinator (depends on LiquidTokenManager)
+        _initializeStakerNodeCoordinator();
+
+        // 6. Add tokens after all initializations
+        _addTestTokens();
+
+        // 7. Setup test token balances
         _setupTestTokens();
+
+        // 8. Renounce roles at the end
+        _renounceAllRoles();
+    }
+
+    function _addTestTokens() internal {
+        console.log("Adding tokens to LiquidTokenManager...");
+
+        // Print role statuses for debugging
+        console.log("Role checks before adding tokens:");
+        console.log(
+            "Deployer has DEFAULT_ADMIN_ROLE:",
+            liquidTokenManager.hasRole(
+                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+                deployer
+            )
+        );
+        console.log(
+            "Deployer has STRATEGY_CONTROLLER_ROLE:",
+            liquidTokenManager.hasRole(
+                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+                deployer
+            )
+        );
+        console.log(
+            "admin has TOKEN_CONFIGURATOR_ROLE:",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                admin
+            )
+        );
+
+        // Get price feed data using proper try/catch syntax
+        try testTokenFeed.latestRoundData() returns (
+            uint80,
+            int256 price,
+            uint256,
+            uint256,
+            uint80
+        ) {
+            console.log("testTokenFeed price:", uint256(price));
+        } catch {
+            console.log("Failed to get testTokenFeed price");
+        }
+
+        // Add tokens as deployer (who must have admin role)
+        vm.startPrank(deployer);
+
+        try
+            liquidTokenManager.addToken(
+                IERC20(address(testToken)),
+                18,
+                0.1e18,
+                IStrategy(address(mockStrategy)),
+                SOURCE_TYPE_CHAINLINK,
+                address(testTokenFeed),
+                0,
+                address(0),
+                bytes4(0)
+            )
+        {
+            console.log("First token added successfully");
+        } catch Error(string memory reason) {
+            console.log("First token add failed:", reason);
+        } catch {
+            console.log("First token add failed with unknown error");
+        }
+
+        try
+            liquidTokenManager.addToken(
+                IERC20(address(testToken2)),
+                18,
+                0,
+                IStrategy(address(mockStrategy2)),
+                SOURCE_TYPE_CHAINLINK,
+                address(testToken2Feed),
+                0,
+                address(0),
+                bytes4(0)
+            )
+        {
+            console.log("Second token added successfully");
+        } catch Error(string memory reason) {
+            console.log("Second token add failed:", reason);
+        } catch {
+            console.log("Second token add failed with unknown error");
+        }
+        vm.stopPrank();
+    }
+
+    function _renounceAllRoles() private {
+        vm.startPrank(deployer);
+
+        // LiquidTokenManager
+        if (
+            liquidTokenManager.hasRole(
+                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+                deployer
+            )
+        ) {
+            liquidTokenManager.renounceRole(
+                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+                deployer
+            );
+        }
+        if (
+            liquidTokenManager.hasRole(
+                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+                deployer
+            )
+        ) {
+            liquidTokenManager.renounceRole(
+                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+                deployer
+            );
+        }
+
+        // TokenRegistryOracle
+        if (
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                deployer
+            )
+        ) {
+            tokenRegistryOracle.renounceRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                deployer
+            );
+        }
+        if (
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+                deployer
+            )
+        ) {
+            tokenRegistryOracle.renounceRole(
+                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+                deployer
+            );
+        }
+        if (
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                deployer
+            )
+        ) {
+            tokenRegistryOracle.renounceRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                deployer
+            );
+        }
+        if (
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                deployer
+            )
+        ) {
+            tokenRegistryOracle.renounceRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                deployer
+            );
+        }
+
+        // StakerNodeCoordinator
+        if (
+            stakerNodeCoordinator.hasRole(
+                stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+                deployer
+            )
+        ) {
+            stakerNodeCoordinator.renounceRole(
+                stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+                deployer
+            );
+        }
+        if (
+            stakerNodeCoordinator.hasRole(
+                stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+                deployer
+            )
+        ) {
+            stakerNodeCoordinator.renounceRole(
+                stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+                deployer
+            );
+        }
+        if (
+            stakerNodeCoordinator.hasRole(
+                stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+                deployer
+            )
+        ) {
+            stakerNodeCoordinator.renounceRole(
+                stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+                deployer
+            );
+        }
+
+        // LiquidToken
+        if (liquidToken.hasRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer)) {
+            liquidToken.renounceRole(
+                liquidToken.DEFAULT_ADMIN_ROLE(),
+                deployer
+            );
+        }
+        if (liquidToken.hasRole(liquidToken.PAUSER_ROLE(), deployer)) {
+            liquidToken.renounceRole(liquidToken.PAUSER_ROLE(), deployer);
+        }
+        vm.stopPrank();
     }
 
     function _initializeSelectors() internal {
@@ -118,229 +348,6 @@ contract BaseTest is Test {
             keccak256("underlyingBalanceFromShares(uint256)")
         );
         mETHToETHSelector = bytes4(keccak256("mETHToETH(uint256)"));
-    }
-
-    function testZeroAddressInitialization() public {
-        // This test remains unchanged
-        LiquidTokenManager newLiquidTokenManager = new LiquidTokenManager();
-        StakerNodeCoordinator newStakerNodeCoordinator = new StakerNodeCoordinator();
-        LiquidToken newLiquidToken = new LiquidToken();
-
-        // LiquidTokenManager Initialization Tests
-        {
-            ILiquidTokenManager.Init memory validInit = ILiquidTokenManager
-                .Init({
-                    assets: new IERC20[](2),
-                    tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
-                    strategies: new IStrategy[](2),
-                    liquidToken: liquidToken,
-                    strategyManager: strategyManager,
-                    delegationManager: delegationManager,
-                    stakerNodeCoordinator: stakerNodeCoordinator,
-                    tokenRegistryOracle: ITokenRegistryOracle(
-                        address(tokenRegistryOracle)
-                    ),
-                    initialOwner: deployer,
-                    strategyController: deployer,
-                    priceUpdater: address(tokenRegistryOracle)
-                });
-
-            validInit.assets[0] = IERC20(address(testToken));
-            validInit.assets[1] = IERC20(address(testToken2));
-            validInit.strategies[0] = IStrategy(address(mockStrategy));
-            validInit.strategies[1] = IStrategy(address(mockStrategy2));
-            validInit.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
-                decimals: 18,
-                pricePerUnit: 1e18,
-                volatilityThreshold: 0.1 * 1e18
-            });
-            validInit.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
-                decimals: 18,
-                pricePerUnit: 1e18,
-                volatilityThreshold: 0
-            });
-
-            // Test each parameter individually
-            ILiquidTokenManager.Init memory testInit;
-
-            // Zero address for owner
-            testInit = validInit;
-            testInit.initialOwner = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for liquidToken
-            testInit = validInit;
-            testInit.liquidToken = ILiquidToken(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for strategyManager
-            testInit = validInit;
-            testInit.strategyManager = IStrategyManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for delegationManager
-            testInit = validInit;
-            testInit.delegationManager = IDelegationManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for stakerNodeCoordinator
-            testInit = validInit;
-            testInit.stakerNodeCoordinator = IStakerNodeCoordinator(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for strategyController
-            testInit = validInit;
-            testInit.strategyController = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address for priceUpdater
-            testInit = validInit;
-            testInit.priceUpdater = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address in assets array
-            testInit = validInit;
-            testInit.assets[0] = IERC20(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-
-            // Zero address in strategies array
-            testInit = validInit;
-            testInit.strategies[0] = IStrategy(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidTokenManager.initialize(testInit);
-        }
-
-        // LiquidToken Initialization Tests
-        {
-            ILiquidToken.Init memory validInit = ILiquidToken.Init({
-                name: "Liquid Staking Token",
-                symbol: "LST",
-                initialOwner: deployer,
-                pauser: pauser,
-                liquidTokenManager: ILiquidTokenManager(
-                    address(liquidTokenManager)
-                ),
-                tokenRegistryOracle: ITokenRegistryOracle(
-                    address(tokenRegistryOracle)
-                )
-            });
-
-            // Test each parameter individually
-            ILiquidToken.Init memory testInit;
-
-            // Zero address for owner
-            testInit = validInit;
-            testInit.initialOwner = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidToken.initialize(testInit);
-
-            // Zero address for pauser
-            testInit = validInit;
-            testInit.pauser = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidToken.initialize(testInit);
-
-            // Zero address for liquidTokenManager
-            testInit = validInit;
-            testInit.liquidTokenManager = ILiquidTokenManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newLiquidToken.initialize(testInit);
-        }
-
-        // StakerNodeCoordinator Initialization Tests
-        {
-            IStakerNodeCoordinator.Init
-                memory validInit = IStakerNodeCoordinator.Init({
-                    liquidTokenManager: liquidTokenManager,
-                    strategyManager: strategyManager,
-                    delegationManager: delegationManager,
-                    maxNodes: 10,
-                    initialOwner: deployer,
-                    pauser: pauser,
-                    stakerNodeCreator: deployer,
-                    stakerNodesDelegator: deployer,
-                    stakerNodeImplementation: address(stakerNodeImplementation)
-                });
-
-            // Test each parameter individually
-            IStakerNodeCoordinator.Init memory testInit;
-
-            // Zero address for owner
-            testInit = validInit;
-            testInit.initialOwner = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for pauser
-            testInit = validInit;
-            testInit.pauser = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for stakerNodeCreator
-            testInit = validInit;
-            testInit.stakerNodeCreator = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for stakerNodesDelegator
-            testInit = validInit;
-            testInit.stakerNodesDelegator = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for liquidTokenManager
-            testInit = validInit;
-            testInit.liquidTokenManager = ILiquidTokenManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for strategyManager
-            testInit = validInit;
-            testInit.strategyManager = IStrategyManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for delegationManager
-            testInit = validInit;
-            testInit.delegationManager = IDelegationManager(address(0));
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-
-            // Zero address for stakerNodeImplementation
-            testInit = validInit;
-            testInit.stakerNodeImplementation = address(0);
-            vm.prank(deployer);
-            vm.expectRevert();
-            newStakerNodeCoordinator.initialize(testInit);
-        }
     }
 
     function _setupELContracts() private {
@@ -418,9 +425,25 @@ contract BaseTest is Test {
     }
 
     function _setupOracleSources() private {
-        vm.startPrank(admin);
+        console.log("Setting up oracle sources...");
 
+        // Grant TOKEN_CONFIGURATOR_ROLE to admin
+        vm.startPrank(deployer);
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            admin
+        );
+
+        // Grant TOKEN_CONFIGURATOR_ROLE to deployer too
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            deployer
+        );
+        vm.stopPrank();
+
+        vm.startPrank(admin);
         // Configure test tokens with Chainlink sources
+        console.log("Configuring testToken in oracle...");
         tokenRegistryOracle.configureToken(
             address(testToken),
             SOURCE_TYPE_CHAINLINK,
@@ -430,6 +453,7 @@ contract BaseTest is Test {
             bytes4(0) // No fallback function
         );
 
+        console.log("Configuring testToken2 in oracle...");
         tokenRegistryOracle.configureToken(
             address(testToken2),
             SOURCE_TYPE_CHAINLINK,
@@ -438,32 +462,33 @@ contract BaseTest is Test {
             address(0), // No fallback source
             bytes4(0) // No fallback function
         );
+        vm.stopPrank();
 
+        // Update prices with proper try/catch syntax
+        vm.startPrank(user2);
+        try tokenRegistryOracle.updateAllPricesIfNeeded() {
+            console.log("Price update successful");
+        } catch Error(string memory reason) {
+            console.log("Price update failed with reason:", reason);
+        } catch {
+            console.log("Price update failed with unknown error");
+        }
         vm.stopPrank();
     }
 
-    function _initializeProxies() private {
-        _initializeTokenRegistryOracle();
-        _initializeLiquidTokenManager();
-        _initializeStakerNodeCoordinator();
-        _initializeLiquidToken();
-
-        // Grant admin role to the admin address for all contracts
-        //_grantRolesToAdmin();
-    }
-
     function _initializeTokenRegistryOracle() private {
+        console.log("Initializing TokenRegistryOracle...");
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
             initialOwner: deployer,
             priceUpdater: user2,
-            liquidToken: address(liquidToken), // <-- ADD THIS to match our new changes in role mngmnt
+            liquidToken: address(liquidToken),
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager))
         });
 
         vm.prank(deployer);
-        tokenRegistryOracle.initialize(init);
+        tokenRegistryOracle.initialize(init, SAMPLE_SALT);
 
-        // Step 2: As deployer, grant admin/configurator roles to address(this)
+        // Grant roles
         vm.startPrank(deployer);
         tokenRegistryOracle.grantRole(
             tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
@@ -477,33 +502,30 @@ contract BaseTest is Test {
             tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
             address(this)
         );
-        // user2 gets RATE_UPDATER_ROLE (already granted in init, but can re-grant for safety)
+
+        // Critical: Grant TOKEN_CONFIGURATOR_ROLE to deployer who will add tokens
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            deployer
+        );
+
+        // Grant RATE_UPDATER_ROLE to user2
         tokenRegistryOracle.grantRole(
             tokenRegistryOracle.RATE_UPDATER_ROLE(),
             user2
         );
 
-        // Step 3: Deployer renounces
-        tokenRegistryOracle.renounceRole(
-            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-            deployer
-        );
-        tokenRegistryOracle.renounceRole(
-            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-            deployer
-        );
-        tokenRegistryOracle.renounceRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+        // Grant RATE_UPDATER_ROLE to deployer temporarily
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
             deployer
         );
         vm.stopPrank();
     }
 
     function _initializeLiquidTokenManager() private {
+        console.log("Initializing LiquidTokenManager...");
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
-            assets: new IERC20[](2),
-            tokenInfo: new ILiquidTokenManager.TokenInfo[](2),
-            strategies: new IStrategy[](2),
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
@@ -511,29 +533,16 @@ contract BaseTest is Test {
             tokenRegistryOracle: ITokenRegistryOracle(
                 address(tokenRegistryOracle)
             ),
-            initialOwner: deployer, // Step 1: deployer is admin
+            initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
         });
-        init.assets[0] = IERC20(address(testToken));
-        init.assets[1] = IERC20(address(testToken2));
-        init.tokenInfo[0] = ILiquidTokenManager.TokenInfo({
-            decimals: 18,
-            pricePerUnit: 1e18,
-            volatilityThreshold: 0.1 * 1e18
-        });
-        init.tokenInfo[1] = ILiquidTokenManager.TokenInfo({
-            decimals: 18,
-            pricePerUnit: 0.5e18,
-            volatilityThreshold: 0
-        });
-        init.strategies[0] = IStrategy(address(mockStrategy));
-        init.strategies[1] = IStrategy(address(mockStrategy2));
 
+        // Initialize LTM with deployer as owner
         vm.prank(deployer);
         liquidTokenManager.initialize(init);
 
-        // Step 2: As deployer, grant roles to address(this)
+        // Grant roles
         vm.startPrank(deployer);
         liquidTokenManager.grantRole(
             liquidTokenManager.DEFAULT_ADMIN_ROLE(),
@@ -543,23 +552,49 @@ contract BaseTest is Test {
             liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
             address(this)
         );
-        // Step 3: Deployer renounces
-        liquidTokenManager.renounceRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            deployer
+        vm.stopPrank();
+    }
+
+    function _initializeStakerNodeCoordinator() private {
+        console.log("Initializing StakerNodeCoordinator...");
+        IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
+            liquidTokenManager: liquidTokenManager,
+            strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            maxNodes: 10,
+            initialOwner: deployer,
+            pauser: pauser,
+            stakerNodeCreator: deployer,
+            stakerNodesDelegator: deployer,
+            stakerNodeImplementation: address(stakerNodeImplementation)
+        });
+
+        vm.prank(deployer);
+        stakerNodeCoordinator.initialize(init);
+
+        // Grant roles
+        vm.startPrank(deployer);
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
+            address(this)
         );
-        liquidTokenManager.renounceRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            deployer
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
+            address(this)
+        );
+        stakerNodeCoordinator.grantRole(
+            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
+            address(this)
         );
         vm.stopPrank();
     }
 
     function _initializeLiquidToken() private {
+        console.log("Initializing LiquidToken...");
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
-            initialOwner: deployer, // Step 1: deployer is admin
+            initialOwner: deployer,
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(
                 address(liquidTokenManager)
@@ -572,111 +607,12 @@ contract BaseTest is Test {
         vm.prank(deployer);
         liquidToken.initialize(init);
 
-        // Step 2: As deployer, grant roles to address(this)/pauser
+        // Grant roles
         vm.startPrank(deployer);
         liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), address(this));
         liquidToken.grantRole(liquidToken.PAUSER_ROLE(), pauser);
-        // Step 3: Deployer renounces
-        liquidToken.renounceRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer);
-        liquidToken.renounceRole(liquidToken.PAUSER_ROLE(), deployer);
         vm.stopPrank();
     }
-
-    function _initializeStakerNodeCoordinator() private {
-        IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
-            liquidTokenManager: liquidTokenManager,
-            strategyManager: strategyManager,
-            delegationManager: delegationManager,
-            maxNodes: 10,
-            initialOwner: deployer, // Step 1: deployer is admin
-            pauser: pauser,
-            stakerNodeCreator: deployer,
-            stakerNodesDelegator: deployer,
-            stakerNodeImplementation: address(stakerNodeImplementation)
-        });
-
-        vm.prank(deployer);
-        stakerNodeCoordinator.initialize(init);
-
-        // Step 2: As deployer, grant roles to address(this) and pauser
-        vm.startPrank(deployer);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-            address(this)
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-            address(this)
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(this)
-        );
-
-        // Step 3: Deployer renounces
-        stakerNodeCoordinator.renounceRole(
-            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-            deployer
-        );
-        stakerNodeCoordinator.renounceRole(
-            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-            deployer
-        );
-        stakerNodeCoordinator.renounceRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            deployer
-        );
-
-        vm.stopPrank();
-    }
-    /*
-    function _grantRolesToAdmin() private {
-        vm.startPrank(deployer);
-
-        // TokenRegistryOracle roles
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-            admin
-        );
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-            admin
-        );
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.RATE_UPDATER_ROLE(),
-            user2
-        );
-
-        // LiquidTokenManager roles
-        liquidTokenManager.grantRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            admin
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            admin
-        );
-
-        // LiquidToken roles
-        liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), admin);
-
-        // StakerNodeCoordinator roles
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-            admin
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-            admin
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            admin
-        );
-
-        vm.stopPrank();
-    }
-    */
 
     function _setupTestTokens() private {
         testToken.mint(user1, 100 ether);

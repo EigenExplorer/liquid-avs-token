@@ -129,10 +129,14 @@ contract Deploy is Script, Test {
     uint256 public liquidTokenManagerInitTimestamp;
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
+    uint256 public oracleSalt;
 
     function run(string memory deployConfigFileName) external {
         // Load config files
         loadConfig(deployConfigFileName);
+        oracleSalt = vm.envUint("ORACLE_SALT");
+        require(admin != address(0), "Admin address must not be zero");
+        require(admin != msg.sender, "Deployer and admin must be different");
 
         // Core deployment
         vm.startBroadcast();
@@ -141,12 +145,13 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+        addAndConfigureTokens();
         configureOracle();
         transferOwnership();
 
-        vm.stopBroadcast();
-
         verifyDeployment();
+
+        vm.stopBroadcast();
         writeDeploymentOutput();
     }
 
@@ -177,7 +182,7 @@ contract Deploy is Script, Test {
     ) external pure returns (address) {
         return stdJson.readAddress(deployConfigData, jsonPath);
     }
-    
+
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
         string memory networkConfigPath = "script/configs/holesky.json";
@@ -251,10 +256,6 @@ contract Deploy is Script, Test {
             params.decimals = stdJson.readUint(
                 deployConfigData,
                 string.concat(prefix, ".params.decimals")
-            );
-            params.pricePerUnit = stdJson.readUint(
-                deployConfigData,
-                string.concat(prefix, ".params.pricePerUnit")
             );
             params.volatilityThreshold = stdJson.readUint(
                 deployConfigData,
@@ -398,45 +399,26 @@ contract Deploy is Script, Test {
     function _initializeTokenRegistryOracle() internal {
         tokenRegistryOracleInitBlock = block.number;
         tokenRegistryOracleInitTimestamp = block.timestamp;
+
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner:  msg.sender, // <-- transferred to admin later on
-                priceUpdater: priceUpdater, // <-- off-chain EOA/bot etc
-                liquidToken: address(liquidToken), // <-- on-chain contract
+                initialOwner: msg.sender, // burner, will transfer to admin
+                priceUpdater: priceUpdater,
+                liquidToken: address(liquidToken),
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
                 )
-            })
+            }),
+            oracleSalt
         );
     }
 
     function _initializeLiquidTokenManager() internal {
         liquidTokenManagerInitBlock = block.number;
         liquidTokenManagerInitTimestamp = block.timestamp;
-        IERC20[] memory assets = new IERC20[](tokens.length);
-        IStrategy[] memory strategies = new IStrategy[](tokens.length);
-        ILiquidTokenManager.TokenInfo[]
-            memory tokenInfo = new ILiquidTokenManager.TokenInfo[](
-                tokens.length
-            );
-
-        for (uint256 i = 0; i < tokens.length; i++) {
-            assets[i] = IERC20(tokens[i].addresses.token);
-            strategies[i] = IStrategy(tokens[i].addresses.strategy);
-            tokenInfo[i] = ILiquidTokenManager.TokenInfo({
-                decimals: uint8(tokens[i].params.decimals),
-                pricePerUnit: uint256(tokens[i].params.pricePerUnit),
-                volatilityThreshold: uint256(
-                    tokens[i].params.volatilityThreshold
-                )
-            });
-        }
 
         liquidTokenManager.initialize(
             ILiquidTokenManager.Init({
-                assets: assets,
-                tokenInfo: tokenInfo,
-                strategies: strategies,
                 liquidToken: liquidToken,
                 strategyManager: IStrategyManager(strategyManager),
                 delegationManager: IDelegationManager(delegationManager),
@@ -444,7 +426,7 @@ contract Deploy is Script, Test {
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
                 ),
-                initialOwner: admin,
+                initialOwner: msg.sender, // burner, will transfer to admin
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)
             })
@@ -488,7 +470,25 @@ contract Deploy is Script, Test {
         );
     }
 
+    function addAndConfigureTokens() internal {
+        TokenConfig[] memory addable = _getAddableTokens(tokens);
+        for (uint256 i = 0; i < addable.length; ++i) {
+            liquidTokenManager.addToken(
+                IERC20(addable[i].addresses.token),
+                uint8(addable[i].params.decimals),
+                uint256(addable[i].params.volatilityThreshold),
+                IStrategy(addable[i].addresses.strategy),
+                addable[i].oracle.sourceType,
+                addable[i].oracle.primarySource,
+                addable[i].oracle.needsArg,
+                addable[i].oracle.fallbackSource,
+                addable[i].oracle.fallbackSelector
+            );
+        }
+    }
+
     function configureOracle() internal {
+        // Must grant TOKEN_CONFIGURATOR_ROLE to self first
         tokenRegistryOracle.grantRole(
             tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
             msg.sender
@@ -513,6 +513,7 @@ contract Deploy is Script, Test {
             );
         }
 
+        // Revoke the role after use
         tokenRegistryOracle.revokeRole(
             tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
             msg.sender
@@ -520,15 +521,39 @@ contract Deploy is Script, Test {
     }
 
     function transferOwnership() internal {
+        // Transfer ProxyAdmin ownership first
         proxyAdmin.transferOwnership(admin);
         require(
             proxyAdmin.owner() == admin,
             "Proxy admin ownership transfer failed"
         );
 
-        // Transfer TokenRegistryOracle admin role
-        tokenRegistryOracle.grantRole(0x00, admin);
-        tokenRegistryOracle.revokeRole(0x00, msg.sender);
+        // Grant all roles meant for `initialOwner` to admin and renounce the same from deployer
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            admin
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            admin
+        );
+
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            msg.sender
+        );
+        liquidTokenManager.renounceRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            msg.sender
+        );
     }
 
     function verifyDeployment() internal view {
@@ -629,39 +654,55 @@ contract Deploy is Script, Test {
         // Assets and strategies
         IERC20[] memory registeredTokens = liquidTokenManager
             .getSupportedTokens();
+        TokenConfig[] memory addableTokens = _getAddableTokens(tokens);
         require(
-            registeredTokens.length == tokens.length,
+            registeredTokens.length == addableTokens.length,
             "LiquidTokenManager: wrong number of registered tokens"
         );
 
-        // Verify token and strategy info matches deployment config
-        for (uint256 i = 0; i < tokens.length; i++) {
-            IERC20 configToken = IERC20(tokens[i].addresses.token);
+        for (uint256 i = 0; i < addableTokens.length; i++) {
+            IERC20 configToken = IERC20(addableTokens[i].addresses.token);
             ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
                 .getTokenInfo(configToken);
+
+            // Decimals check (always required)
             require(
-                tokenInfo.decimals == tokens[i].params.decimals,
+                tokenInfo.decimals == addableTokens[i].params.decimals,
                 "LiquidTokenManager: wrong token decimals"
             );
-            require(
-                tokenInfo.pricePerUnit == tokens[i].params.pricePerUnit,
-                "LiquidTokenManager: wrong token price"
-            );
+            // Volatility threshold check (always required)
             require(
                 tokenInfo.volatilityThreshold ==
-                    tokens[i].params.volatilityThreshold,
+                    addableTokens[i].params.volatilityThreshold,
                 "LiquidTokenManager: wrong volatility threshold"
             );
-
+            // Strategy check (always required, including native tokens!)
             IStrategy registeredStrategy = liquidTokenManager.getTokenStrategy(
                 configToken
             );
             require(
-                address(registeredStrategy) == tokens[i].addresses.strategy,
+                address(registeredStrategy) ==
+                    addableTokens[i].addresses.strategy,
                 "LiquidTokenManager: wrong strategy address"
             );
-
-            // Verify token is in supported tokens list
+            // Price check
+            if (
+                addableTokens[i].oracle.sourceType == 0 &&
+                addableTokens[i].oracle.primarySource == address(0)
+            ) {
+                // Native token: price should be exactly 1e18
+                require(
+                    tokenInfo.pricePerUnit == 1e18,
+                    "LiquidTokenManager: native price should be 1e18"
+                );
+            } else {
+                // Non-native: price must be >0
+                require(
+                    tokenInfo.pricePerUnit > 0,
+                    "LiquidTokenManager: price should be set"
+                );
+            }
+            // Token must be present in supportedTokens
             bool tokenFound = false;
             for (uint256 j = 0; j < registeredTokens.length; j++) {
                 if (address(registeredTokens[j]) == address(configToken)) {
@@ -741,6 +782,7 @@ contract Deploy is Script, Test {
             ),
             "Rate Updater role not assigned to priceUpdater in TokenRegistryOracle"
         );
+
         require(
             tokenRegistryOracle.hasRole(
                 tokenRegistryOracle.RATE_UPDATER_ROLE(),
@@ -749,26 +791,6 @@ contract Deploy is Script, Test {
             "Rate Updater role not assigned to LiquidToken in TokenRegistryOracle"
         );
     }
-    /*
-    function configureRoles() internal {
-        // Grant RATE_UPDATER_ROLE to LiquidToken to enable price updates during deposits
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.RATE_UPDATER_ROLE(),
-            address(liquidToken)
-        );
-
-        // Transfer DEFAULT_ADMIN_ROLE to the final admin
-        tokenRegistryOracle.grantRole(0x00, admin);
-        tokenRegistryOracle.renounceRole(0x00, msg.sender);
-
-        // Log the role assignment to help with verification
-        emit RoleAssigned(
-            "TokenRegistryOracle",
-            "RATE_UPDATER_ROLE",
-            address(liquidToken)
-        );
-    }
-    */
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";
@@ -792,13 +814,13 @@ contract Deploy is Script, Test {
             parent_object,
             "maxNodes",
             STAKER_NODE_COORDINATOR_MAX_NODES
-        ); // Adjust as needed
+        );
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
         vm.serializeUint(
             parent_object,
             "deploymentTimestamp",
             block.timestamp * 1000
-        ); // Converting to milliseconds
+        );
 
         // Contract deployments section
         string memory contractDeployments = "contractDeployments";
@@ -1075,5 +1097,32 @@ contract Deploy is Script, Test {
                     )
                 )
             );
+    }
+
+    function _getAddableTokens(
+        TokenConfig[] memory tokens
+    ) internal pure returns (TokenConfig[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < tokens.length; ++i) {
+            if (
+                tokens[i].oracle.sourceType == 0 &&
+                tokens[i].oracle.primarySource == address(0)
+            ) {
+                continue; // Skip native tokens (like Eigen)
+            }
+            count++;
+        }
+        TokenConfig[] memory filtered = new TokenConfig[](count);
+        uint256 j = 0;
+        for (uint256 i = 0; i < tokens.length; ++i) {
+            if (
+                tokens[i].oracle.sourceType == 0 &&
+                tokens[i].oracle.primarySource == address(0)
+            ) {
+                continue;
+            }
+            filtered[j++] = tokens[i];
+        }
+        return filtered;
     }
 }

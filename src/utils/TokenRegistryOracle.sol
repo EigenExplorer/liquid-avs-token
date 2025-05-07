@@ -7,7 +7,7 @@ import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/interfaces/feeds/AggregatorV3Interface.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
+import "../libraries/StalenessThreshold.sol";
 /**
  * @title TokenRegistryOracle
  * @notice Gas-optimized price oracle with primary/fallback lookup
@@ -24,7 +24,7 @@ contract TokenRegistryOracle is
     bytes32 public constant TOKEN_CONFIGURATOR_ROLE =
         keccak256("TOKEN_CONFIGURATOR_ROLE");
     uint256 private constant PRECISION = 1e18;
-    uint256 private constant STALENESS_PERIOD = 24 hours;
+    //uint256 private constant STALENESS_PERIOD = 24 hours;
 
     // Source types
     uint8 public constant SOURCE_TYPE_CHAINLINK = 1;
@@ -35,8 +35,10 @@ contract TokenRegistryOracle is
     ILiquidTokenManager public liquidTokenManager;
 
     // Price staleness controls
-    uint64 private _priceUpdateInterval = 12 hours;
+    uint256 private _stalenessSalt;
+    uint64 private _emergencyInterval;
     uint64 public lastGlobalPriceUpdate;
+    bool private _emergencyMode;
 
     // Gas-optimized token configuration: packed into single storage slot
     struct TokenConfig {
@@ -58,7 +60,10 @@ contract TokenRegistryOracle is
     /**
      * @notice Initialize the contract
      */
-    function initialize(Init memory init) public initializer {
+    function initialize(
+        Init memory init,
+        uint256 stalenessSalt
+    ) public initializer {
         __AccessControl_init();
 
         require(
@@ -80,12 +85,15 @@ contract TokenRegistryOracle is
 
         liquidTokenManager = init.liquidTokenManager;
         lastGlobalPriceUpdate = uint64(block.timestamp);
+        _stalenessSalt = stalenessSalt;
+        _emergencyInterval = 12 hours;
+        _emergencyMode = false;
     }
 
     /**
      * @notice Configure a token with its primary and fallback sources
      * @param token Token address
-     * @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+     * @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol)
      * @param primarySource Primary source address
      * @param needsArg Whether fallback fn needs args
      * @param fallbackSource Address of the fallback source contract
@@ -195,6 +203,10 @@ contract TokenRegistryOracle is
         }
     }
 
+    function _getDynamicInterval() internal view returns (uint256) {
+        if (_emergencyMode) return _emergencyInterval;
+        return StalenessThreshold.getHiddenThreshold(_stalenessSalt);
+    }
     /**
      * @notice Sets price update interval
      */
@@ -202,9 +214,14 @@ contract TokenRegistryOracle is
         uint256 interval
     ) external onlyRole(ORACLE_ADMIN_ROLE) {
         require(interval > 0, "Interval cannot be zero");
-        uint256 oldInterval = _priceUpdateInterval;
-        _priceUpdateInterval = uint64(interval);
-        emit UpdateIntervalChanged(oldInterval, interval);
+        _emergencyInterval = uint64(interval);
+        _emergencyMode = true;
+        emit UpdateIntervalChanged(_emergencyInterval, interval);
+    }
+
+    function disableEmergencyInterval() external onlyRole(ORACLE_ADMIN_ROLE) {
+        _emergencyMode = false;
+        emit EmergencyIntervalDisabled();
     }
 
     /**
@@ -217,14 +234,6 @@ contract TokenRegistryOracle is
     }
 
     /**
-     * @notice Gets configured update interval
-     * @return Interval in seconds
-     */
-    function priceUpdateInterval() external view returns (uint256) {
-        return _priceUpdateInterval;
-    }
-
-    /**
      * @notice Check if prices are stale
      */
     function arePricesStale()
@@ -234,7 +243,7 @@ contract TokenRegistryOracle is
         returns (bool)
     {
         return (block.timestamp >
-            uint256(lastGlobalPriceUpdate) + uint256(_priceUpdateInterval));
+            uint256(lastGlobalPriceUpdate) + _getDynamicInterval());
     }
 
     /**
@@ -589,22 +598,22 @@ contract TokenRegistryOracle is
         return liquidTokenManager.getTokenInfo(IERC20(token)).pricePerUnit;
     }
 
-    // =========================================================================
-    // TESTING FUNCTIONS - COMMENT OUT FOR PRODUCTION
-    // =========================================================================
-
     /**
-     * @notice TEST ONLY: Get token price from primary source
-     * @dev This function exposes the internal _getTokenPrice for testing purposes
+     * @notice helper for addtoken: Get token price from primary source
+     * @dev This function exposes the internal _getTokenPrice for testing/setting purposes
      * @param token The token address to get the price for
-     * @return price The price in ETH terms (18 decimals)
+     * @return price The price in based terms (18 decimals)
      * @return success Whether the price fetch was successful
      */
-    function _getTokenPrice_exposed(
+    function _getTokenPrice_getter(
         address token
     ) external view returns (uint256 price, bool success) {
         return _getTokenPrice(token);
     }
+
+    // =========================================================================
+    // TESTING FUNCTIONS - COMMENT OUT FOR PRODUCTION
+    // =========================================================================
 
     /**
      * @notice TEST ONLY: Get token price from fallback source

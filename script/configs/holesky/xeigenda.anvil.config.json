@@ -8,8 +8,8 @@
     },
     "liquidToken": {
       "init": {
-        "name": "EigenDA Liquid Avs Token",
-        "symbol": "xEIGEN"
+        "name": "EigenDA Example Liquid Avs Token",
+        "symbol": "xEigenDA"
       }
     }
   },
@@ -21,7 +21,6 @@
         "strategy": "0x7d704507b76571a51d9cae8addabbfd0ba0e63d3"
       },
       "params": {
-        "pricePerUnit": "848500000000000000",
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -40,7 +39,6 @@
         "strategy": "0x3a8fbdf9e77dfc25d09741f51d3e181b25d0c4e0"
       },
       "params": {
-        "pricePerUnit": "967200000000000000",
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -59,7 +57,6 @@
         "strategy": "0x05037a81bd7b4c9e0f7b430f1f2a22c31a2fd943"
       },
       "params": {
-        "pricePerUnit": "1020100000000000000",
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -68,7 +65,7 @@
         "primarySource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
         "needsArg": 1,
         "fallbackSource": "0x1d8b30cc38dba8abce1ac29ea27d9cfd05379a09",
-        "fallbackSelector": "0x0a8a5f53"
+        "fallbackSelector": "0xf79c3f02"
       }
     },
     {
@@ -78,7 +75,6 @@
         "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
       },
       "params": {
-        "pricePerUnit": "1138000000000000000",
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -97,7 +93,6 @@
         "strategy": "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
       },
       "params": {
-        "pricePerUnit": "1000000000000000000",
         "volatilityThreshold": "0",
         "decimals": 18
       },
@@ -116,7 +111,6 @@
         "strategy": "0x7673a47463f80c6a3553db9e54c8cdcd5313d0ac"
       },
       "params": {
-        "pricePerUnit": "1000000000000000000",
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
@@ -125,13 +119,13 @@
         "primarySource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
         "needsArg": 0,
         "fallbackSource": "0x8783c9c904e1bdc87d9168ae703c8481e8a477fd",
-        "fallbackSelector": "0xce1e09c0"
+        "fallbackSelector": "0x71ca337d"
       }
     }
   ],
   "roles": {
     "admin": "0x6b9ea92522D087Ae37Fcb6e73129B81B65266534",
     "pauser": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf",
-    "priceUpdater": "0xfF41629BD7f10DAB1325271ffAD4b39b265b76cD"
+    "priceUpdater": "0xE50bDB0e10E0D3903eDF34148c04772B8C21CCBf"
   }
 }

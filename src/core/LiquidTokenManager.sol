@@ -86,14 +86,6 @@ contract LiquidTokenManager is
             revert ZeroAddress();
         }
 
-        if (init.assets.length != init.tokenInfo.length) {
-            revert LengthMismatch(init.assets.length, init.tokenInfo.length);
-        }
-
-        if (init.assets.length != init.strategies.length) {
-            revert LengthMismatch(init.assets.length, init.strategies.length);
-        }
-
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
         _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
@@ -104,53 +96,12 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
 
-        // Initialize strategies for each asset
-        uint256 len = init.assets.length;
-        unchecked {
-            for (uint256 i = 0; i < len; i++) {
-                if (
-                    address(init.assets[i]) == address(0) ||
-                    address(init.strategies[i]) == address(0)
-                ) {
-                    revert ZeroAddress();
-                }
-
-                if (init.tokenInfo[i].decimals == 0) {
-                    revert InvalidDecimals();
-                }
-
-                if (
-                    init.tokenInfo[i].volatilityThreshold != 0 &&
-                    (init.tokenInfo[i].volatilityThreshold < 1e16 ||
-                        init.tokenInfo[i].volatilityThreshold > 1e18)
-                ) {
-                    revert InvalidThreshold();
-                }
-
-                if (tokens[init.assets[i]].decimals != 0) {
-                    revert TokenExists(address(init.assets[i]));
-                }
-
-                tokens[init.assets[i]] = init.tokenInfo[i];
-                tokenStrategies[init.assets[i]] = init.strategies[i];
-                supportedTokens.push(init.assets[i]);
-
-                emit TokenAdded(
-                    init.assets[i],
-                    init.tokenInfo[i].decimals,
-                    init.tokenInfo[i].pricePerUnit,
-                    init.tokenInfo[i].volatilityThreshold,
-                    address(init.strategies[i]),
-                    msg.sender
-                );
-            }
-        }
+        // No token population allowed here!
     }
 
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
-    /// @param initialPrice Initial price for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
     /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
@@ -161,7 +112,6 @@ contract LiquidTokenManager is
     function addToken(
         IERC20 token,
         uint8 decimals,
-        uint256 initialPrice,
         uint256 volatilityThreshold,
         IStrategy strategy,
         uint8 primaryType,
@@ -174,7 +124,6 @@ contract LiquidTokenManager is
             revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
-        if (initialPrice == 0) revert InvalidPrice();
         if (
             volatilityThreshold != 0 &&
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
@@ -182,7 +131,6 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         // Price source validation and configuration
-        // Allow native tokens (price always 1) to skip price source config
         bool isNative = (primaryType == 0 && primarySource == address(0));
         if (!isNative && (primaryType < 1 || primaryType > 4))
             revert InvalidPriceSource();
@@ -206,19 +154,27 @@ contract LiquidTokenManager is
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
+        uint256 fetchedPrice = isNative ? 1e18 : 0;
+        if (!isNative) {
+            // Call Oracle for the price immediately after configuration
+            (uint256 price, bool ok) = tokenRegistryOracle
+                ._getTokenPrice_getter(address(token));
+            require(ok && price > 0, "Token price fetch failed");
+            fetchedPrice = price;
+        }
+
         tokens[token] = TokenInfo({
             decimals: decimals,
-            pricePerUnit: isNative ? 1e18 : initialPrice,
+            pricePerUnit: fetchedPrice,
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
-
         supportedTokens.push(token);
 
         emit TokenAdded(
             token,
             decimals,
-            initialPrice,
+            fetchedPrice,
             volatilityThreshold,
             address(strategy),
             msg.sender
@@ -639,5 +595,4 @@ contract LiquidTokenManager is
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
-
 }
