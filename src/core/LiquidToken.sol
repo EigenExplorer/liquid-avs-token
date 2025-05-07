@@ -9,7 +9,7 @@ import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
-
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
@@ -28,6 +28,8 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
+    ITokenRegistryOracle public tokenRegistryOracle;
+
     /**
     * @dev Withdrawal delay constant used for request/fulfill withdrawal flow
     * @dev OUT OF SCOPE FOR V1
@@ -69,11 +71,15 @@ contract LiquidToken is
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
-
+        if (address(init.tokenRegistryOracle) == address(0)) {
+            revert("TokenRegistryOracle cannot be the zero address");
+        }
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
+        // Set token registry oracle if provided
+        tokenRegistryOracle = init.tokenRegistryOracle;
     }
 
     /// @notice Allows users to deposit multiple assets and receive shares
@@ -87,6 +93,38 @@ contract LiquidToken is
         address receiver
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
+
+        // Check if prices need update
+        if (tokenRegistryOracle.arePricesStale()) {
+            // Attempt price update with minimal try/catch
+            bool updated;
+            try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
+                bool result
+            ) {
+                updated = result;
+            } catch {
+                revert PriceUpdateFailed();
+            }
+
+            // Check update result - most gas efficient check first
+            if (!updated) revert PriceUpdateRejected();
+
+            // Verify prices are no longer stale
+            if (tokenRegistryOracle.arePricesStale())
+                revert PricesRemainStale();
+
+            emit PricesUpdatedBeforeDeposit(msg.sender);
+        }
+
+        // Always check token prices regardless of staleness (enhanced security)
+        for (uint256 i = 0; i < assets.length; i++) {
+            address assetAddr = address(assets[i]);
+            if (liquidTokenManager.tokenIsSupported(IERC20(assetAddr))) {
+                if (tokenRegistryOracle.getTokenPrice(assetAddr) == 0) {
+                    revert AssetPriceInvalid(assetAddr);
+                }
+            }
+        }
 
         uint256 len = assets.length;
         uint256[] memory sharesArray = new uint256[](len);
@@ -137,7 +175,6 @@ contract LiquidToken is
 
         return sharesArray;
     }
-
     /// @notice Allows users to request a withdrawal of their shares
     /// @param withdrawAssets The ERC20 assets to withdraw
     /// @param shareAmounts The number of shares to withdraw for each asset
@@ -377,7 +414,7 @@ contract LiquidToken is
     /**
      * @dev Gets withdrawal requests for a user
      * @dev OUT OF SCOPE FOR V1
-    */
+     */
     /**
     function getUserWithdrawalRequests(
         address user
@@ -389,7 +426,7 @@ contract LiquidToken is
     /**
      * @dev Gets details of a specific withdrawal request
      * @dev OUT OF SCOPE FOR V1
-    */
+     */
     /**
     function getWithdrawalRequest(
         bytes32 requestId
@@ -504,5 +541,5 @@ contract LiquidToken is
     /// @notice Unpauses the contract
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
-    } 
+    }
 }

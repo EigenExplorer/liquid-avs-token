@@ -8,3 +8,4 @@ lib/eigenlayer-contracts/=lib/eigenlayer-contracts/
 @openzeppelin-upgradeable/contracts/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/contracts/
 @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/proxy/transparent/TransparentUpgradeableProxy.sol
 @openzeppelin/contracts/proxy/beacon/IBeacon.sol=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/proxy/beacon/IBeacon.sol
+@chainlink/contracts/src/interfaces/feeds/=lib/foundry-chainlink-toolkit/src/interfaces/feeds/

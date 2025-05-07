@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
@@ -13,6 +14,7 @@ interface ILiquidToken is IERC20Upgradeable {
         string name;
         string symbol;
         ILiquidTokenManager liquidTokenManager;
+        ITokenRegistryOracle tokenRegistryOracle;
         address initialOwner;
         address pauser;
     }
@@ -28,6 +30,18 @@ interface ILiquidToken is IERC20Upgradeable {
         bool fulfilled;
     }
     */
+
+    /// @notice Custom errors for price update failures
+    error PriceUpdateFailed(); // Generic price update failure
+    error PriceUpdateRejected(); // Update returned false
+    error PricesRemainStale(); // Prices still stale after update
+    error AssetPriceInvalid(address token); // Specific token has invalid price
+
+    /// @notice Emitted when prices are updated during a deposit
+    event PricesUpdatedBeforeDeposit(address indexed depositor);
+
+    /// @notice Emitted when a price update fails during deposit
+    event PriceUpdateFailedDuringDeposit(address indexed depositor);
 
     /// @notice Emitted when an asset is deposited
     event AssetDeposited(
@@ -96,9 +110,6 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @notice Error when a new withdrawal is attempted with an existing request ID
     error DuplicateRequestId(bytes32 requestId);
     */
-
-    /// @notice Error for unsupported asset
-    error AssetNotSupported(IERC20Upgradeable asset);
 
     /// @notice Error for mismatched array lengths
     error ArrayLengthMismatch();

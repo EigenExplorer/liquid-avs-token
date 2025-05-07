@@ -75,9 +75,10 @@ interface IStakerNode {
         bytes32 approverSalt
     ) external;
 
-    /// @notice Undelegates the StakerNode's assets from the current operator
+    /*
     /// @dev Out OF SCOPE FOR V1
-    /**
+
+    /// @notice Undelegates the StakerNode's assets from the current operator
     function undelegate() external;
     */
 

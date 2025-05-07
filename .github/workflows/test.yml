@@ -50,10 +50,10 @@ jobs:
           export PATH="$PATH:$HOME/.cache/solidity"
 
           forge --version
-          forge build --sizes --optimizer-runs 200 --via-ir
+          forge build --sizes --optimizer-runs 200 --via-ir --use solc:0.8.27
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test --fork-url ${{ secrets.RPC_URL }} -vvvv --optimizer-runs 200 --via-ir
+          forge test --fork-url ${{ secrets.RPC_URL }} -vvvv --optimizer-runs 200 --via-ir --use solc:0.8.27
         id: test
