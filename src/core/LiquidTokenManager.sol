@@ -86,20 +86,6 @@ contract LiquidTokenManager is
             revert ZeroAddress();
         }
 
-        // ===> I JUST ADD MORE  RESTRICTION <===
-        require(
-            init.assets.length == 0,
-            "LTM: No tokens allowed in init; use addToken"
-        );
-        require(
-            init.tokenInfo.length == 0,
-            "LTM: No tokenInfo allowed in init; use addToken"
-        );
-        require(
-            init.strategies.length == 0,
-            "LTM: No strategies allowed in init; use addToken"
-        );
-
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
         _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);

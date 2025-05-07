@@ -63,7 +63,21 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Setup base test environment
         super.setUp();
+        // Add debug logs for token addresses
+        console.log("testToken address:", address(testToken));
+        console.log("testToken2 address:", address(testToken2));
+        console.log("mockStrategy address:", address(mockStrategy));
+        console.log("mockStrategy2 address:", address(mockStrategy2));
 
+        // Verify tokens are supported
+        console.log(
+            "testToken supported:",
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))
+        );
+        console.log(
+            "testToken2 supported:",
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))
+        );
         // DEBUG: Log deployer and admin addresses
         console.log("Admin address:", admin);
         console.log("Deployer address:", deployer);
@@ -191,7 +205,10 @@ contract LiquidTokenManagerTest is BaseTest {
                 RATE_UPDATER_ROLE,
                 foundryInternalCaller
             );
-
+            tokenRegistryOracle.grantRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                address(this)
+            );
             // Original role assignments
             tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, deployer);
             tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, deployer);
@@ -238,8 +255,91 @@ contract LiquidTokenManagerTest is BaseTest {
                 foundryInternalCaller
             )
         );
-    }
 
+        // Register test tokens if they're not already supported
+        if (!liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))) {
+            console.log("Registering testToken in setUp");
+
+            // Mock the oracle price getter for testToken
+            vm.mockCall(
+                address(tokenRegistryOracle),
+                abi.encodeWithSelector(
+                    ITokenRegistryOracle._getTokenPrice_getter.selector,
+                    address(testToken)
+                ),
+                abi.encode(1e18, true) // price = 1e18, success = true
+            );
+
+            vm.startPrank(admin);
+            try
+                liquidTokenManager.addToken(
+                    IERC20(address(testToken)),
+                    18, // decimals
+                    0.05 * 1e18, // 5% volatility threshold
+                    mockStrategy,
+                    SOURCE_TYPE_CHAINLINK,
+                    address(testTokenFeed),
+                    0, // needsArg
+                    address(0), // fallbackSource
+                    bytes4(0) // fallbackFn
+                )
+            {
+                console.log("Successfully added testToken in setUp");
+            } catch Error(string memory reason) {
+                console.log("Failed to add testToken:", reason);
+            } catch (bytes memory) {
+                console.log("Failed to add testToken (bytes error)");
+            }
+            vm.stopPrank();
+        }
+
+        // Do the same for testToken2
+        if (!liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))) {
+            console.log("Registering testToken2 in setUp");
+
+            // Mock the oracle price getter for testToken2
+            vm.mockCall(
+                address(tokenRegistryOracle),
+                abi.encodeWithSelector(
+                    ITokenRegistryOracle._getTokenPrice_getter.selector,
+                    address(testToken2)
+                ),
+                abi.encode(1e18, true) // price = 1e18, success = true
+            );
+
+            vm.startPrank(admin);
+            try
+                liquidTokenManager.addToken(
+                    IERC20(address(testToken2)),
+                    18, // decimals
+                    0.05 * 1e18, // 5% volatility threshold
+                    mockStrategy2,
+                    SOURCE_TYPE_CHAINLINK,
+                    address(testToken2Feed),
+                    0, // needsArg
+                    address(0), // fallbackSource
+                    bytes4(0) // fallbackFn
+                )
+            {
+                console.log("Successfully added testToken2 in setUp");
+            } catch Error(string memory reason) {
+                console.log("Failed to add testToken2:", reason);
+            } catch (bytes memory) {
+                console.log("Failed to add testToken2 (bytes error)");
+            }
+            vm.stopPrank();
+        }
+
+        // Verify tokens are now supported
+        console.log(
+            "After setup - testToken supported:",
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))
+        );
+        console.log(
+            "After setup - testToken2 supported:",
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))
+        );
+    }
     // Helper function to ensure a node is delegated (only on test networks)
     function _ensureNodeIsDelegated(uint256 nodeId) internal {
         if (!isLocalTestNetwork) return;
@@ -478,9 +578,13 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenFailsIfAlreadySupported() public {
-        // Try to add testToken which was already added in setUp()
+        // First verify token is already supported
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "testToken should be supported"
+        );
+
         uint8 decimals = 18;
-        uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 0;
         MockStrategy duplicateStrategy = new MockStrategy(
             strategyManager,
@@ -499,11 +603,11 @@ contract LiquidTokenManagerTest is BaseTest {
             decimals,
             volatilityThreshold,
             duplicateStrategy,
-            0, // primaryType
-            address(0), // primarySource
-            0, // needsArg
-            address(0), // fallbackSource
-            bytes4(0) // fallbackFn
+            0,
+            address(0),
+            0,
+            address(0),
+            bytes4(0)
         );
     }
 
@@ -1223,41 +1327,74 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testPriceUpdateFailsIfVolatilityThresholdHit() public {
-        vm.startPrank(deployer);
+        // First verify token is supported
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "testToken should be supported"
+        );
 
+        // Get current info for debugging
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
+            .getTokenInfo(IERC20(address(testToken)));
+        console.log("Current token price:", tokenInfo.pricePerUnit);
+        console.log(
+            "Current volatility threshold:",
+            tokenInfo.volatilityThreshold
+        );
+
+        vm.startPrank(deployer);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILiquidTokenManager.VolatilityThresholdHit.selector,
                 IERC20(address(testToken)),
-                1e18
+                1e18 // 100% change
             )
         );
-        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 100% increase but only 10% is allowed
+        liquidTokenManager.updatePrice(IERC20(address(testToken)), 2e18); // 100% increase
         vm.stopPrank();
     }
-
     function testSetVolatilityThresholdSuccess() public {
-        vm.startPrank(deployer);
+        // First verify token is supported
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "testToken should be supported"
+        );
 
+        vm.startPrank(deployer);
         liquidTokenManager.setVolatilityThreshold(
             IERC20(address(testToken)),
             0
         );
+
+        // Setting to 0 should allow any price update without volatility check
         liquidTokenManager.updatePrice(IERC20(address(testToken)), 10e18); // 10x increase should pass
+
+        // Verify price was actually updated
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
+            .getTokenInfo(IERC20(address(testToken)));
+        assertEq(
+            tokenInfo.pricePerUnit,
+            10e18,
+            "Price should be updated to 10e18"
+        );
         vm.stopPrank();
     }
 
     function testSetVolatilityThresholdFailsForInvalidValue() public {
-        vm.startPrank(deployer);
+        // First verify token is supported
+        assertTrue(
+            liquidTokenManager.tokenIsSupported(IERC20(address(testToken))),
+            "testToken should be supported"
+        );
 
+        vm.startPrank(deployer);
         vm.expectRevert(ILiquidTokenManager.InvalidThreshold.selector);
         liquidTokenManager.setVolatilityThreshold(
             IERC20(address(testToken)),
-            1.1e18
-        ); // More than 100%
+            1.1e18 // More than 100%
+        );
         vm.stopPrank();
     }
-
     function testMultipleTokenStrategyManagement() public {
         console.log("Starting testMultipleTokenStrategyManagement");
 

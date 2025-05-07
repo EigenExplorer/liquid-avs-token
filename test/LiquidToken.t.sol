@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import "forge-std/console.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
 import {LiquidToken} from "../src/core/LiquidToken.sol";
@@ -18,9 +19,120 @@ import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
         super.setUp();
-        liquidTokenManager.setVolatilityThreshold(testToken, 0); // Disable volatility check
-    }
 
+        // --- Register testToken ---
+        if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))) {
+            try
+                liquidTokenManager.setVolatilityThreshold(
+                    IERC20(address(testToken)),
+                    0
+                )
+            {
+                console.log("Volatility threshold disabled for testToken");
+            } catch Error(string memory reason) {
+                console.log("Failed to set volatility threshold:", reason);
+            } catch (bytes memory) {
+                console.log(
+                    "Failed to set volatility threshold (unknown error)"
+                );
+            }
+        } else {
+            console.log("testToken not supported, adding it first");
+            vm.startPrank(admin);
+
+            // Mock the oracle price getter for testToken
+            bytes4 getTokenPriceSelector = bytes4(
+                keccak256("_getTokenPrice_getter(address)")
+            );
+            vm.mockCall(
+                address(tokenRegistryOracle),
+                abi.encodeWithSelector(
+                    getTokenPriceSelector,
+                    address(testToken)
+                ),
+                abi.encode(1e18, true) // price = 1e18, success = true
+            );
+
+            try
+                liquidTokenManager.addToken(
+                    IERC20(address(testToken)),
+                    18, // decimals
+                    0, // volatility threshold already set to 0
+                    mockStrategy,
+                    SOURCE_TYPE_CHAINLINK,
+                    address(testTokenFeed),
+                    0, // needsArg
+                    address(0), // fallbackSource
+                    bytes4(0) // fallbackFn
+                )
+            {
+                console.log("Successfully added testToken in LiquidTokenTest");
+            } catch Error(string memory reason) {
+                console.log("Failed to add testToken:", reason);
+            } catch (bytes memory) {
+                console.log("Failed to add testToken (bytes error)");
+            }
+            vm.stopPrank();
+        }
+
+        // --- Register testToken2 ---
+        if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))) {
+            try
+                liquidTokenManager.setVolatilityThreshold(
+                    IERC20(address(testToken2)),
+                    0
+                )
+            {
+                console.log("Volatility threshold disabled for testToken2");
+            } catch Error(string memory reason) {
+                console.log(
+                    "Failed to set volatility threshold for testToken2:",
+                    reason
+                );
+            } catch (bytes memory) {
+                console.log(
+                    "Failed to set volatility threshold for testToken2 (unknown error)"
+                );
+            }
+        } else {
+            console.log("testToken2 not supported, adding it");
+            vm.startPrank(admin);
+
+            // Mock the oracle price getter for testToken2
+            bytes4 getTokenPriceSelector = bytes4(
+                keccak256("_getTokenPrice_getter(address)")
+            );
+            vm.mockCall(
+                address(tokenRegistryOracle),
+                abi.encodeWithSelector(
+                    getTokenPriceSelector,
+                    address(testToken2)
+                ),
+                abi.encode(5e17, true) // price = 0.5e18, success = true
+            );
+
+            try
+                liquidTokenManager.addToken(
+                    IERC20(address(testToken2)),
+                    18, // decimals
+                    0, // volatility threshold already set to 0
+                    mockStrategy2,
+                    SOURCE_TYPE_CHAINLINK,
+                    address(testToken2Feed),
+                    0, // needsArg
+                    address(0), // fallbackSource
+                    bytes4(0) // fallbackFn
+                )
+            {
+                console.log("Successfully added testToken2 in LiquidTokenTest");
+            } catch Error(string memory reason) {
+                console.log("Failed to add testToken2:", reason);
+            } catch (bytes memory) {
+                console.log("Failed to add testToken2 (bytes error)");
+            }
+            vm.stopPrank();
+        }
+    }
     function testDeposit() public {
         vm.prank(user1);
 

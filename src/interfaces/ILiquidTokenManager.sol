@@ -16,9 +16,6 @@ import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
 interface ILiquidTokenManager {
     /// @notice Initialization parameters for LiquidTokenManager
     struct Init {
-        IERC20[] assets;
-        TokenInfo[] tokenInfo;
-        IStrategy[] strategies;
         ILiquidToken liquidToken;
         IStrategyManager strategyManager;
         IDelegationManager delegationManager;
@@ -245,15 +242,6 @@ interface ILiquidTokenManager {
         bytes32[] calldata approverSalts
     ) external;
 
-    /// @notice Undelegate a set of staker nodes from their operators
-    /// @param nodeIds The IDs of the staker nodes
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegateNodes(
-        uint256[] calldata nodeIds
-    ) external;
-    */
-
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
     /// @return The total staked balance of the asset across all nodes
@@ -300,4 +288,13 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @dev Out OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external;
+    */
 }

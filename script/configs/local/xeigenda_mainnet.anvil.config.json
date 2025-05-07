@@ -30,7 +30,7 @@
         "primarySource": "0x536218f9E9Eb48863970252233c8F271f554C2d0",
         "needsArg": 0,
         "fallbackSource": "0xae78736Cd615f374D3085123A210448E74Fc6393",
-        "fallbackSelector": "0x8af07e89"
+        "fallbackSelector": "0xe6aa216c"
       }
     },
     {
@@ -87,7 +87,7 @@
         "primarySource": "0xF017fcB346A1885194689bA23Eff2fE6fA5C483b",
         "needsArg": 0,
         "fallbackSource": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
-        "fallbackSelector": "0xbd6d894d"
+        "fallbackSelector": "0x3ba0b9a9"
       }
     },
     {
@@ -106,7 +106,7 @@
         "primarySource": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
         "needsArg": 0,
         "fallbackSource": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-        "fallbackSelector": "0xcd55c2ad"
+        "fallbackSelector": "0x035faf82"
       }
     },
     {
@@ -125,7 +125,7 @@
         "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
         "needsArg": 1,
         "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
-        "fallbackSelector": "0xf961a013"
+        "fallbackSelector": "0x5890c11c"
       }
     },
     {
@@ -163,7 +163,7 @@
         "primarySource": "0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492",
         "needsArg": 0,
         "fallbackSource": "0xF64bAe65f6f2a5277571143A24FaaFDFC0C2a737",
-        "fallbackSelector": "0x8af07e89"
+        "fallbackSelector": "0x3ba0b9a9"
       }
     },
     {
@@ -182,7 +182,7 @@
         "primarySource": "0xf951E335afb289353dc249e82926178EaC7DEd78",
         "needsArg": 0,
         "fallbackSource": "0xf951E335afb289353dc249e82926178EaC7DEd78",
-        "fallbackSelector": "0xd65ab1f6"
+        "fallbackSelector": "0xd68b2cb6"
       }
     },
     {
@@ -201,7 +201,7 @@
         "primarySource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
         "needsArg": 1,
         "fallbackSource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
-        "fallbackSelector": "0x0a8a5f53"
+        "fallbackSelector": "0xf79c3f02"
       }
     },
     {
@@ -220,7 +220,7 @@
         "primarySource": "0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2",
         "needsArg": 0,
         "fallbackSource": "0xE95A203B1a91a908F9B9CE46459d101078c2c3cb",
-        "fallbackSelector": "0xce1e09c0"
+        "fallbackSelector": "0x71ca337d"
       }
     },
     {
@@ -258,7 +258,7 @@
         "primarySource": "0xa2E3356610840701BDf5611a53974510Ae27E2e1",
         "needsArg": 0,
         "fallbackSource": "0xa2E3356610840701BDf5611a53974510Ae27E2e1",
-        "fallbackSelector": "0x679aefce"
+        "fallbackSelector": "0x3ba0b9a9"
       }
     },
     {
@@ -277,7 +277,7 @@
         "primarySource": "0x861d15F8a4059cb918bD6F3670adAEB1220B298f",
         "needsArg": 0,
         "fallbackSource": "0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568",
-        "fallbackSelector": "0x77c7b8fc"
+        "fallbackSelector": "0xc92aecc4"
       }
     },
     {

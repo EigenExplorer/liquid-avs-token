@@ -463,9 +463,6 @@ contract Deploy is Script, Test {
 
         liquidTokenManager.initialize(
             ILiquidTokenManager.Init({
-                assets: assets,
-                tokenInfo: tokenInfo,
-                strategies: strategies,
                 liquidToken: liquidToken,
                 strategyManager: IStrategyManager(strategyManager),
                 delegationManager: IDelegationManager(delegationManager),
