@@ -86,13 +86,19 @@ contract LiquidTokenManager is
             revert ZeroAddress();
         }
 
-        if (init.assets.length != init.tokenInfo.length) {
-            revert LengthMismatch(init.assets.length, init.tokenInfo.length);
-        }
-
-        if (init.assets.length != init.strategies.length) {
-            revert LengthMismatch(init.assets.length, init.strategies.length);
-        }
+        // ===> I JUST ADD MORE  RESTRICTION <===
+        require(
+            init.assets.length == 0,
+            "LTM: No tokens allowed in init; use addToken"
+        );
+        require(
+            init.tokenInfo.length == 0,
+            "LTM: No tokenInfo allowed in init; use addToken"
+        );
+        require(
+            init.strategies.length == 0,
+            "LTM: No strategies allowed in init; use addToken"
+        );
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
@@ -104,47 +110,7 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
 
-        // Initialize strategies for each asset
-        uint256 len = init.assets.length;
-        unchecked {
-            for (uint256 i = 0; i < len; i++) {
-                if (
-                    address(init.assets[i]) == address(0) ||
-                    address(init.strategies[i]) == address(0)
-                ) {
-                    revert ZeroAddress();
-                }
-
-                if (init.tokenInfo[i].decimals == 0) {
-                    revert InvalidDecimals();
-                }
-
-                if (
-                    init.tokenInfo[i].volatilityThreshold != 0 &&
-                    (init.tokenInfo[i].volatilityThreshold < 1e16 ||
-                        init.tokenInfo[i].volatilityThreshold > 1e18)
-                ) {
-                    revert InvalidThreshold();
-                }
-
-                if (tokens[init.assets[i]].decimals != 0) {
-                    revert TokenExists(address(init.assets[i]));
-                }
-
-                tokens[init.assets[i]] = init.tokenInfo[i];
-                tokenStrategies[init.assets[i]] = init.strategies[i];
-                supportedTokens.push(init.assets[i]);
-
-                emit TokenAdded(
-                    init.assets[i],
-                    init.tokenInfo[i].decimals,
-                    init.tokenInfo[i].pricePerUnit,
-                    init.tokenInfo[i].volatilityThreshold,
-                    address(init.strategies[i]),
-                    msg.sender
-                );
-            }
-        }
+        // No token population allowed here!
     }
 
     /// @notice Adds a new token to the registry and configures its price sources
