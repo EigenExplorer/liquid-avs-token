@@ -17,7 +17,7 @@
     {
       "name": "Eigen",
       "addresses": {
-        "token": "0x275ccf9be51f4a6c94aba6114cdf2a4c45b9cb27",
+        "token": "0x3b78576f7d6837500ba3de27a60c7f594934027e",
         "strategy": "0x43252609bff8a13dfe5e057097f2f45a24387a84"
       },
       "params": {

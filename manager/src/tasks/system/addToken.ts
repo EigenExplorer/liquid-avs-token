@@ -27,7 +27,6 @@ import {
 export async function addToken(
   tokenAddress: string,
   decimals: number,
-  initialPrice: string,
   volatilityThreshold: string,
   strategyAddress: string,
   primaryType: number,
@@ -42,7 +41,7 @@ export async function addToken(
     // Setup task params
     const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS;
     const abi = parseAbi([
-      "function addToken(address,uint8,uint256,uint256,address,uint8,address,uint8,address,bytes4)",
+      "function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)",
     ]);
     const metadata = {
       title: `Add Token ${tokenAddress}`,
@@ -56,7 +55,6 @@ export async function addToken(
       args: [
         tokenAddress,
         decimals,
-        BigInt(initialPrice),
         BigInt(volatilityThreshold),
         strategyAddress,
         primaryType,
