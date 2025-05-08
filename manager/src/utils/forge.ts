@@ -243,3 +243,12 @@ export async function getPendingProposals(
   if (!multisigAddress) throw new Error("Env vars not set correctly.");
   return (await apiKit.getPendingTransactions(multisigAddress)).results;
 }
+
+export function isContractOurs(address: string): boolean {
+  return (
+    address === LIQUID_TOKEN_ADDRESS.toLowerCase() ||
+    address === LIQUID_TOKEN_MANAGER_ADDRESS.toLowerCase() ||
+    address === STAKER_NODE_COORDINATOR_ADDRESS.toLowerCase() ||
+    address === TOKEN_REGISTRY_ORACLE_ADDRESS.toLowerCase()
+  );
+}

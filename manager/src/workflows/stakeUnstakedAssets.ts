@@ -1,4 +1,8 @@
-import { getPendingProposals, LIQUID_TOKEN_ADDRESS } from "../utils/forge";
+import {
+  getPendingProposals,
+  isContractOurs,
+  LIQUID_TOKEN_ADDRESS,
+} from "../utils/forge";
 import {
   type NodeAllocation,
   stakeAssetsToNodes,
@@ -40,12 +44,14 @@ const LAT_API_URL = process.env.LAT_API_URL;
  */
 export async function stakeUnstakedAssets() {
   try {
-    // Check if the multisig has any pending proposals
-    const pendingProposalsCount = (await getPendingProposals()).length;
-    if (pendingProposalsCount > 0) {
-      throw new Error(
-        `Cannot execute workflow due to ${pendingProposalsCount} pending proposals on Admin multisig`
-      );
+    // Check if the multisig has any pending proposals for this LAT
+    const pendingProposals = await getPendingProposals();
+    for (const proposal of pendingProposals) {
+      if (isContractOurs(proposal.to.toLowerCase())) {
+        throw new Error(
+          `Cannot execute workflow due to existing pending tx for this LAT at nonce ${proposal.nonce}`
+        );
+      }
     }
 
     // LAT API: Fetch unstaked assets and amounts
@@ -143,7 +149,7 @@ export async function stakeUnstakedAssets() {
 
     console.log("[Manager] Stake unstaked assets complete");
   } catch (error) {
-    console.log("[Manager] Error: ", error);
+    console.log("[Manager] Error: ", error.message);
     throw error;
   }
 }
