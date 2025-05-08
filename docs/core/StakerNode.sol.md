@@ -1,9 +1,9 @@
 # StakerNode
 
-[Git Source](https://github.com/EigenExplorer/liquid-avs-token/blob/5327ad163b4824431dc106b6e260de3ac2542f2f/src/core/StakerNode.sol)
+[Git Source](https://github.com/EigenExplorer/liquid-avs-token/src/core/StakerNode.sol)
 
 **Inherits:**
-[IStakerNode](/src/interfaces/IStakerNode.sol/interface.IStakerNode.md), Initializable, ReentrancyGuardUpgradeable
+[IStakerNode](/src/interfaces/IStakerNode.sol), Initializable, ReentrancyGuardUpgradeable
 
 Implements staking node functionality for tokens, enabling token staking, delegation, and rewards management
 

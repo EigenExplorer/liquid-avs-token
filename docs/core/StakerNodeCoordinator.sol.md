@@ -1,9 +1,9 @@
 # StakerNodeCoordinator
 
-[Git Source](https://github.com/EigenExplorer/liquid-avs-token/blob/5327ad163b4824431dc106b6e260de3ac2542f2f/src/core/StakerNodeCoordinator.sol)
+[Git Source](https://github.com/EigenExplorer/liquid-avs-token/src/core/StakerNodeCoordinator.sol)
 
 **Inherits:**
-[IStakerNodeCoordinator](/src/interfaces/IStakerNodeCoordinator.sol/interface.IStakerNodeCoordinator.md), AccessControlUpgradeable
+[IStakerNodeCoordinator](/src/interfaces/IStakerNodeCoordinator.sol), AccessControlUpgradeable
 
 Coordinates the creation and management of staker nodes
 

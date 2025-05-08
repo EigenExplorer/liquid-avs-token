@@ -1,9 +1,9 @@
 # LiquidToken
 
-[Git Source](https://github.com/EigenExplorer/liquid-avs-token/blob/5327ad163b4824431dc106b6e260de3ac2542f2f/src/core/LiquidToken.sol)
+[Git Source](https://github.com/EigenExplorer/liquid-avs-token/src/core/LiquidToken.sol)
 
 **Inherits:**
-[ILiquidToken](/src/interfaces/ILiquidToken.sol/interface.ILiquidToken.md), AccessControlUpgradeable, ERC20Upgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable
+[ILiquidToken](/src/interfaces/ILiquidToken.sol), AccessControlUpgradeable, ERC20Upgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable
 
 Implements a liquid staking token with deposit, withdrawal, and asset management functionalities
 
