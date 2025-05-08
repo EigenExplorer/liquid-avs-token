@@ -20,7 +20,6 @@ async function manualAddToken() {
     // ------------------------------------------------------------------------------------
     const tokenAddress: string = "0x";
     const decimals: number = 18;
-    const initialPrice: string = "1000000000000000000";
     const volatilityThreshold: string = "50000000000000000";
     const strategyAddress: string = "0x";
     const primaryType: number = 1;
@@ -34,7 +33,6 @@ async function manualAddToken() {
     await addToken(
       tokenAddress,
       decimals,
-      initialPrice,
       volatilityThreshold,
       strategyAddress,
       primaryType,

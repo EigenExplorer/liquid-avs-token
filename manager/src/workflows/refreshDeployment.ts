@@ -115,7 +115,7 @@ export async function refreshDeployment() {
 
     await refreshDeploymentAddresses();
   } catch (error) {
-    console.log("[Manager] Error: ", error);
+    console.log("[Manager] Error: ", error.message);
     throw error;
   }
 }
