@@ -338,13 +338,12 @@ export async function testAddToken() {
     let passing = true;
     const functionName = "addToken";
     const abi = parseAbi([
-      "function addToken(address,uint8,uint256,uint256,address,uint8,address,uint8,address,bytes4)",
+      "function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)",
     ]);
 
     const args: [
       string,
       number,
-      string,
       string,
       string,
       number,
@@ -357,7 +356,6 @@ export async function testAddToken() {
         ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
         : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
       18,
-      "1000000000000000000",
       "50000000000000000",
       NETWORK === "holesky"
         ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
@@ -389,7 +387,6 @@ export async function testAddToken() {
           ? "0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3" // sfrxETH
           : "0xac3e018457b222d93114458476f3e3416abbe38f", // sfrxETH
         18,
-        BigInt("1000000000000000000"),
         BigInt("50000000000000000"),
         NETWORK === "holesky"
           ? "0x9281ff96637710cd9a5cacce9c6fad8c9f54631c"
