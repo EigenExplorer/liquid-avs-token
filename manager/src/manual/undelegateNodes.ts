@@ -34,13 +34,11 @@ async function manualUndelegateNodes() {
       `[Manual] Undelegate ${nodeIds.length} Staker Node(s): nonce: ${pendingTx[0].nonce}`
     );
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual] Running manual tx proposal...");
-    await manualUndelegateNodes();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualUndelegateNodes();
 })();

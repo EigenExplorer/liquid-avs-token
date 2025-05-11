@@ -51,13 +51,11 @@ async function manualDelegateNodes() {
       `[Manual] Delegate ${nodeIds.length} Staker Nodes: nonce: ${pendingTx[0].nonce}`
     );
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual] Running manual tx proposal...");
-    await manualDelegateNodes();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualDelegateNodes();
 })();

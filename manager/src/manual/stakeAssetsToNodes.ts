@@ -48,13 +48,11 @@ async function manualStakeAssetsToNodes() {
       `[Manual] Stake Assets To ${allocations.length} Node(s): nonce: ${pendingTx[0].nonce}`
     );
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual] Running manual tx proposal...");
-    await manualStakeAssetsToNodes();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualStakeAssetsToNodes();
 })();

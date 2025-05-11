@@ -37,13 +37,11 @@ async function manualBatchUpdateRates() {
       );
     }
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual][System] Running manual tx proposal...");
-    await manualBatchUpdateRates();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualBatchUpdateRates();
 })();
