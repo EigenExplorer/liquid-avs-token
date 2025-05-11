@@ -203,30 +203,26 @@ export function getOutputFile(): string {
  * @returns
  */
 export async function refreshDeploymentAddresses() {
-  try {
-    const output = await JSON.parse(
-      await fs.readFile(
-        path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`),
-        "utf8"
-      )
-    );
+  const output = await JSON.parse(
+    await fs.readFile(
+      path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`),
+      "utf8"
+    )
+  );
 
-    LIQUID_TOKEN_ADDRESS = String(output.proxyAddress);
-    LIQUID_TOKEN_MANAGER_ADDRESS = String(
-      output.contractDeployments.proxy.liquidTokenManager.address
-    );
-    STAKER_NODE_COORDINATOR_ADDRESS = String(
-      output.contractDeployments.proxy.stakerNodeCoordinator.address
-    );
-    TOKEN_REGISTRY_ORACLE_ADDRESS = String(
-      output.contractDeployments.proxy.tokenRegistryOracle.address
-    );
-    ADMIN = String(output.roles.admin);
-    PAUSER = String(output.roles.pauser);
-    PRICE_UPDATER = String(output.roles.priceUpdater);
-  } catch (error) {
-    console.log("Error: ", error);
-  }
+  LIQUID_TOKEN_ADDRESS = String(output.proxyAddress);
+  LIQUID_TOKEN_MANAGER_ADDRESS = String(
+    output.contractDeployments.proxy.liquidTokenManager.address
+  );
+  STAKER_NODE_COORDINATOR_ADDRESS = String(
+    output.contractDeployments.proxy.stakerNodeCoordinator.address
+  );
+  TOKEN_REGISTRY_ORACLE_ADDRESS = String(
+    output.contractDeployments.proxy.tokenRegistryOracle.address
+  );
+  ADMIN = String(output.roles.admin);
+  PAUSER = String(output.roles.pauser);
+  PRICE_UPDATER = String(output.roles.priceUpdater);
 }
 
 /**

@@ -36,13 +36,11 @@ async function manualUpgradeStakerNodeImplementation() {
       );
     }
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual][System] Running manual tx proposal...");
-    await manualUpgradeStakerNodeImplementation();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualUpgradeStakerNodeImplementation();
 })();

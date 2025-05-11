@@ -38,13 +38,11 @@ async function manualCreateStakerNodes() {
       );
     }
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual] Running manual tx proposal...");
-    await manualCreateStakerNodes();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualCreateStakerNodes();
 })();

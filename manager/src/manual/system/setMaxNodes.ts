@@ -5,7 +5,7 @@ import { refreshDeployment } from "../../workflows/refreshDeployment";
 
 /**
  * To run this script, edit the params and run
- * `npx tsx run .src/manual/system/setMaxNodes.ts` from the `/manager` folder
+ * `npx tsx ./src/manual/system/setMaxNodes.ts` from the `/manager` folder
  *
  * IMPORTANT:
  * Make sure the .env is updated to the LAT and the deployment you're targetting!
@@ -36,13 +36,11 @@ async function manualSetMaxNodes() {
       );
     }
   } catch (error) {
-    console.log(error);
+    console.log("[Manual] Error: ", error.message);
   }
 }
 
 (async () => {
-  try {
-    console.log("[Manual][System] Running manual tx proposal...");
-    await manualSetMaxNodes();
-  } catch {}
+  console.log("[Manual] Running manual tx proposal...");
+  await manualSetMaxNodes();
 })();
