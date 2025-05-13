@@ -13,6 +13,8 @@ import {
   testUpgradeStakerNodeImplementation,
   testBatchUpdateRates,
   testUpdateAllPricesIfNeeded,
+  testGrantRole,
+  testRevokeRole,
 } from "./tasks";
 
 /**
@@ -39,6 +41,8 @@ async function testAllTasks() {
     await testUpgradeStakerNodeImplementation();
     await testUpdateAllPricesIfNeeded();
     await testBatchUpdateRates();
+    await testGrantRole();
+    await testRevokeRole();
   } catch {}
 }
 

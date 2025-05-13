@@ -1,7 +1,13 @@
 import "dotenv/config";
 
 import type { Abi } from "viem";
-import { ADMIN, DEPLOYMENT, NETWORK, PAUSER } from "../../utils/forge";
+import {
+  ADMIN,
+  DEPLOYMENT,
+  LIQUID_TOKEN_ADDRESS,
+  NETWORK,
+  PAUSER,
+} from "../../utils/forge";
 import { apiKit } from "../../utils/safe";
 import { decodeFunctionData, encodeFunctionData, parseAbi } from "viem/utils";
 import { createStakerNodes } from "../../tasks/createStakerNodes";
@@ -21,6 +27,8 @@ import { unpauseLiquidToken } from "../../tasks/system/unpauseLiquidToken";
 import { upgradeStakerNodeImplementation } from "../../tasks/system/upgradeStakerNodeImplementation";
 import { batchUpdateRates } from "../../tasks/system/batchUpdateRates";
 import { updateAllPricesIfNeeded } from "../../tasks/system/updateAllPricesIfNeeded";
+import { grantRole } from "../../tasks/system/grantRole";
+import { revokeRole } from "../../tasks/system/revokeRole";
 
 // --- Manager tasks tests ---
 
@@ -712,6 +720,7 @@ export async function testUpdateAllPricesIfNeeded() {
 
 /**
  * Test script for batched price update
+ *
  */
 export async function testBatchUpdateRates() {
   try {
@@ -736,6 +745,94 @@ export async function testBatchUpdateRates() {
     ];
 
     await batchUpdateRates(args[0], args[1]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args,
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for granting role
+ *
+ */
+export async function testGrantRole() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "grantRole";
+    const abi = parseAbi(["function grantRole(bytes32,address)"]);
+
+    const args: [`0x${string}`, string] = [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x457e4309b91f5cb6b0ad9c6bf39e4788b5ba6a12",
+    ];
+
+    await grantRole(LIQUID_TOKEN_ADDRESS, args[0], args[1]);
+
+    // Get proposed tx
+    const pendingTx = (
+      await apiKit.getPendingTransactions(ADMIN, {
+        limit: 1,
+      })
+    ).results[0];
+
+    const txData = pendingTx.data as `0x${string}`;
+    const expectedTxData = encodeFunctionData({
+      abi,
+      functionName,
+      args,
+    });
+    passing = compareTxData(txData, expectedTxData, abi);
+
+    console.log(
+      `[Test] ${functionName}: `,
+      passing ? "passing ✅" : "failing ❌"
+    );
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+/**
+ * Test script for revoking role
+ *
+ */
+export async function testRevokeRole() {
+  try {
+    if (DEPLOYMENT !== "local") throw new Error("Deployment is not local");
+    if (!ADMIN) throw new Error("Env vars not set correctly.");
+
+    let passing = true;
+    const functionName = "revokeRole";
+    const abi = parseAbi(["function revokeRole(bytes32,address)"]);
+
+    const args: [`0x${string}`, string] = [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x457e4309b91f5cb6b0ad9c6bf39e4788b5ba6a12",
+    ];
+
+    await revokeRole(LIQUID_TOKEN_ADDRESS, args[0], args[1]);
 
     // Get proposed tx
     const pendingTx = (
