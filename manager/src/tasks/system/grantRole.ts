@@ -40,15 +40,21 @@ export async function grantRole(
     // Setup task params
     const abi = parseAbi(["function grantRole(bytes32,address)"]);
     const metadata = {
-      title: `Grant ${role} Role on ${contractAddress}`,
-      description: `Proposal to grant the ${role} role to ${newAddress} via manual proposal`,
+      title: "Grant Role",
+      description: `Proposal to grant the ${role.substring(
+        0,
+        4
+      )}...${role.substring(role.length - 4)} role to ${newAddress.substring(
+        0,
+        4
+      )}...${newAddress.substring(newAddress.length - 4)} via manual proposal`,
     };
 
     // Setup transaction data
     const data = encodeFunctionData({
       abi,
       functionName: "grantRole",
-      args: [roleHash, getAddress(newAddress)],
+      args: [roleHash, newAddress],
     });
     const metaTransactionData = {
       to: getAddress(contractAddress),

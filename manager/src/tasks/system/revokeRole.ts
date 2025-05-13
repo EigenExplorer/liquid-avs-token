@@ -13,20 +13,17 @@ import { ADMIN, proposeSafeTransaction } from "../../utils/forge";
 import { getViemClient } from "../../utils/viemClient";
 
 /**
- * Creates a proposal for revoking a role, with optional safety check to ensure
- * at least one address will still have the role after revocation
+ * Creates a proposal for revoking a role using `revokeRole` on an AccessControlUpgradeable contract
  *
  * @param contractAddress
  * @param role
  * @param addressToRevoke
- * @param skipSafetyCheck
  * @returns
  */
 export async function revokeRole(
   contractAddress: string,
   role: string,
-  addressToRevoke: string,
-  skipSafetyCheck = false
+  addressToRevoke: string
 ) {
   try {
     if (!ADMIN) throw new Error("Env vars not set correctly.");
@@ -52,7 +49,7 @@ export async function revokeRole(
       address: getAddress(contractAddress),
       abi: roleManagerAbi,
       functionName: "hasRole",
-      args: [roleHash, getAddress(addressToRevoke)],
+      args: [roleHash, addressToRevoke],
     });
 
     if (!hasRole)
@@ -60,50 +57,21 @@ export async function revokeRole(
         `Address ${addressToRevoke} does not have the ${role} role`
       );
 
-    // Safety check: Make sure we're not removing the last address with this role
-    if (!skipSafetyCheck) {
-      // Ensure that there are more than 1 addresses with this role
-      const memberCount = await viemClient.readContract({
-        address: getAddress(contractAddress),
-        abi: roleManagerAbi,
-        functionName: "getRoleMemberCount",
-        args: [roleHash],
-      });
-
-      if (Number(memberCount) <= 1)
-        throw new Error(
-          `Safety check failed: ${addressToRevoke} is the only address with the ${role} role. If you know what you're doing, disable safety check and try again.`
-        );
-
-      // Additional check for critical roles: Ensure that the same address wasn't registered multiple times or zero address was registered
-      // We do this by making sure there would be at least one valid address with this role after revocation
-      let foundAlternative = false;
-      for (let i = 0; i < Number(memberCount); i++) {
-        const member = await viemClient.readContract({
-          address: getAddress(contractAddress),
-          abi: roleManagerAbi,
-          functionName: "getRoleMember",
-          args: [roleHash, BigInt(i)],
-        });
-
-        if (getAddress(member) !== getAddress(addressToRevoke)) {
-          foundAlternative = true;
-          break;
-        }
-      }
-
-      if (!foundAlternative) {
-        throw new Error(
-          `Safety check failed: No alternative addresses found with the ${role} role. If you know what you're doing, disable safety check and try again.`
-        );
-      }
-    }
-
     // Setup task params
     const abi = parseAbi(["function revokeRole(bytes32,address)"]);
     const metadata = {
-      title: `Revoke ${role} Role on ${contractAddress}`,
-      description: `Proposal to revoke the ${role} role from ${addressToRevoke} via manual proposal`,
+      title: "Revoke Role",
+      description: `Proposal to revoke the ${role.substring(
+        0,
+        4
+      )}...${role.substring(
+        role.length - 4
+      )} role to ${addressToRevoke.substring(
+        0,
+        4
+      )}...${addressToRevoke.substring(
+        addressToRevoke.length - 4
+      )} via manual proposal`,
     };
 
     // Setup transaction data

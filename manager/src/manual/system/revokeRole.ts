@@ -10,6 +10,15 @@ import { refreshDeployment } from "../../workflows/refreshDeployment";
  * IMPORTANT:
  * Make sure the .env is updated to the LAT and the deployment you're targetting!
  *
+ * ================--WARNING: PROCEED WITH CAUTION--================
+ * USE THE GRANT ROLE PROPOSAL FIRST TO MAKE SURE THERE EXISTS
+ * ANOTHER ACCOUNT ALREADY HOLDING THE ROLE YOU PLAN TO REVOKE
+ *
+ * REVOKING A ROLE WITHOUT AN EXISTING BACKUP CAN CAUSE A
+ * PERMANENT LOCK ON THE CONTRACT
+ *
+ * PROCEED ONLY IF YOU KNOW WHAT YOU'RE DOING
+ * =================================================================
  */
 async function manualRevokeRole() {
   try {
@@ -19,13 +28,12 @@ async function manualRevokeRole() {
     // Function params, edit these!
     // ------------------------------------------------------------------------------------
     const contractAddress: string = "0x";
-    const role: string = "DEFAULT_ADMIN_ROLE";
+    const role: string = "RATE_UPDATER_ROLE";
     const addressToRevoke: string = "0x";
-    const skipSafetyCheck: boolean = false;
     // ------------------------------------------------------------------------------------
 
     await refreshDeployment();
-    await revokeRole(contractAddress, role, addressToRevoke, skipSafetyCheck);
+    await revokeRole(contractAddress, role, addressToRevoke);
 
     const pendingTransactions = (
       await apiKit.getPendingTransactions(ADMIN, {
