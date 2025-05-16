@@ -1,5 +1,5 @@
 {
-  "avsAddress": "0x870679e138bcdf293b7ff14dd44b70fc97e12fc0",
+  "avsAddress": "0x22cac0e6a1465f043428e8aef737b3cb09d0eeda",
   "contracts": {
     "stakerNodeCoordinator": {
       "init": {
@@ -8,12 +8,30 @@
     },
     "liquidToken": {
       "init": {
-        "name": "EigenDA ETH Liquid Avs Token",
-        "symbol": "xEigenDA"
+        "name": "Lagrange ZK Prover Network ETH Liquid Avs Token",
+        "symbol": "xLagrangeZKPN-ETH"
       }
     }
   },
   "tokens": [
+    {
+      "name": "ETH",
+      "addresses": {
+        "token": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
+        "strategy": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0"
+      },
+      "params": {
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
+      }
+    },
     {
       "name": "rETH",
       "addresses": {
@@ -33,10 +51,10 @@
       }
     },
     {
-      "name": "mETH",
+      "name": "stETH",
       "addresses": {
-        "token": "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
-        "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
+        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
       },
       "params": {
         "volatilityThreshold": "50000000000000000",
@@ -44,10 +62,10 @@
       },
       "oracle": {
         "sourceType": 1,
-        "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
+        "primarySource": "0x86392dC19c0b719886221c78AB11eb8Cf5c52812",
         "needsArg": 1,
-        "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
-        "fallbackSelector": "0x5890c11c"
+        "fallbackSource": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "fallbackSelector": "0x7a28fb88"
       }
     },
     {
@@ -69,21 +87,21 @@
       }
     },
     {
-      "name": "osETH",
+      "name": "mETH",
       "addresses": {
-        "token": "0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9",
-        "strategy": "0x57ba429517c3473b6d34ca9acd56c0e735b94c02"
+        "token": "0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa",
+        "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
       },
       "params": {
         "volatilityThreshold": "50000000000000000",
         "decimals": 18
       },
       "oracle": {
-        "sourceType": 2,
-        "primarySource": "0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d",
+        "sourceType": 1,
+        "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
         "needsArg": 1,
-        "fallbackSource": "0x2A261e60FB14586B474C208b1B7AC6D0f5000306",
-        "fallbackSelector": "0x07a2d13a"
+        "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
+        "fallbackSelector": "0x5890c11c"
       }
     },
     {
@@ -123,24 +141,6 @@
       }
     },
     {
-      "name": "lsETH",
-      "addresses": {
-        "token": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
-        "strategy": "0xae60d8180437b5c34bb956822ac2710972584473"
-      },
-      "params": {
-        "volatilityThreshold": "50000000000000000",
-        "decimals": 18
-      },
-      "oracle": {
-        "sourceType": 3,
-        "primarySource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
-        "needsArg": 1,
-        "fallbackSource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
-        "fallbackSelector": "0xf79c3f02"
-      }
-    },
-    {
       "name": "ankrETH",
       "addresses": {
         "token": "0xE95A203B1a91a908F9B9CE46459d101078c2c3cb",
@@ -156,24 +156,6 @@
         "needsArg": 0,
         "fallbackSource": "0xE95A203B1a91a908F9B9CE46459d101078c2c3cb",
         "fallbackSelector": "0x71ca337d"
-      }
-    },
-    {
-      "name": "OETH",
-      "addresses": {
-        "token": "0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3",
-        "strategy": "0xa4c637e0f704745d182e4d38cab7e7485321d059"
-      },
-      "params": {
-        "volatilityThreshold": "50000000000000000",
-        "decimals": 18
-      },
-      "oracle": {
-        "sourceType": 1,
-        "primarySource": "0x703118C4CbccCBF2AB31913e0f8075fbbb15f563",
-        "needsArg": 1,
-        "fallbackSource": "0xDcEe70654261AF21C44c093C300eD3Bb97b78192",
-        "fallbackSelector": "0x07a2d13a"
       }
     },
     {

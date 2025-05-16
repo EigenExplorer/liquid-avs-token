@@ -29,8 +29,8 @@
 #  1. LTM_UndelegateNodes (out of scope for v1)
 
 # Instructions:
-# To load env file: source .env
 # To setup a local node (on a separate terminal instance): anvil --fork-url $RPC_URL
+# Edit the script where "User action" is marked
 # To run this script (make sure terminal is at the root directory `/liquid-avs-token`):
 #  1. chmod +x script/tasks/run.sh
 #  2. script/tasks/run.sh
@@ -49,26 +49,46 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
+# Auto-load environment variables
+if [ -f .env ]; then
+    source .env
+    echo "[Script] Environment variables loaded from .env"
+else
+    echo "[Script] Error: .env file not found"
+    exit 1
+fi
+
+# User action (1/1): Edit deployment info
+LAT_NAME="xskate-eth"
+CHAIN="mainnet"
+
+# User action (2/2): Copy relevant config file from `/configs/holesky` or `/configs/mainnet` folders into `/configs/local`
+# Note: Update all addresses in `roles` in the config to match `ADMIN_PUBLIC_KEY` below (anvil test acc #1)
+DEPLOYMENT_CONFIG_FILE="${LAT_NAME}.anvil.config.json"
+ADMIN_PUBLIC_KEY="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+ADMIN_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+
 # Environment configuration
 RPC_URL="http://127.0.0.1:8545"
-DEPLOYER_PRIVATE_KEY="${DEPLOYER_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}"
-ADMIN_PRIVATE_KEY="${ADMIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
-PRICE_UPDATER_PRIVATE_KEY="${PRICE_UPDATER_PRIVATE_KEY:-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a}"
+DEPLOYER_PRIVATE_KEY="0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
 mkdir -p script/outputs/local
 
-# Chain configuration (replace mainnet <> holesky to switch chains)
-NETWORK_CONFIG_FILE="holesky.json"
-DEPLOYMENT_CONFIG_FILE="xeigenda_holesky.anvil.config.json"
+# Chain configuration
+NETWORK_CONFIG_FILE="${CHAIN}.json"
 OUTPUT_PATH="script/outputs/local/deployment_data.json"
 OUTPUT_FILE="/local/deployment_data.json"
-RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb" # mainnet: "0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
+if [ "$CHAIN" = "mainnet" ]; then
+    RETH_WHALE="0x3ad1b118813e71a6b2683fcb2044122fe195ac36"
+elif [ "$CHAIN" = "holesky" ]; then
+    RETH_WHALE="0xC9CA2bA9A27De1Db589d8c33Ab8EDFa2111b31fb"
+fi
 
-# Deploy contracts (replace Mainnet <> Holesky to switch chains)
-forge script --via-ir --optimize true script/deploy/local/DeployHolesky.s.sol:Deploy \
+# Deploy contracts
+forge script --via-ir --optimize true script/deploy/local/Deploy.s.sol:Deploy \
     --rpc-url $RPC_URL --broadcast \
     --private-key $DEPLOYER_PRIVATE_KEY \
-    --sig "run(string)" \
-    -- $DEPLOYMENT_CONFIG_FILE
+    --sig "run(string,string)" \
+    -- $DEPLOYMENT_CONFIG_FILE $CHAIN
 
 #-----------------------------------------------------------------------------------------------------
 # ACTION

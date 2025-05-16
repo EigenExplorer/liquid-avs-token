@@ -5,10 +5,11 @@
 #-----------------------------------------------------------------------------------------------------
 
 # Instructions:
-# To load env file: source .env
+# Edit the script where "User action" is marked
 # To run this script:
 #  1. chmod +x script/deploy/mainnet/deploy.sh
 #  2. script/deploy/mainnet/deploy.sh
+# If writing update to GH, when prompted for password, input your access token (not your GH password)
 
 #-----------------------------------------------------------------------------------------------------
 # SETUP
@@ -38,7 +39,7 @@ if [ -z "$ETHERSCAN_API_KEY" ]; then
     exit 0
 fi
 
-# Deployment info (edit this)
+# User action (1/1): Edit deployment info
 LAT_NAME=""
 DEPLOYMENT_NAME="v1"
 

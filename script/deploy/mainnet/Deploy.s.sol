@@ -132,7 +132,7 @@ contract Deploy is Script, Test {
     uint256 public oracleSalt;
 
     function run(string memory deployConfigFileName) external {
-        // Load config files
+        // Load config file
         loadConfig(deployConfigFileName);
         oracleSalt = vm.envUint("ORACLE_SALT");
         require(admin != address(0), "Admin address must not be zero");

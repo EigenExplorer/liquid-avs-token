@@ -27,11 +27,8 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 /// @dev To load env file:
 // source .env
 
-/// @dev To setup a local node (on a separate terminal instance):
-// anvil --fork-url $RPC_URL
-
 /// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/local/DeployHolesky.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "holesky.json" "xeigenda_holesky.anvil.config.json" -vvvv
+// forge script script/deploy/local/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string,string)" -- "xeigenda.anvil.config.json" "mainnet" -vvvv
 
 event RoleAssigned(string contractName, string role, address recipient);
 
@@ -44,7 +41,6 @@ struct OracleConfig {
     bytes4 fallbackSelector;
 }
 
-// Add name (optional) and oracle config to TokenConfig
 struct TokenAddresses {
     address strategy;
     address token;
@@ -135,9 +131,9 @@ contract Deploy is Script, Test {
     uint256 public stakerNodeCoordinatorInitTimestamp;
     uint256 public oracleSalt;
 
-    function run(string memory deployConfigFileName) external {
-        // Load config files
-        loadConfig(deployConfigFileName);
+    function run(string memory deployConfigFileName, string memory chain) external {
+        // Load config file
+        loadConfig(deployConfigFileName, chain);
         oracleSalt = vm.envUint("ORACLE_SALT");
         require(admin != address(0), "Admin address must not be zero");
         require(admin != msg.sender, "Deployer and admin must be different");
@@ -187,9 +183,9 @@ contract Deploy is Script, Test {
         return stdJson.readAddress(deployConfigData, jsonPath);
     }
 
-    function loadConfig(string memory deployConfigFileName) internal {
+    function loadConfig(string memory deployConfigFileName, string memory chain) internal {
         // Load network-specific config
-        string memory networkConfigPath = "script/configs/holesky.json";
+        string memory networkConfigPath = string.concat("script/configs/", chain, ".json");
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(
             stdJson.readUint(networkConfigData, ".network.chainId") ==
@@ -208,7 +204,9 @@ contract Deploy is Script, Test {
 
         // Load deployment-specific config
         string memory deployConfigPath = string(
-            bytes(string.concat("script/configs/local/", deployConfigFileName))
+            bytes(
+                string.concat("script/configs/local/", deployConfigFileName)
+            )
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);
 
@@ -242,6 +240,7 @@ contract Deploy is Script, Test {
                 vm.toString(i),
                 "]"
             );
+
             // Addresses
             TokenAddresses memory addrs;
             addrs.token = stdJson.readAddress(
@@ -403,7 +402,7 @@ contract Deploy is Script, Test {
 
         tokenRegistryOracle.initialize(
             ITokenRegistryOracle.Init({
-                initialOwner: msg.sender,
+                initialOwner: msg.sender, // burner, will transfer to admin
                 priceUpdater: priceUpdater,
                 liquidToken: address(liquidToken),
                 liquidTokenManager: ILiquidTokenManager(
@@ -504,7 +503,6 @@ contract Deploy is Script, Test {
                 continue;
             }
 
-            console.log("Configuring token in Oracle:", tokens[i].name);
             tokenRegistryOracle.configureToken(
                 address(tokens[i].addresses.token),
                 tokens[i].oracle.sourceType,
@@ -772,11 +770,11 @@ contract Deploy is Script, Test {
             "Staker Nodes Delegator role not assigned in StakerNodeCoordinator"
         );
 
+        // TokenRegistryOracle
         require(
             tokenRegistryOracle.hasRole(adminRole, admin),
             "Admin role not assigned in TokenRegistryOracle"
         );
-
         require(
             tokenRegistryOracle.hasRole(
                 tokenRegistryOracle.RATE_UPDATER_ROLE(),

@@ -1,5 +1,5 @@
 {
-  "avsAddress": "0x870679e138bcdf293b7ff14dd44b70fc97e12fc0",
+  "avsAddress": "0xef2a435e5ee44b2041100ef8cbc8ae035166606c",
   "contracts": {
     "stakerNodeCoordinator": {
       "init": {
@@ -8,12 +8,30 @@
     },
     "liquidToken": {
       "init": {
-        "name": "EigenDA ETH Liquid Avs Token",
-        "symbol": "xEigenDA"
+        "name": "Aligned ETH Liquid Avs Token",
+        "symbol": "xAligned-ETH"
       }
     }
   },
   "tokens": [
+    {
+      "name": "ETH",
+      "addresses": {
+        "token": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
+        "strategy": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0"
+      },
+      "params": {
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
+      }
+    },
     {
       "name": "rETH",
       "addresses": {
@@ -33,10 +51,10 @@
       }
     },
     {
-      "name": "mETH",
+      "name": "stETH",
       "addresses": {
-        "token": "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
-        "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
+        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
       },
       "params": {
         "volatilityThreshold": "50000000000000000",
@@ -44,10 +62,10 @@
       },
       "oracle": {
         "sourceType": 1,
-        "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
+        "primarySource": "0x86392dC19c0b719886221c78AB11eb8Cf5c52812",
         "needsArg": 1,
-        "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
-        "fallbackSelector": "0x5890c11c"
+        "fallbackSource": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "fallbackSelector": "0x7a28fb88"
       }
     },
     {
@@ -66,6 +84,24 @@
         "needsArg": 0,
         "fallbackSource": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
         "fallbackSelector": "0x3ba0b9a9"
+      }
+    },
+    {
+      "name": "mETH",
+      "addresses": {
+        "token": "0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa",
+        "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
+        "needsArg": 1,
+        "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
+        "fallbackSelector": "0x5890c11c"
       }
     },
     {
