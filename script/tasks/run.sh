@@ -63,7 +63,8 @@ LAT_NAME="xskate-eth"
 CHAIN="mainnet"
 
 # User action (2/2): Copy relevant config file from `/configs/holesky` or `/configs/mainnet` folders into `/configs/local`
-# Note: Update all addresses in `roles` in the config to match `ADMIN_PUBLIC_KEY` below (anvil test acc #1)
+#  - Note: Update all addresses in `roles` in the config to match `ADMIN_PUBLIC_KEY` below (anvil test acc #1)
+#  - Note: stETH must be the first token, followed by rETH
 DEPLOYMENT_CONFIG_FILE="${LAT_NAME}.anvil.config.json"
 ADMIN_PUBLIC_KEY="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 ADMIN_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
