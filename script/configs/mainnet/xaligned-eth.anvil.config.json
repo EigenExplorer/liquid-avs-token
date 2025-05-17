@@ -1,5 +1,5 @@
 {
-  "avsAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+  "avsAddress": "0xef2a435e5ee44b2041100ef8cbc8ae035166606c",
   "contracts": {
     "stakerNodeCoordinator": {
       "init": {
@@ -8,12 +8,30 @@
     },
     "liquidToken": {
       "init": {
-        "name": "EigenDA Example Liquid Avs Token",
-        "symbol": "xEigenDA"
+        "name": "Aligned ETH Liquid Avs Token",
+        "symbol": "xAligned-ETH"
       }
     }
   },
   "tokens": [
+    {
+      "name": "ETH",
+      "addresses": {
+        "token": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
+        "strategy": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0"
+      },
+      "params": {
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
+      }
+    },
     {
       "name": "rETH",
       "addresses": {
@@ -30,24 +48,6 @@
         "needsArg": 0,
         "fallbackSource": "0xae78736Cd615f374D3085123A210448E74Fc6393",
         "fallbackSelector": "0xe6aa216c"
-      }
-    },
-    {
-      "name": "Eigen",
-      "addresses": {
-        "token": "0xec53bf9167f50cdeb3ae105f56099aaab9061f83",
-        "strategy": "0xacb55c530acdb2849e6d4f36992cd8c9d50ed8f7"
-      },
-      "params": {
-        "volatilityThreshold": "0",
-        "decimals": 18
-      },
-      "oracle": {
-        "sourceType": 0,
-        "primarySource": "0x0000000000000000000000000000000000000000",
-        "needsArg": 0,
-        "fallbackSource": "0x0000000000000000000000000000000000000000",
-        "fallbackSelector": "0x00000000"
       }
     },
     {
@@ -87,9 +87,9 @@
       }
     },
     {
-      "name": "METH",
+      "name": "mETH",
       "addresses": {
-        "token": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
+        "token": "0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa",
         "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
       },
       "params": {
@@ -231,42 +231,6 @@
       }
     },
     {
-      "name": "uniBTC",
-      "addresses": {
-        "token": "0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568",
-        "strategy": "0x505241696ab63faec03ed7893246de52eb1a8cff"
-      },
-      "params": {
-        "volatilityThreshold": "50000000000000000",
-        "decimals": 18
-      },
-      "oracle": {
-        "sourceType": 3,
-        "primarySource": "0x861d15F8a4059cb918bD6F3670adAEB1220B298f",
-        "needsArg": 0,
-        "fallbackSource": "0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568",
-        "fallbackSelector": "0xc92aecc4"
-      }
-    },
-    {
-      "name": "stBTC",
-      "addresses": {
-        "token": "0xf6718b2701D4a6498eF77D7c152b2137Ab28b8A3",
-        "strategy": "0xdd24550e754e63d16d07881d16d88328d9ee3382"
-      },
-      "params": {
-        "volatilityThreshold": "50000000000000000",
-        "decimals": 18
-      },
-      "oracle": {
-        "sourceType": 3,
-        "primarySource": "0xD93571A6201978976e37c4A0F7bE17806f2Feab2",
-        "needsArg": 1,
-        "fallbackSource": "0xdF217EFD8f3ecb5E837aedF203C28c1f06854017",
-        "fallbackSelector": "0x07a2d13a"
-      }
-    },
-    {
       "name": "sfrxETH",
       "addresses": {
         "token": "0xac3E018457B222d93114458476f3E3416Abbe38F",
@@ -286,8 +250,8 @@
     }
   ],
   "roles": {
-    "admin": "0xfB069FF1d105F4B33Ffad1c0d1aeC08D379FC715",
-    "pauser": "0xfB069FF1d105F4B33Ffad1c0d1aeC08D379FC715",
-    "priceUpdater": "0x48F8BE189372d8aE0Aca865330E918570623B2fa"
+    "admin": "",
+    "pauser": "",
+    "priceUpdater": ""
   }
 }

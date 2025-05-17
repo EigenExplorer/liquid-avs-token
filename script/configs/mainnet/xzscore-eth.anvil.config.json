@@ -1,0 +1,257 @@
+{
+  "avsAddress": "0xc9e94bf890c9b4f11685d576bc65b08e0e87556f",
+  "contracts": {
+    "stakerNodeCoordinator": {
+      "init": {
+        "maxNodes": 10
+      }
+    },
+    "liquidToken": {
+      "init": {
+        "name": "zScore by Zeru ETH Liquid Avs Token",
+        "symbol": "xzScore-ETH"
+      }
+    }
+  },
+  "tokens": [
+    {
+      "name": "ETH",
+      "addresses": {
+        "token": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
+        "strategy": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0"
+      },
+      "params": {
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
+      }
+    },
+    {
+      "name": "rETH",
+      "addresses": {
+        "token": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+        "strategy": "0x1bee69b7dfffa4e2d53c2a2df135c388ad25dcd2"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0x536218f9E9Eb48863970252233c8F271f554C2d0",
+        "needsArg": 0,
+        "fallbackSource": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+        "fallbackSelector": "0xe6aa216c"
+      }
+    },
+    {
+      "name": "stETH",
+      "addresses": {
+        "token": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "strategy": "0x93c4b944d05dfe6df7645a86cd2206016c51564d"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0x86392dC19c0b719886221c78AB11eb8Cf5c52812",
+        "needsArg": 1,
+        "fallbackSource": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+        "fallbackSelector": "0x7a28fb88"
+      }
+    },
+    {
+      "name": "cbETH",
+      "addresses": {
+        "token": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+        "strategy": "0x54945180db7943c0ed0fee7edab2bd24620256bc"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0xF017fcB346A1885194689bA23Eff2fE6fA5C483b",
+        "needsArg": 0,
+        "fallbackSource": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+        "fallbackSelector": "0x3ba0b9a9"
+      }
+    },
+    {
+      "name": "mETH",
+      "addresses": {
+        "token": "0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa",
+        "strategy": "0x298afb19a105d59e74658c4c334ff360bade6dd2"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0x5b563107C8666d2142C216114228443B94152362",
+        "needsArg": 1,
+        "fallbackSource": "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f",
+        "fallbackSelector": "0x5890c11c"
+      }
+    },
+    {
+      "name": "osETH",
+      "addresses": {
+        "token": "0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9",
+        "strategy": "0x57ba429517c3473b6d34ca9acd56c0e735b94c02"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 2,
+        "primarySource": "0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d",
+        "needsArg": 1,
+        "fallbackSource": "0x2A261e60FB14586B474C208b1B7AC6D0f5000306",
+        "fallbackSelector": "0x07a2d13a"
+      }
+    },
+    {
+      "name": "ETHx",
+      "addresses": {
+        "token": "0xA35b1B31Ce002FBF2058D22F30f95D405200A15b",
+        "strategy": "0x9d7ed45ee2e8fc5482fa2428f15c971e6369011d"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 2,
+        "primarySource": "0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492",
+        "needsArg": 0,
+        "fallbackSource": "0xF64bAe65f6f2a5277571143A24FaaFDFC0C2a737",
+        "fallbackSelector": "0x3ba0b9a9"
+      }
+    },
+    {
+      "name": "swETH",
+      "addresses": {
+        "token": "0xf951E335afb289353dc249e82926178EaC7DEd78",
+        "strategy": "0x0fe4f44bee93503346a3ac9ee5a26b130a5796d6"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 3,
+        "primarySource": "0xf951E335afb289353dc249e82926178EaC7DEd78",
+        "needsArg": 0,
+        "fallbackSource": "0xf951E335afb289353dc249e82926178EaC7DEd78",
+        "fallbackSelector": "0xd68b2cb6"
+      }
+    },
+    {
+      "name": "lsETH",
+      "addresses": {
+        "token": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+        "strategy": "0xae60d8180437b5c34bb956822ac2710972584473"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 3,
+        "primarySource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+        "needsArg": 1,
+        "fallbackSource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+        "fallbackSelector": "0xf79c3f02"
+      }
+    },
+    {
+      "name": "ankrETH",
+      "addresses": {
+        "token": "0xE95A203B1a91a908F9B9CE46459d101078c2c3cb",
+        "strategy": "0x13760f50a9d7377e4f20cb8cf9e4c26586c658ff"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 2,
+        "primarySource": "0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2",
+        "needsArg": 0,
+        "fallbackSource": "0xE95A203B1a91a908F9B9CE46459d101078c2c3cb",
+        "fallbackSelector": "0x71ca337d"
+      }
+    },
+    {
+      "name": "OETH",
+      "addresses": {
+        "token": "0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3",
+        "strategy": "0xa4c637e0f704745d182e4d38cab7e7485321d059"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 1,
+        "primarySource": "0x703118C4CbccCBF2AB31913e0f8075fbbb15f563",
+        "needsArg": 1,
+        "fallbackSource": "0xDcEe70654261AF21C44c093C300eD3Bb97b78192",
+        "fallbackSelector": "0x07a2d13a"
+      }
+    },
+    {
+      "name": "wbETH",
+      "addresses": {
+        "token": "0xa2E3356610840701BDf5611a53974510Ae27E2e1",
+        "strategy": "0x7ca911e83dabf90c90dd3de5411a10f1a6112184"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 3,
+        "primarySource": "0xa2E3356610840701BDf5611a53974510Ae27E2e1",
+        "needsArg": 0,
+        "fallbackSource": "0xa2E3356610840701BDf5611a53974510Ae27E2e1",
+        "fallbackSelector": "0x3ba0b9a9"
+      }
+    },
+    {
+      "name": "sfrxETH",
+      "addresses": {
+        "token": "0xac3E018457B222d93114458476f3E3416Abbe38F",
+        "strategy": "0x8ca7a5d6f3acd3a7a8bc468a8cd0fb14b6bd28b6"
+      },
+      "params": {
+        "volatilityThreshold": "50000000000000000",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 3,
+        "primarySource": "0xac3E018457B222d93114458476f3E3416Abbe38F",
+        "needsArg": 1,
+        "fallbackSource": "0xac3E018457B222d93114458476f3E3416Abbe38F",
+        "fallbackSelector": "0x07a2d13a"
+      }
+    }
+  ],
+  "roles": {
+    "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "pauser": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "priceUpdater": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  }
+}

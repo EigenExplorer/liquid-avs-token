@@ -7,8 +7,8 @@
 # Instructions:
 # Edit the script where "User action" is marked
 # To run this script:
-#  1. chmod +x script/deploy/holesky/deploy.sh
-#  2. script/deploy/holesky/deploy.sh
+#  1. chmod +x script/deploy/mainnet/deploy.sh
+#  2. script/deploy/mainnet/deploy.sh
 # If writing update to GH, when prompted for password, input your access token (not your GH password)
 
 #-----------------------------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ LAT_NAME=""
 DEPLOYMENT_NAME="v1"
 
 # Configuration
-CHAIN="holesky"
+CHAIN="mainnet"
 GITHUB_REPO="Eigenexplorer/lat-deployments"
 GITHUB_BRANCH="dev"
 DEPLOYMENT_CONFIG_FILE="${LAT_NAME}.anvil.config.json"
@@ -52,8 +52,8 @@ DEPLOYMENT_CONFIG_PATH="script/configs/$CHAIN/$DEPLOYMENT_CONFIG_FILE"
 OUTPUT_FOLDER_PATH="script/outputs/$CHAIN"
 OUTPUT_PATH="$OUTPUT_FOLDER_PATH/deployment_data.json"
 ABI_PATH="$OUTPUT_FOLDER_PATH/abi"
-API_URL="https://api-holesky.etherscan.io/api"
-ETHERSCAN_BASE_URL="https://holesky.etherscan.io"
+ETHERSCAN_BASE_URL="https://etherscan.io"
+API_URL="$ETHERSCAN_BASE_URL/api"
 
 # Create output directories
 mkdir -p $OUTPUT_FOLDER_PATH

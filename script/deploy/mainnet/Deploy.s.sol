@@ -28,7 +28,7 @@ import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordin
 // source .env
 
 /// @dev To run this deploy script (make sure terminal is at the root directory `/liquid-avs-token`):
-// forge script script/deploy/holesky/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
+// forge script script/deploy/mainnet/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --private-key $DEPLOYER_PRIVATE_KEY --sig "run(string)" -- "xeigenda.anvil.config.json" -vvvv
 
 event RoleAssigned(string contractName, string role, address recipient);
 
@@ -63,7 +63,7 @@ contract Deploy is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     // Path to output file
-    string constant OUTPUT_PATH = "script/outputs/holesky/deployment_data.json";
+    string constant OUTPUT_PATH = "script/outputs/mainnet/deployment_data.json";
 
     // Network-level config
     address public strategyManager;
@@ -185,7 +185,7 @@ contract Deploy is Script, Test {
 
     function loadConfig(string memory deployConfigFileName) internal {
         // Load network-specific config
-        string memory networkConfigPath = "script/configs/holesky.json";
+        string memory networkConfigPath = "script/configs/mainnet.json";
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(
             stdJson.readUint(networkConfigData, ".network.chainId") ==
@@ -205,7 +205,7 @@ contract Deploy is Script, Test {
         // Load deployment-specific config
         string memory deployConfigPath = string(
             bytes(
-                string.concat("script/configs/holesky/", deployConfigFileName)
+                string.concat("script/configs/mainnet/", deployConfigFileName)
             )
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);

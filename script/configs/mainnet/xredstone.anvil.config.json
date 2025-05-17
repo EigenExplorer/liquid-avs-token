@@ -1,0 +1,41 @@
+{
+  "avsAddress": "0x6f943318b05ad7c6ee596a220510a6d64b518dd8",
+  "contracts": {
+    "stakerNodeCoordinator": {
+      "init": {
+        "maxNodes": 10
+      }
+    },
+    "liquidToken": {
+      "init": {
+        "name": "Redstone AVS Native Liquid Avs Token",
+        "symbol": "xRedstone"
+      }
+    }
+  },
+  "tokens": [
+    {
+      "name": "RED",
+      "addresses": {
+        "token": "0xc43c6bfeda065fe2c4c11765bf838789bd0bb5de",
+        "strategy": "0x903a1FF023a35EFeD333ee9D6bF30629A098B9ed"
+      },
+      "params": {
+        "volatilityThreshold": "0",
+        "decimals": 18
+      },
+      "oracle": {
+        "sourceType": 0,
+        "primarySource": "0x0000000000000000000000000000000000000000",
+        "needsArg": 0,
+        "fallbackSource": "0x0000000000000000000000000000000000000000",
+        "fallbackSelector": "0x00000000"
+      }
+    }
+  ],
+  "roles": {
+    "admin": "",
+    "pauser": "",
+    "priceUpdater": ""
+  }
+}
