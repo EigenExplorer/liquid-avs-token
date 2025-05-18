@@ -34,11 +34,12 @@ interface StakerNodesResponse {
 }
 
 const LAT_API_URL = process.env.LAT_API_URL;
+const EE_API_URL = process.env.EE_API_URL;
+const EE_API_TOKEN = process.env.EE_API_TOKEN;
 
 /**
  * Workflow for staking unstaked assets in the `LiquidToken` contract across nodes
- * Policy:
- * - Even split of all asset amounts across all nodes
+ * Policy: Split every asset across all Operators that restake it
  *
  * @returns
  */
@@ -88,7 +89,12 @@ export async function stakeUnstakedAssets() {
         node.operatorDelegation !== "0x0000000000000000000000000000000000000000"
     );
 
-    if (delegatedNodes.length === 0) return [];
+    if (delegatedNodes.length === 0) {
+      console.log(
+        "[Manager][Warning] No delegated nodes found. Skipping workflow..."
+      );
+      return [];
+    }
 
     // LAT API: Fetch token data
     const tokensResponse = await fetch(
@@ -106,24 +112,85 @@ export async function stakeUnstakedAssets() {
       tokensData.data.map((token) => [token.address.toLowerCase(), token])
     );
 
+    // EE API: Fetch strategies restaked by each Operator
+    const operatorAddresses = delegatedNodes.map((node) =>
+      node.operatorDelegation.toLowerCase()
+    );
+    const operatorStrategiesData = await Promise.all(
+      operatorAddresses.map(async (operatorAddress) => {
+        const operatorResponse = await fetch(
+          `${EE_API_URL}/operators/${operatorAddress}`,
+          {
+            headers: {
+              "X-API-Token": `${process.env.EE_API_TOKEN}`,
+            },
+          }
+        );
+
+        if (!operatorResponse.ok) {
+          throw new Error(
+            `Failed to fetch operator ${operatorAddress}: ${operatorResponse.status} ${operatorResponse.statusText}`
+          );
+        }
+
+        const data = await operatorResponse.json();
+        const strategyAddresses = data.shares.map((share) =>
+          share.strategyAddress.toLowerCase()
+        );
+        return {
+          operator: operatorAddress as string,
+          strategies: strategyAddresses as string[],
+        };
+      })
+    );
+    const operatorStrategies = new Map(
+      operatorStrategiesData.map((item) => [item.operator, item.strategies])
+    );
+
     const allocations: NodeAllocation[] = [];
 
     for (const asset of unstakedAssets) {
       // Get token info to account for decimals
       const tokenInfo = tokenInfoMap.get(asset.asset.toLowerCase());
 
-      if (!tokenInfo) continue;
+      if (!tokenInfo) {
+        console.log(
+          `[Manager][Warning] Token info for ${asset.asset.toLowerCase()} not found. Skipping its allocation...`
+        );
+        continue;
+      }
 
       const balance = BigInt(asset.balance);
       const stakingAmount = (balance * BigInt(995)) / BigInt(1000); // allow 0.5% margin of error
 
-      if (stakingAmount <= 0) continue;
+      if (stakingAmount <= 0) {
+        console.log(
+          `[Manager][Warning] Staking amount for ${asset.asset.toLowerCase()} is invalid, computed as ${stakingAmount} . Skipping its allocation...`
+        );
+        continue;
+      }
+
+      // Filter for nodes whose Operators restake the asset
+      const assetStrategyAddress = tokenInfo.strategyAddress.toLowerCase();
+      const eligibleNodes = delegatedNodes.filter((node) =>
+        operatorStrategies
+          .get(node.operatorDelegation.toLowerCase())
+          ?.includes(assetStrategyAddress)
+      );
+
+      // Skip if no operators restake this strategy
+      if (eligibleNodes.length === 0) {
+        console.log(
+          `[Manager][Warning] No operators restake asset ${asset.asset}. Skipping its allocation...`
+        );
+        continue;
+      }
 
       // Calculate even distribution across all nodes
-      const amountPerNode = stakingAmount / BigInt(delegatedNodes.length);
+      const amountPerNode = stakingAmount / BigInt(eligibleNodes.length);
 
       // Create allocations for all nodes
-      for (const node of delegatedNodes) {
+      for (const node of eligibleNodes) {
         const existingAllocation = allocations.find(
           (alloc) => alloc.nodeId === node.nodeId.toString()
         );
@@ -142,7 +209,12 @@ export async function stakeUnstakedAssets() {
     }
 
     // If no allocations, exit early
-    if (allocations.length === 0) return [];
+    if (allocations.length === 0) {
+      console.log(
+        "[Manager][Warning] No allocations computed. Skipping workflow..."
+      );
+      return [];
+    }
 
     // Create proposals to stake assets to nodes
     await stakeAssetsToNodes(allocations);
