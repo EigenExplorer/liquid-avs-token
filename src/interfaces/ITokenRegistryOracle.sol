@@ -42,11 +42,18 @@ interface ITokenRegistryOracle {
      * @param token Address of the removed token
      */
     event TokenRemoved(address token);
-
+    /**
+     * @notice Emitted when multiple pool safety settings are updated
+     * @param pools The pool addresses affected
+     * @param settings Whether each pool requires the reentrancy lock
+     */
+    event BatchPoolsConfigured(address[] pools, bool[] settings);
     /// @notice Error thrown when no valid prices fetched by primary&fallbacks sources
     error NoFreshPrice(address token);
     /// @notice Error thrown when an unauthorized address attempts to update prices
     error InvalidUpdater(address sender);
+    /// @notice Error for mismatched array lengths
+    error ArrayLengthMismatch();
 
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
@@ -105,7 +112,7 @@ interface ITokenRegistryOracle {
     /// @notice Get the current price of a token in ETH terms
     /// @param token Token address to get price for
     /// @return The current price with 18 decimals precision
-    function getTokenPrice(address token) external view returns (uint256);
+    function getTokenPrice(address token) external returns (uint256);
 
     /// @notice Get last price update timestamp
     /// @return Timestamp of last price update
@@ -114,5 +121,5 @@ interface ITokenRegistryOracle {
     /// @return price of a token and success/failure of this
     function _getTokenPrice_getter(
         address token
-    ) external view returns (uint256 price, bool success);
+    ) external returns (uint256 price, bool success);
 }

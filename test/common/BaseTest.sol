@@ -724,7 +724,7 @@ contract BaseTest is Test {
     /**
      * @dev Gets the price of a token directly from TokenRegistryOracle
      */
-    function _getTokenPrice(address token) internal view returns (uint256) {
+    function _getTokenPrice(address token) internal returns (uint256) {
         return tokenRegistryOracle.getTokenPrice(token);
     }
 
