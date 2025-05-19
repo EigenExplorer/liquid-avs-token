@@ -134,7 +134,6 @@ contract Deploy is Script, Test {
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
     uint256 public oracleSalt;
-
     function run(string memory deployConfigFileName) external {
         // Load config files
         loadConfig(deployConfigFileName);
@@ -149,8 +148,34 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
+
+        // Add tokens and configure oracle after initialization
         addAndConfigureTokens();
         configureOracle();
+        configureCurvePoolsReentrancy();
+
+        console.log(
+            "TokenRegistryOracle proxy address:",
+            address(tokenRegistryOracle)
+        );
+        console.log("Admin (from JSON):", admin);
+        console.log("Deployer (msg.sender):", msg.sender);
+        console.log(
+            "HasRole (admin, before transfer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "HasRole (deployer, before transfer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
+
+        // Transfer ownership and configure roles
         transferOwnership();
 
         verifyDeployment();
@@ -257,6 +282,10 @@ contract Deploy is Script, Test {
             params.decimals = stdJson.readUint(
                 deployConfigData,
                 string.concat(prefix, ".params.decimals")
+            );
+            params.pricePerUnit = stdJson.readUint(
+                deployConfigData,
+                string.concat(prefix, ".params.pricePerUnit")
             );
             params.volatilityThreshold = stdJson.readUint(
                 deployConfigData,
@@ -412,11 +441,26 @@ contract Deploy is Script, Test {
             }),
             oracleSalt
         );
+
+        console.log("TokenRegistryOracle initialized with owner:", msg.sender);
+        console.log(
+            "Has DEFAULT_ADMIN_ROLE:",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
     }
 
     function _initializeLiquidTokenManager() internal {
         liquidTokenManagerInitBlock = block.number;
         liquidTokenManagerInitTimestamp = block.timestamp;
+
+        // Initialize with empty arrays - we'll add tokens separately
+        IERC20[] memory assets = new IERC20[](0);
+        IStrategy[] memory strategies = new IStrategy[](0);
+        ILiquidTokenManager.TokenInfo[]
+            memory tokenInfo = new ILiquidTokenManager.TokenInfo[](0);
 
         liquidTokenManager.initialize(
             ILiquidTokenManager.Init({
@@ -427,11 +471,32 @@ contract Deploy is Script, Test {
                 tokenRegistryOracle: ITokenRegistryOracle(
                     address(tokenRegistryOracle)
                 ),
-                initialOwner: msg.sender, // burner, will transfer to admin
+                initialOwner: msg.sender, // Deployer is initial owner here too
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)
             })
         );
+    }
+
+    function addAndConfigureTokens() internal {
+        TokenConfig[] memory addable = _getAddableTokens(tokens);
+        for (uint256 i = 0; i < addable.length; ++i) {
+            console.log("Adding token:", addable[i].name);
+            console.log("  Token address:", addable[i].addresses.token);
+            console.log("  Strategy address:", addable[i].addresses.strategy);
+
+            liquidTokenManager.addToken(
+                IERC20(addable[i].addresses.token),
+                uint8(addable[i].params.decimals),
+                uint256(addable[i].params.volatilityThreshold),
+                IStrategy(addable[i].addresses.strategy),
+                addable[i].oracle.sourceType,
+                addable[i].oracle.primarySource,
+                addable[i].oracle.needsArg,
+                addable[i].oracle.fallbackSource,
+                addable[i].oracle.fallbackSelector
+            );
+        }
     }
 
     function _initializeStakerNodeCoordinator() internal {
@@ -443,7 +508,7 @@ contract Deploy is Script, Test {
                 strategyManager: IStrategyManager(strategyManager),
                 delegationManager: IDelegationManager(delegationManager),
                 maxNodes: STAKER_NODE_COORDINATOR_MAX_NODES,
-                initialOwner: admin,
+                initialOwner: admin, // Admin is set as owner directly (working approach)
                 pauser: pauser,
                 stakerNodeCreator: admin,
                 stakerNodesDelegator: address(liquidTokenManager),
@@ -459,7 +524,7 @@ contract Deploy is Script, Test {
             ILiquidToken.Init({
                 name: LIQUID_TOKEN_NAME,
                 symbol: LIQUID_TOKEN_SYMBOL,
-                initialOwner: admin,
+                initialOwner: admin, // Admin is set as owner directly (working approach)
                 pauser: pauser,
                 liquidTokenManager: ILiquidTokenManager(
                     address(liquidTokenManager)
@@ -469,23 +534,6 @@ contract Deploy is Script, Test {
                 )
             })
         );
-    }
-
-    function addAndConfigureTokens() internal {
-        TokenConfig[] memory addable = _getAddableTokens(tokens);
-        for (uint256 i = 0; i < addable.length; ++i) {
-            liquidTokenManager.addToken(
-                IERC20(addable[i].addresses.token),
-                uint8(addable[i].params.decimals),
-                uint256(addable[i].params.volatilityThreshold),
-                IStrategy(addable[i].addresses.strategy),
-                addable[i].oracle.sourceType,
-                addable[i].oracle.primarySource,
-                addable[i].oracle.needsArg,
-                addable[i].oracle.fallbackSource,
-                addable[i].oracle.fallbackSelector
-            );
-        }
     }
 
     function configureOracle() internal {
@@ -530,7 +578,26 @@ contract Deploy is Script, Test {
             "Proxy admin ownership transfer failed"
         );
 
-        // Grant all roles meant for `initialOwner` to admin and renounce the same from deployer
+        console.log("[transferOwnership] Before grants:");
+        console.log("  admin:", admin);
+        console.log("  deployer (msg.sender):", msg.sender);
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
+
+        // --- TOKEN REGISTRY ORACLE ---
+        // Grant all roles to admin before renouncing from deployer
         tokenRegistryOracle.grantRole(
             tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
             admin
@@ -539,22 +606,133 @@ contract Deploy is Script, Test {
             tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
             admin
         );
+
+        console.log(
+            "Granting RATE_UPDATER_ROLE to priceUpdater:",
+            priceUpdater
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            priceUpdater
+        );
+
+        // Verify the role was granted
+        console.log(
+            "priceUpdater has RATE_UPDATER_ROLE after grant:",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                priceUpdater
+            )
+        );
+
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            address(liquidToken)
+        );
+        tokenRegistryOracle.grantRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            address(liquidTokenManager)
+        );
+
+        // Log after grants
+        console.log("[transferOwnership] After grants:");
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
+        );
+        console.log(
+            "  HasRole (oracle admin, admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (rate updater, priceUpdater):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                priceUpdater
+            )
+        );
+        console.log(
+            "  HasRole (rate updater, liquidToken):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.RATE_UPDATER_ROLE(),
+                address(liquidToken)
+            )
+        );
+        console.log(
+            "  HasRole (token configurator, liquidTokenManager):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+                address(liquidTokenManager)
+            )
+        );
+
+        // Now renounce all roles from deployer/burner
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.RATE_UPDATER_ROLE(),
+            msg.sender
+        );
+        tokenRegistryOracle.renounceRole(
+            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
+            msg.sender
+        );
+
+        // Handles LiquidTokenManager roles
         liquidTokenManager.grantRole(
             liquidTokenManager.DEFAULT_ADMIN_ROLE(),
             admin
         );
 
-        tokenRegistryOracle.renounceRole(
-            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-            msg.sender
+        // Check roles properly transferred
+        console.log(
+            "LiquidTokenManager admin role granted to admin:",
+            liquidTokenManager.hasRole(
+                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
         );
-        tokenRegistryOracle.renounceRole(
-            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-            msg.sender
-        );
+
+        // Finally, renounce deployer roles
         liquidTokenManager.renounceRole(
             liquidTokenManager.DEFAULT_ADMIN_ROLE(),
             msg.sender
+        );
+
+        // Log after renounce
+        console.log("[transferOwnership] After renounce:");
+        console.log(
+            "  HasRole (admin):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                admin
+            )
+        );
+        console.log(
+            "  HasRole (deployer):",
+            tokenRegistryOracle.hasRole(
+                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
+                msg.sender
+            )
         );
     }
 
@@ -793,6 +971,22 @@ contract Deploy is Script, Test {
             "Rate Updater role not assigned to LiquidToken in TokenRegistryOracle"
         );
     }
+    function configureCurvePoolsReentrancy() internal {
+        address[] memory pools = new address[](3);
+        bool[] memory settings = new bool[](3);
+
+        // Pool addresses from audit
+        pools[0] = 0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d; // Safe
+        pools[1] = 0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492; // Safe
+        pools[2] = 0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2; // Unsafe
+
+        // TRUE = NEEDS REENTRANCY LOCK TRIGGER
+        settings[0] = true; // Safe pool: needs lock trigger
+        settings[1] = true; // Safe pool: needs lock trigger
+        settings[2] = false; // Unsafe pool: skip lock (no protection available)
+
+        tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+    }
 
     function writeDeploymentOutput() internal {
         string memory parent_object = "parent";
@@ -816,13 +1010,13 @@ contract Deploy is Script, Test {
             parent_object,
             "maxNodes",
             STAKER_NODE_COORDINATOR_MAX_NODES
-        );
+        ); // Adjust as needed
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
         vm.serializeUint(
             parent_object,
             "deploymentTimestamp",
             block.timestamp * 1000
-        );
+        ); // Converting to milliseconds
 
         // Contract deployments section
         string memory contractDeployments = "contractDeployments";
@@ -1084,23 +1278,7 @@ contract Deploy is Script, Test {
         vm.writeJson(finalJson, OUTPUT_PATH);
     }
 
-    // --- Helper functions ---
-    function _getImplementationFromProxy(
-        address proxy
-    ) internal view returns (address) {
-        return
-            address(
-                uint160(
-                    uint256(
-                        vm.load(
-                            proxy,
-                            0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc
-                        )
-                    )
-                )
-            );
-    }
-
+    //Helper for filtering addable tokens
     function _getAddableTokens(
         TokenConfig[] memory tokens
     ) internal pure returns (TokenConfig[] memory) {
@@ -1110,7 +1288,7 @@ contract Deploy is Script, Test {
                 tokens[i].oracle.sourceType == 0 &&
                 tokens[i].oracle.primarySource == address(0)
             ) {
-                continue; // Skip native tokens (like Eigen)
+                continue; // Skip native tokens (like EigenInu)
             }
             count++;
         }
@@ -1126,5 +1304,22 @@ contract Deploy is Script, Test {
             filtered[j++] = tokens[i];
         }
         return filtered;
+    }
+
+    // --- Helper functions ---
+    function _getImplementationFromProxy(
+        address proxy
+    ) internal view returns (address) {
+        return
+            address(
+                uint160(
+                    uint256(
+                        vm.load(
+                            proxy,
+                            0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc
+                        )
+                    )
+                )
+            );
     }
 }
