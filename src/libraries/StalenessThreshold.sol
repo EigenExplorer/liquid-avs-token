@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 library StalenessThreshold {
     function getHiddenThreshold(
@@ -11,6 +11,6 @@ library StalenessThreshold {
         );
         uint256 val = uint256(hash);
         uint256 squashed = ((val ^ (val >> 13)) % 1001); // [0, 1000]
-        thresholdSeconds = 3600 + ((squashed * squashed) % 39600); // [3600, 43200)
+        thresholdSeconds = 3600 + ((squashed * squashed) % 10800); // [3600, 14400)
     }
 }

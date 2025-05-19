@@ -104,7 +104,7 @@ contract LiquidTokenManager is
     /// @param decimals Number of decimals for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
-    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol , primarysource0 related to native tokens that get handle differently)
     /// @param primarySource Primary source address
     /// @param needsArg Whether fallback fn needs args
     /// @param fallbackSource Address of the fallback source contract
@@ -132,7 +132,7 @@ contract LiquidTokenManager is
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
-        if (!isNative && (primaryType < 1 || primaryType > 4))
+        if (!isNative && (primaryType < 1 || primaryType > 3))
             revert InvalidPriceSource();
         if (!isNative && primarySource == address(0))
             revert InvalidPriceSource();
@@ -154,13 +154,14 @@ contract LiquidTokenManager is
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
-        uint256 fetchedPrice = isNative ? 1e18 : 0;
+        uint256 fetchedPrice;
         if (!isNative) {
-            // Call Oracle for the price immediately after configuration
             (uint256 price, bool ok) = tokenRegistryOracle
                 ._getTokenPrice_getter(address(token));
             require(ok && price > 0, "Token price fetch failed");
             fetchedPrice = price;
+        } else {
+            fetchedPrice = 1e18;
         }
 
         tokens[token] = TokenInfo({
