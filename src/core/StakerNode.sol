@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
@@ -57,23 +57,34 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
+        // Cache strategyManager to save gas
         IStrategyManager strategyManager = coordinator.strategyManager();
 
+        // Cache array length
         uint256 assetsLength = assets.length;
-        for (uint256 i = 0; i < assetsLength; i++) {
-            IERC20 asset = assets[i];
-            uint256 amount = amounts[i];
-            IStrategy strategy = strategies[i];
 
-            asset.forceApprove(address(strategyManager), amount);
+        // Use unchecked for counter increment since i < assetsLength
+        unchecked {
+            for (uint256 i = 0; i < assetsLength; i++) {
+                IERC20 asset = assets[i];
+                uint256 amount = amounts[i];
+                IStrategy strategy = strategies[i];
 
-            uint256 eigenShares = strategyManager.depositIntoStrategy(
-                strategy,
-                asset,
-                amount
-            );
+                asset.forceApprove(address(strategyManager), amount);
 
-            emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
+                uint256 eigenShares = strategyManager.depositIntoStrategy(
+                    strategy,
+                    asset,
+                    amount
+                );
+
+                emit AssetDepositedToStrategy(
+                    asset,
+                    strategy,
+                    amount,
+                    eigenShares
+                );
+            }
         }
     }
 
@@ -83,11 +94,13 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @param approverSalt Salt used in the signature
     function delegate(
         address operator,
-        ISignatureUtils.SignatureWithExpiry memory signature,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
         bytes32 approverSalt
-    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
-        if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
+    ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
+        if (operatorDelegation != address(0))
+            revert NodeIsDelegated(operatorDelegation);
 
+        // Cache delegationManager to save gas
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.delegateTo(operator, signature, approverSalt);
         operatorDelegation = operator;
@@ -100,7 +113,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     function undelegate()
         external
         override
-        onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
+        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
         returns (bytes32[] memory)
     {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();

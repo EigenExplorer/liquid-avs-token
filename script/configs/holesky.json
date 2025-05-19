@@ -1,0 +1,15 @@
+{
+  "network": {
+    "name": "holesky",
+    "chainId": 17000,
+    "eigenLayer": {
+      "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+      "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7"
+    }
+  },
+  "deployment": {
+    "gasLimit": 6000000,
+    "verificationDelay": 60,
+    "timeoutBlocks": 200
+  }
+}

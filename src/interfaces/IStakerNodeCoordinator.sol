@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -24,6 +23,7 @@ interface IStakerNodeCoordinator {
         address pauser;
         address stakerNodeCreator;
         address stakerNodesDelegator;
+        address stakerNodeImplementation;
     }
 
     /// @notice Emitted when a new staker node is created
@@ -49,6 +49,9 @@ interface IStakerNodeCoordinator {
 
     /// @notice Error when contract is paused
     error Paused();
+
+    /// @notice Error when attempting to use a non-contract address as implementation
+    error NotAContract();
 
     /// @notice Error for zero amount
     error ZeroAmount();
@@ -81,10 +84,6 @@ interface IStakerNodeCoordinator {
     /// @notice Creates a new staker node
     /// @return The IStakerNode interface of the newly created staker node
     function createStakerNode() external returns (IStakerNode);
-
-    /// @notice Registers the initial staker node implementation
-    /// @param _implementationContract Address of the implementation contract
-    function registerStakerNodeImplementation(address _implementationContract) external;
 
     /// @notice Upgrades the staker node implementation
     /// @param _implementationContract Address of the new implementation contract

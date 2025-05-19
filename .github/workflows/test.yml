@@ -23,20 +23,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
+
+      - name: Clean and initialize minimal submodules
+        run: |
+          rm -rf lib
+
+          git submodule init
+          git submodule update
+
+          forge install
 
       - name: Run Forge build
         run: |
+          # Install solc 0.8.27 directly
+          mkdir -p ~/.cache/solidity
+          cd ~/.cache/solidity
+          wget -q https://github.com/ethereum/solidity/releases/download/v0.8.27/solc-static-linux
+          chmod +x solc-static-linux
+          ln -sf solc-static-linux solc
+          export PATH="$PATH:$HOME/.cache/solidity"
+
           forge --version
-          forge build --sizes
+          forge build --sizes --optimizer-runs 200 --via-ir --use solc:0.8.27
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test --fork-url ${{ secrets.RPC_URL }} -vvv
+          forge test --fork-url ${{ secrets.RPC_URL }} -vvvv --optimizer-runs 200 --via-ir --use solc:0.8.27
         id: test

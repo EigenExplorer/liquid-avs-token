@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
@@ -28,13 +29,18 @@ contract LiquidToken is
     using SafeERC20 for IERC20;
 
     ILiquidTokenManager public liquidTokenManager;
+    ITokenRegistryOracle public tokenRegistryOracle;
+
+    mapping(address => uint256) public assetBalances;
+    mapping(address => uint256) public queuedAssetBalances;
+
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
     IWithdrawalManager public withdrawalManager;
 
     mapping(address => uint256) public assetBalances;
     mapping(address => uint256) public queuedAssetBalances;
     mapping(address => uint256) private _withdrawalNonce;
-
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -59,6 +65,9 @@ contract LiquidToken is
         if (address(init.liquidTokenManager) == address(0)) {
             revert("LiquidTokenManager cannot be the zero address");
         }
+        if (address(init.tokenRegistryOracle) == address(0)) {
+            revert("TokenRegistryOracle cannot be the zero address");
+        }
         if (address(init.withdrawalManager) == address(0)) {
             revert("WithdrawalManager cannot be the zero address");
         }
@@ -67,6 +76,7 @@ contract LiquidToken is
         _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidTokenManager = init.liquidTokenManager;
+        tokenRegistryOracle = init.tokenRegistryOracle;
         withdrawalManager = init.withdrawalManager;
     }
 
@@ -76,46 +86,89 @@ contract LiquidToken is
     /// @param receiver The address to receive the minted shares
     /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20[] calldata assets,
+        IERC20Upgradeable[] calldata assets,
         uint256[] calldata amounts,
         address receiver
     ) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        uint256[] memory sharesArray = new uint256[](assets.length);
+        // Check if prices need update
+        if (tokenRegistryOracle.arePricesStale()) {
+            // Attempt price update with minimal try/catch
+            bool updated;
+            try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
+                bool result
+            ) {
+                updated = result;
+            } catch {
+                revert PriceUpdateFailed();
+            }
 
+            // Check update result - most gas efficient check first
+            if (!updated) revert PriceUpdateRejected();
+
+            // Verify prices are no longer stale
+            if (tokenRegistryOracle.arePricesStale())
+                revert PricesRemainStale();
+
+            emit PricesUpdatedBeforeDeposit(msg.sender);
+        }
+
+        // Always check token prices regardless of staleness (enhanced security)
         for (uint256 i = 0; i < assets.length; i++) {
-            IERC20 asset = assets[i];
-            uint256 amount = amounts[i];
+            address assetAddr = address(assets[i]);
+            if (liquidTokenManager.tokenIsSupported(IERC20(assetAddr))) {
+                if (tokenRegistryOracle.getTokenPrice(assetAddr) == 0) {
+                    revert AssetPriceInvalid(assetAddr);
+                }
+            }
+        }
 
-            if (amount == 0) revert ZeroAmount();
-            if (!liquidTokenManager.tokenIsSupported(asset))
-                revert UnsupportedAsset(asset);
+        uint256 len = assets.length;
+        uint256[] memory sharesArray = new uint256[](len);
 
-            uint256 shares = calculateShares(asset, amount);
-            if (shares == 0) revert ZeroShares();
+        unchecked {
+            for (uint256 i = 0; i < len; i++) {
+                IERC20 asset = IERC20(address(assets[i]));
+                uint256 amount = amounts[i];
 
-            asset.safeTransferFrom(msg.sender, address(this), amount);
-            assetBalances[address(asset)] += amount;
-            
-            if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
-                revert AssetBalanceOutOfSync(
-                    asset, 
-                    assetBalances[address(asset)], 
+                if (amount == 0) revert ZeroAmount();
+                if (!liquidTokenManager.tokenIsSupported(asset))
+                    revert UnsupportedAsset(assets[i]);
+
+                // True amount received may differ from `amount` for rebasing tokens
+                uint256 balanceBefore = asset.balanceOf(address(this));
+                asset.safeTransferFrom(msg.sender, address(this), amount);
+                uint256 balanceAfter = asset.balanceOf(address(this));
+
+                uint256 trueAmount = balanceAfter - balanceBefore;
+
+                uint256 shares = calculateShares(assets[i], trueAmount);
+                if (shares == 0) revert ZeroShares();
+
+                assetBalances[address(asset)] += trueAmount;
+
+                if (
+                    assetBalances[address(asset)] >
                     asset.balanceOf(address(this))
+                )
+                    revert AssetBalanceOutOfSync(
+                        assets[i],
+                        assetBalances[address(asset)],
+                        asset.balanceOf(address(this))
+                    );
+
+                _mint(receiver, shares);
+                sharesArray[i] = shares;
+
+                emit AssetDeposited(
+                    msg.sender,
+                    receiver,
+                    assets[i],
+                    trueAmount,
+                    shares
                 );
-
-            _mint(receiver, shares);
-
-            sharesArray[i] = shares;
-
-            emit AssetDeposited(
-                msg.sender,
-                receiver,
-                asset,
-                amount,
-                shares
-            );
+            }
         }
 
         return sharesArray;
@@ -125,7 +178,7 @@ contract LiquidToken is
     /// @param assets The ERC20 assets to withdraw
     /// @param amounts The amount of tokens to withdraw for each asset
     function initiateWithdrawal(
-        IERC20[] memory assets,
+        IERC20Upgradeable[] memory assets,
         uint256[] memory amounts
     ) external nonReentrant whenNotPaused returns (bytes32) {
         if (assets.length != amounts.length)
@@ -141,11 +194,11 @@ contract LiquidToken is
             totalShares += amounts[i];
         }
 
-        if (balanceOf(msg.sender) < totalShares)
+        if (balanceOf(sender) < totalShares)
             revert InsufficientBalance(
-                IERC20(address(this)),
+                IERC20Upgradeable(address(this)),
                 totalShares,
-                balanceOf(msg.sender)
+                balanceOf(sender)
             );
 
         // Receive escrow shares to burn on returning assets to user
@@ -172,14 +225,14 @@ contract LiquidToken is
     }
 
     function previewWithdrawal(
-        IERC20[] memory assets,
+        IERC20Upgradeable[] memory assets,
         uint256[] memory amounts
     ) external view override returns (bool) {
         return _previewWithdrawal(assets, amounts);
     }
 
     function _previewWithdrawal(
-        IERC20[] memory assets,
+        IERC20Upgradeable[] memory assets,
         uint256[] memory amounts
     ) internal view returns (bool) {
         bool isPossible = true;
@@ -200,7 +253,7 @@ contract LiquidToken is
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
     function creditQueuedAssetBalances(
-        IERC20[] calldata assets,
+        IERC20Upgradeable[] calldata assets,
         uint256[] calldata amounts
     ) external whenNotPaused {
         if (msg.sender != address(withdrawalManager) && msg.sender != address(liquidTokenManager))
@@ -219,7 +272,7 @@ contract LiquidToken is
     /// @param amounts The debit amounts expressed in native token
     /// @param sharesToBurn Amount of shares to burn
     function debitQueuedAssetBalances(
-        IERC20[] calldata assets,
+        IERC20Upgradeable[] calldata assets,
         uint256[] calldata amounts,
         uint256 sharesToBurn
     ) external whenNotPaused {
@@ -241,7 +294,7 @@ contract LiquidToken is
     /// @param assets The assets to debit
     /// @param amounts The credit amounts expressed in native token
     function creditAssetBalances(
-        IERC20[] calldata assets,
+        IERC20Upgradeable[] calldata assets,
         uint256[] calldata amounts
     ) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager))
@@ -260,7 +313,7 @@ contract LiquidToken is
     /// @param amounts The amounts of each asset to transfer
     /// @param receiver The receiver of the funds, either `LiquidTokenManager` or `WithdrawalManager`
     function transferAssets(
-        IERC20[] calldata assetsToRetrieve,
+        IERC20Upgradeable[] calldata assetsToRetrieve,
         uint256[] calldata amounts,
         address receiver
     ) external whenNotPaused {
@@ -274,15 +327,15 @@ contract LiquidToken is
             revert InvalidReceiver(receiver);
 
         for (uint256 i = 0; i < assetsToRetrieve.length; i++) {
-            IERC20 asset = assetsToRetrieve[i];
+            IERC20 asset = IERC20(address(assetsToRetrieve[i]));
             uint256 amount = amounts[i];
 
             if (!liquidTokenManager.tokenIsSupported(asset))
-                revert UnsupportedAsset(asset);
+                revert UnsupportedAsset(assetsToRetrieve[i]);
 
             if (amount > assetBalances[address(asset)])
                 revert InsufficientBalance(
-                    IERC20(address(asset)),
+                    IERC20Upgradeable(address(asset)),
                     assetBalances[address(asset)],
                     amount
                 );
@@ -311,11 +364,11 @@ contract LiquidToken is
     /// @param amount The amount of the asset
     /// @return The number of shares
     function calculateShares(
-        IERC20 asset,
+        IERC20Upgradeable asset,
         uint256 amount
     ) public view returns (uint256) {
         uint256 assetAmountInUnitOfAccount = liquidTokenManager
-            .convertToUnitOfAccount(asset, amount);
+            .convertToUnitOfAccount(IERC20(address(asset)), amount);
         return _convertToShares(assetAmountInUnitOfAccount);
     }
 
@@ -324,13 +377,13 @@ contract LiquidToken is
     /// @param shares The number of shares
     /// @return The amount of the asset
     function calculateAmount(
-        IERC20 asset,
+        IERC20Upgradeable asset,
         uint256 shares
     ) public view returns (uint256) {
         uint256 amountInUnitOfAccount = _convertToAssets(shares);
         return
             liquidTokenManager.convertFromUnitOfAccount(
-                asset,
+                IERC20(address(asset)),
                 amountInUnitOfAccount
             );
     }
@@ -342,14 +395,23 @@ contract LiquidToken is
     /// @notice Returns the total value of assets managed by the contract
     /// @return The total value of assets in the unit of account
     function totalAssets() public view returns (uint256) {
-        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+        IERC20[] memory supportedTokens = liquidTokenManager
+            .getSupportedTokens();
 
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             // Unstaked Asset Balances
             total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
-                _balanceAsset(supportedTokens[i])
+                _balanceAsset(IERC20Upgradeable(address(supportedTokens[i])))
+            );
+
+            // Queued Asset Balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                _balanceQueuedAsset(
+                    IERC20Upgradeable(address(supportedTokens[i]))
+                )
             );
 
             // Queued Asset Balances
@@ -359,7 +421,9 @@ contract LiquidToken is
             );
 
             // Staked Asset Balances
-            total += liquidTokenManager.getStakedAssetBalance(supportedTokens[i]);
+            total += liquidTokenManager.getStakedAssetBalance(
+                supportedTokens[i]
+            );
         }
 
         return total;
@@ -369,7 +433,7 @@ contract LiquidToken is
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
     function balanceAssets(
-        IERC20[] calldata assetList
+        IERC20Upgradeable[] calldata assetList
     ) public view returns (uint256[] memory) {
         uint256[] memory balances = new uint256[](assetList.length);
         for (uint256 i = 0; i < assetList.length; i++) {
@@ -382,7 +446,7 @@ contract LiquidToken is
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
     function balanceQueuedAssets(
-        IERC20[] calldata assetList
+        IERC20Upgradeable[] calldata assetList
     ) public view returns (uint256[] memory) {
         uint256[] memory balances = new uint256[](assetList.length);
         for (uint256 i = 0; i < assetList.length; i++) {
@@ -419,11 +483,15 @@ contract LiquidToken is
         return (shares * totalAsset) / supply;
     }
 
-    function _balanceAsset(IERC20 asset) internal view returns (uint256) {
+    function _balanceAsset(
+        IERC20Upgradeable asset
+    ) internal view returns (uint256) {
         return assetBalances[address(asset)];
     }
 
-    function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
+    function _balanceQueuedAsset(
+        IERC20Upgradeable asset
+    ) internal view returns (uint256) {
         return queuedAssetBalances[address(asset)];
     }
 

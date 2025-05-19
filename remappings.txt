@@ -1,3 +1,11 @@
+forge-std/=lib/forge-std/src/
+ds-test/=lib/eigenlayer-contracts/lib/ds-test/src/
 @eigenlayer/=lib/eigenlayer-contracts/src/
-@openzeppelin/=lib/openzeppelin-contracts/
-@openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/
+lib/eigenlayer-contracts/=lib/eigenlayer-contracts/
+@openzeppelin/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/
+@openzeppelin/contracts/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/
+@openzeppelin-upgradeable/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/
+@openzeppelin-upgradeable/contracts/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/contracts/
+@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/proxy/transparent/TransparentUpgradeableProxy.sol
+@openzeppelin/contracts/proxy/beacon/IBeacon.sol=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/proxy/beacon/IBeacon.sol
+@chainlink/contracts/src/interfaces/feeds/=lib/foundry-chainlink-toolkit/src/interfaces/feeds/

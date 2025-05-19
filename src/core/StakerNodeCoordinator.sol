@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
@@ -50,6 +50,9 @@ contract StakerNodeCoordinator is
         if (init.initialOwner == address(0)) {
             revert("Initial owner cannot be the zero address");
         }
+        if (init.pauser == address(0)) {
+            revert("Pauser cannot be the zero address");
+        }
         if (init.stakerNodeCreator == address(0)) {
             revert("Staker node creator cannot be the zero address");
         }
@@ -69,6 +72,10 @@ contract StakerNodeCoordinator is
             revert("DelegationManager cannot be the zero address");
         }
 
+        if (init.maxNodes == 0) {
+            revert ZeroAmount();
+        }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
@@ -78,6 +85,7 @@ contract StakerNodeCoordinator is
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         maxNodes = init.maxNodes;
+        _registerStakerNodeImplementation(init.stakerNodeImplementation);
     }
 
     /// @notice Creates a new staker node
@@ -96,12 +104,17 @@ contract StakerNodeCoordinator is
             revert TooManyStakerNodes(maxNodes);
         }
 
-        BeaconProxy proxy = new BeaconProxy(address(upgradeableBeacon), "");
+        // Cache upgradeableBeacon address to save gas
+        address beaconAddr = address(upgradeableBeacon);
+        BeaconProxy proxy = new BeaconProxy(beaconAddr, "");
         IStakerNode node = IStakerNode(payable(proxy));
 
         initializeStakerNode(node, nodeId);
 
-        _stakerNodes.push(node);
+        // Use unchecked for nodeId increment since we already checked maxNodes
+        unchecked {
+            stakerNodes.push(node);
+        }
 
         emit NodeCreated(nodeId, node, msg.sender);
 
@@ -127,24 +140,22 @@ contract StakerNodeCoordinator is
     /// @notice Registers the initial staker node implementation
     /// @param _implementationContract Address of the implementation contract
     /// @dev Can only be called once by an account with DEFAULT_ADMIN_ROLE
-    function registerStakerNodeImplementation(
+    function _registerStakerNodeImplementation(
         address _implementationContract
-    )
-        public
-        override
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        notZeroAddress(_implementationContract)
-    {
+    ) internal notZeroAddress(_implementationContract) {
         if (address(upgradeableBeacon) != address(0)) {
             revert BeaconImplementationAlreadyExists();
         }
 
-        upgradeableBeacon = new UpgradeableBeacon(
-            _implementationContract,
-            address(this)
-        );
+        upgradeableBeacon = new UpgradeableBeacon(_implementationContract);
 
-        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, true);
+        upgradeableBeacon.transferOwnership(address(this));
+
+        emit NodeImplementationChanged(
+            address(upgradeableBeacon),
+            _implementationContract,
+            true
+        );
     }
 
     /// @notice Upgrades the staker node implementation
@@ -162,15 +173,26 @@ contract StakerNodeCoordinator is
             revert NoBeaconImplementationExists();
         }
 
+        // Implementation validation
+        if (_implementationContract.code.length == 0) revert NotAContract();
+
         upgradeableBeacon.upgradeTo(_implementationContract);
 
-        uint256 nodeCount = _stakerNodes.length;
+        // Cache array length
+        uint256 nodeCount = stakerNodes.length;
 
-        for (uint256 i = 0; i < nodeCount; i++) {
-            initializeStakerNode(IStakerNode(_stakerNodes[i]), i);
+        // Use unchecked for counter increment since i < nodeCount
+        unchecked {
+            for (uint256 i = 0; i < nodeCount; i++) {
+                initializeStakerNode(IStakerNode(stakerNodes[i]), i);
+            }
         }
 
-        emit NodeImplementationChanged(address(upgradeableBeacon), _implementationContract, false);
+        emit NodeImplementationChanged(
+            address(upgradeableBeacon),
+            _implementationContract,
+            false
+        );
     }
 
     /// @notice Sets the maximum number of staker nodes
