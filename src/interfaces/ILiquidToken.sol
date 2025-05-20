@@ -62,6 +62,9 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
 
+    /// @notice Error for invalid funds recepient
+    error InvalidReceiver(address receiver);
+
     /// @notice Error for unauthorized access
     error UnauthorizedAccess(address sender);
 

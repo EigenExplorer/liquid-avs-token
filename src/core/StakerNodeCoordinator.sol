@@ -6,7 +6,6 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -29,7 +28,7 @@ contract StakerNodeCoordinator is
     uint256 public override maxNodes;
 
     UpgradeableBeacon public upgradeableBeacon;
-    IStakerNode[] private _stakerNodes;
+    IStakerNode[] private stakerNodes;
 
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
@@ -98,7 +97,7 @@ contract StakerNodeCoordinator is
         onlyRole(STAKER_NODE_CREATOR_ROLE)
         returns (IStakerNode)
     {
-        uint256 nodeId = _stakerNodes.length;
+        uint256 nodeId = stakerNodes.length;
 
         if (nodeId >= maxNodes) {
             revert TooManyStakerNodes(maxNodes);
@@ -201,7 +200,7 @@ contract StakerNodeCoordinator is
     function setMaxNodes(
         uint256 _maxNodes
     ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 nodeCount = _stakerNodes.length;
+        uint256 nodeCount = stakerNodes.length;
         if (_maxNodes < nodeCount) {
             revert MaxNodesLowerThanCurrent(nodeCount, _maxNodes);
         }
@@ -232,13 +231,13 @@ contract StakerNodeCoordinator is
     /// @notice Retrieves all staker nodes
     /// @return An array of all IStakerNode interfaces
     function getAllNodes() public view override returns (IStakerNode[] memory) {
-        return _stakerNodes;
+        return stakerNodes;
     }
 
     /// @notice Gets the total number of staker nodes
     /// @return uint256 The number of staker nodes
     function getStakerNodesCount() public view override returns (uint256) {
-        return _stakerNodes.length;
+        return stakerNodes.length;
     }
 
     /// @notice Retrieves a staker node by its ID
@@ -247,10 +246,10 @@ contract StakerNodeCoordinator is
     function getNodeById(
         uint256 nodeId
     ) public view override returns (IStakerNode) {
-        if (nodeId >= _stakerNodes.length) {
+        if (nodeId >= stakerNodes.length) {
             revert NodeIdOutOfRange(nodeId);
         }
-        return _stakerNodes[nodeId];
+        return stakerNodes[nodeId];
     }
 
     modifier notZeroAddress(address _address) {

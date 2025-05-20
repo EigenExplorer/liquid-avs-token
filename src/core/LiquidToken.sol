@@ -38,8 +38,6 @@ contract LiquidToken is
 
     IWithdrawalManager public withdrawalManager;
 
-    mapping(address => uint256) public assetBalances;
-    mapping(address => uint256) public queuedAssetBalances;
     mapping(address => uint256) private _withdrawalNonce;
 
     /// @dev Disables initializers for the implementation contract
@@ -188,17 +186,17 @@ contract LiquidToken is
 
         uint256 totalShares = 0;
         for (uint256 i = 0; i < assets.length; i++) {
-            if (!liquidTokenManager.tokenIsSupported(assets[i]))
+            if (!liquidTokenManager.tokenIsSupported(IERC20(address(assets[i]))))
                 revert UnsupportedAsset(assets[i]);
             if (amounts[i] == 0) revert ZeroAmount();
             totalShares += amounts[i];
         }
 
-        if (balanceOf(sender) < totalShares)
+        if (balanceOf(msg.sender) < totalShares)
             revert InsufficientBalance(
                 IERC20Upgradeable(address(this)),
                 totalShares,
-                balanceOf(sender)
+                balanceOf(msg.sender)
             );
 
         // Receive escrow shares to burn on returning assets to user
@@ -237,9 +235,9 @@ contract LiquidToken is
     ) internal view returns (bool) {
         bool isPossible = true;
         for(uint256 i = 0; i < assets.length; i++) {
-            IERC20 asset = assets[i];
+            IERC20Upgradeable asset = assets[i];
             if (
-                (assetBalances[address(asset)] + liquidTokenManager.getStakedAssetBalance(assets[i])) < 
+                (assetBalances[address(asset)] + liquidTokenManager.getStakedAssetBalance(IERC20(address(asset)))) < 
                 amounts[i]
             ) {
                 isPossible = false;
@@ -345,13 +343,13 @@ contract LiquidToken is
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this))) 
                 revert AssetBalanceOutOfSync(
-                    asset, 
+                    assetsToRetrieve[i], 
                     assetBalances[address(asset)], 
                     asset.balanceOf(address(this))
                 );
 
             emit AssetTransferred(
-                asset,
+                assetsToRetrieve[i],
                 amount,
                 receiver,
                 msg.sender
@@ -412,12 +410,6 @@ contract LiquidToken is
                 _balanceQueuedAsset(
                     IERC20Upgradeable(address(supportedTokens[i]))
                 )
-            );
-
-            // Queued Asset Balances
-            total += liquidTokenManager.convertToUnitOfAccount(
-                supportedTokens[i],
-                _balanceQueuedAsset(supportedTokens[i])
             );
 
             // Staked Asset Balances

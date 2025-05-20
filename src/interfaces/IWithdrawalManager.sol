@@ -3,9 +3,10 @@ pragma solidity ^0.8.20;
 
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ISignatureUtils} from "@eigenlayer/contracts/interfaces/ISignatureUtils.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {ILiquidTokenManager} from "./ILiquidTokenManager.sol";
@@ -46,7 +47,7 @@ interface IWithdrawalManager {
     /// @param withdrawal The EigenLayer withdrawal struct containing delegation details
     /// @param assets Array of token addresses being withdrawn
     struct ELWithdrawalRequest {
-        IDelegationManager.Withdrawal withdrawal;
+        IDelegationManagerTypes.Withdrawal withdrawal;
         IERC20[] assets;
     }
 
@@ -55,7 +56,7 @@ interface IWithdrawalManager {
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
     /// @param shareAmounts Array of share amounts being withdrawn per asset
-    /// @param timestamp Block timestamp when the request was made 
+    /// @param timestamp Block timestamp when the request was made
     event WithdrawalInitiated(
         bytes32 indexed requestId,
         address indexed user,
@@ -136,7 +137,7 @@ interface IWithdrawalManager {
     /// @param user The requesting user's address
     /// @param requestId The unique identifier for the withdrawal request
     function createWithdrawalRequest(
-        IERC20[] memory assets,
+        IERC20Upgradeable[] memory assets,
         uint256[] memory amounts,
         address user,
         bytes32 requestId
@@ -154,13 +155,22 @@ interface IWithdrawalManager {
     function recordRedemptionCreated(
         bytes32 redemptionId,
         ILiquidTokenManager.Redemption calldata redemption,
-        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata assets
     ) external;
 
-    /// @notice Records the completion of a redemption by LiquidTokenManager
-    /// @param redemptionId The ID of the completed redemption
-    function recordRedemptionCompleted(bytes32 redemptionId) external;
+    /// @notice Called by `LiquidTokenManger` when a redemption is completed
+    /// @dev Slashing, if any, is accounted for here
+    /// @dev The function back-calculates the % of funds slashed with the discrepancy between the
+    /// @dev requested withdrawal amounts (recorded in `withdrawalRequests`) and the actual returned amounts
+    /// @param redemptionId The ID of the redemption
+    /// @param assets The assets corresponding to the share amounts
+    /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
+    function recordRedemptionCompleted(
+        bytes32 redemptionId,
+        IERC20Upgradeable[] calldata assets,
+        uint256[] calldata receivedAmounts
+    ) external returns (uint256[] memory);
 
     /// @notice Gets all withdrawal request IDs for a user
     /// @param user The address of the user

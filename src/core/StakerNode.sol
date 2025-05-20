@@ -9,6 +9,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -29,6 +30,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
         keccak256("LIQUID_TOKEN_MANAGER_ROLE");
+    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
+        keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -124,7 +127,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         );
 
         emit UndelegatedFromOperator(operatorDelegation);
-        
+
         operatorDelegation = address(0);
         return withdrawalRoots;
     }
@@ -133,22 +136,23 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @dev EL creates one withdrawal request regardless of the number of strategies
     /// @param strategies The set of strategies to withdraw from
     /// @param shareAmounts The amount of shares to withdraw per strategy
-    function withdrawAssets(IStrategy[] calldata strategies, uint256[] calldata shareAmounts)   
-        external
-        override
-        onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
-        returns (bytes32)
-    {
+    function withdrawAssets(
+        IStrategy[] calldata strategies,
+        uint256[] calldata shareAmounts
+    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) returns (bytes32) {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
-        if (strategies.length != shareAmounts.length) revert LengthMismatch(strategies.length, shareAmounts.length);
-        
-        IDelegationManager.QueuedWithdrawalParams[] memory requestParams = 
-            new IDelegationManager.QueuedWithdrawalParams[](1);
-        
-        requestParams[0] = IDelegationManager.QueuedWithdrawalParams({
+        if (strategies.length != shareAmounts.length)
+            revert LengthMismatch(strategies.length, shareAmounts.length);
+
+        IDelegationManagerTypes.QueuedWithdrawalParams[]
+            memory requestParams = new IDelegationManagerTypes.QueuedWithdrawalParams[](
+                1
+            );
+
+        requestParams[0] = IDelegationManagerTypes.QueuedWithdrawalParams({
             strategies: strategies,
-            shares: shareAmounts,
-            withdrawer: address(this)
+            depositShares: shareAmounts,
+            __deprecated_withdrawer: address(this)
         });
 
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -160,12 +164,16 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @param withdrawals The set of EL withdrawals to complete and associated data
     /// @param tokens The set of tokens to receive funds in
     function completeWithdrawals(
-        IDelegationManager.Withdrawal[] calldata withdrawals,
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
         IERC20[][] calldata tokens
-    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) returns (IERC20[] memory) {
+    )
+        external
+        override
+        onlyRole(LIQUID_TOKEN_MANAGER_ROLE)
+        returns (IERC20[] memory)
+    {
         uint256 arrayLength = withdrawals.length;
         bool[] memory receiveAsTokensArray = new bool[](arrayLength);
-        uint256[] memory middlewareTimesIndexes = new uint256[](arrayLength);
 
         for (uint256 i = 0; i < arrayLength; i++) {
             receiveAsTokensArray[i] = true;
@@ -175,7 +183,6 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         delegationManager.completeQueuedWithdrawals(
             withdrawals,
             tokens,
-            middlewareTimesIndexes,
             receiveAsTokensArray
         );
 
@@ -197,8 +204,6 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                 }
             }
         }
-
-        if (uniqueCount == 0) revert NoTokensReceived();
 
         return receivedTokens;
     }

@@ -5,6 +5,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
@@ -57,7 +58,7 @@ interface ILiquidTokenManager {
         uint256[] amounts;
     }
 
-    /// @notice Represents an intent to make a certain amount of funds available by calling staker node withdrawals 
+    /// @notice Represents an intent to make a certain amount of funds available by calling staker node withdrawals
     /// @dev Redemptions are made by the manager to:
     ///     i. settle a set of user withdrawal requests
     ///     ii. partially withdraw a set of assets from nodes
@@ -151,9 +152,17 @@ interface ILiquidTokenManager {
         uint256[] nodeIds
     );
 
-    /// @notice Emitted when a redemption is successfully completed
+    /// @notice Emitted when a redemption is successfuly completed
     /// @param redemptionId Unique identifier of the completed redemption
-    event RedemptionCompleted(bytes32 redemptionId);
+    /// @param assets Array of token addresses involved in the redemption
+    /// @param requestedAmounts Array of originally requested share amounts for each asset
+    /// @param receivedAmounts Array of actually received share amounts for each asset after any slashing
+    event RedemptionCompleted(
+        bytes32 indexed redemptionId,
+        IERC20Upgradeable[] assets,
+        uint256[] requestedAmounts,
+        uint256[] receivedAmounts
+    );
 
     /// @notice Emitted when a token is removed from the system
     /// @param token Address of the removed token
@@ -207,7 +216,11 @@ interface ILiquidTokenManager {
     /// @param asset The token address
     /// @param required The amount required
     /// @param available The amount available
-    error InsufficientBalance(IERC20 asset, uint256 required, uint256 available);
+    error InsufficientBalance(
+        IERC20 asset,
+        uint256 required,
+        uint256 available
+    );
 
     /// @notice Error thrown when attempting to add a token that already exists
     /// @param asset Address of the existing token
@@ -220,7 +233,7 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when attempting to remove a token that is currently in use
     /// @param token Address of the token in use
     error TokenInUse(IERC20 token);
-        
+
     /// @notice Error thrown when price source configuration is invalid
     error InvalidPriceSource();
 
@@ -276,7 +289,7 @@ interface ILiquidTokenManager {
     error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
 
     /// @notice Initializes the LiquidTokenManager contract
-    /// @param init Initialization parameters 
+    /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
     /// @notice Adds a new token to the registry and configures its price sources
@@ -349,7 +362,7 @@ interface ILiquidTokenManager {
     /// @return The IStrategy interface for the corresponding strategy
     function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
 
-        /// @notice Stakes assets to a specific node
+    /// @notice Stakes assets to a specific node
     /// @param nodeId The ID of the node to stake to
     /// @param assets The assets to stake
     /// @param amounts The amounts of each asset to stake
@@ -371,15 +384,14 @@ interface ILiquidTokenManager {
     function delegateNodes(
         uint256[] memory nodeIds,
         address[] memory operators,
-        ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[]
+            calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) external;
 
     /// @notice Undelegate a set of staker nodes from their operators
     /// @param nodeIds The IDs of the staker nodes
-    function undelegateNodes(
-        uint256[] calldata nodeIds
-    ) external;
+    function undelegateNodes(uint256[] calldata nodeIds) external;
 
     /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
@@ -418,7 +430,7 @@ interface ILiquidTokenManager {
         uint256[][] calldata shares
     ) external;
 
-    /// @notice Enables settlement of a set withdrawal requests by directing funds from `LiquidToken` and staker nodes into `WithdrawalManager`  
+    /// @notice Enables settlement of a set withdrawal requests by directing funds from `LiquidToken` and staker nodes into `WithdrawalManager`
     /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
     /// @param ltAssets The assets that will be drawn from `LiquidToken`
     /// @param ltAmounts The amounts for `ltAssets`
@@ -461,7 +473,10 @@ interface ILiquidTokenManager {
 
     /// @notice Returns the StakerNodeCoordinator contract
     /// @return The IStakerNodeCoordinator interface
-    function stakerNodeCoordinator() external view returns (IStakerNodeCoordinator);
+    function stakerNodeCoordinator()
+        external
+        view
+        returns (IStakerNodeCoordinator);
 
     /// @notice Returns the TokenRegistryOracle contract
     /// @return The ITokenRegistryOracle interface
