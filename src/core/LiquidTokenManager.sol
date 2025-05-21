@@ -58,6 +58,9 @@ contract LiquidTokenManager is
     /// @notice Mapping of tokens to their corresponding strategies
     mapping(IERC20 => IStrategy) public tokenStrategies;
 
+    /// @notice Reverse mapping of strategies to their corresponding tokens
+    mapping(IStrategy => IERC20) public strategyTokens;
+
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
 
@@ -129,6 +132,11 @@ contract LiquidTokenManager is
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
         ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
+        // Ensure the strategy isn't already assigned to another token
+        IERC20 existingToken = strategyTokens[strategy];
+        if (address(existingToken) != address(0) && address(existingToken) != address(token)) {
+            revert StrategyAlreadyAssigned(address(strategy), address(existingToken));
+        }
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
@@ -169,6 +177,7 @@ contract LiquidTokenManager is
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
+        strategyTokens[strategy] = token;
         supportedTokens.push(token);
 
         emit TokenAdded(
@@ -235,8 +244,14 @@ contract LiquidTokenManager is
         // Call tokenRegistryOracle's removeToken function
         tokenRegistryOracle.removeToken(address(token));
 
-        delete tokens[token];
+        // Delete token strategy mapping and its reverse mapping
+        IStrategy strategy = tokenStrategies[token];
+        if (address(strategy) != address(0)) {
+            delete strategyTokens[strategy];
+        }
         delete tokenStrategies[token];
+
+        delete tokens[token];
 
         emit TokenRemoved(token, msg.sender);
     }
@@ -594,5 +609,26 @@ contract LiquidTokenManager is
         );
 
         tokens[asset].volatilityThreshold = newThreshold;
+    }
+
+    /// @notice Get the token for a strategy
+    /// @param strategy The strategy address
+    /// @return The token address
+    function getTokenForStrategy(IStrategy strategy) external view returns (IERC20) {
+        return strategyTokens[strategy];
+    }
+
+    /// @notice Get the strategy for a token
+    /// @param token The token address
+    /// @return The strategy address
+    function getStrategyForToken(IERC20 token) external view returns (IStrategy) {
+        return tokenStrategies[token];
+    }
+
+    /// @notice Check if a strategy is supported
+    /// @param strategy The strategy address
+    /// @return True if the strategy is supported
+    function isStrategySupported(IStrategy strategy) external view returns (bool) {
+        return address(strategyTokens[strategy]) != address(0);
     }
 }

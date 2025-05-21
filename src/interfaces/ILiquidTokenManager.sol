@@ -132,6 +132,12 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when an invalid decimals value is provided
     error InvalidDecimals();
 
+    /// @notice Error thrown when an address is not a valid contract
+    error NotAContract();
+
+    /// @notice Error thrown when a strategy is already assigned to another token
+    error StrategyAlreadyAssigned(address strategy, address existingToken);
+
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
 
