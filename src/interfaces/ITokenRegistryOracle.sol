@@ -16,7 +16,7 @@ interface ITokenRegistryOracle {
     struct Init {
         address initialOwner;
         address priceUpdater;
-        address liquidToken; // <-- Add this for proper role mngmnt now
+        address liquidToken;
         ILiquidTokenManager liquidTokenManager;
     }
 

@@ -483,38 +483,25 @@ contract LiquidTokenManager is
         uint256[] calldata nodeIds
     ) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
         for (uint256 i = 0; i < nodeIds.length; i++) {
-            uint256 nodeId = nodeIds[i];
-            IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-            (
-                IStrategy[] memory strategies,
-                uint256[] memory shares
-            ) = strategyManager.getDeposits(address(node));
-            bytes32[] memory withdrawalRoots = node.undelegate();
-
-            emit NodeUndelegated(nodeIds[i], node.getOperatorDelegation());
-
-            // Create a redemptipon if withdrawals were queued on EL
-            if (withdrawalRoots.length > 0) {
-                _createRedemptionNodeUndelegation(
-                    nodeId,
-                    strategies,
-                    shares,
-                    withdrawalRoots
-                );
-            }
+            _createRedemptionNodeUndelegation(nodeIds[i]);
         }
     }
 
     /// @notice Creates a redemption for a node undelegation
-    function _createRedemptionNodeUndelegation(
-        uint256 nodeId,
-        IStrategy[] memory strategies,
-        uint256[] memory shares,
-        bytes32[] memory withdrawalRoots
-    ) private {
+    function _createRedemptionNodeUndelegation(uint256 nodeId) private {
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-        address staker = address(node);
-        uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(staker);
+        uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(
+            address(node)
+        );
+        address delegatedTo = node.getOperatorDelegation();
+        (
+            IStrategy[] memory strategies,
+            uint256[] memory shares
+        ) = strategyManager.getDeposits(address(node));
+        bytes32[] memory withdrawalRoots = node.undelegate();
+
+        emit NodeUndelegated(nodeId, delegatedTo);
+
         IDelegationManagerTypes.Withdrawal[]
             memory withdrawals = new IDelegationManagerTypes.Withdrawal[](
                 withdrawalRoots.length
@@ -540,9 +527,9 @@ contract LiquidTokenManager is
 
             IDelegationManagerTypes.Withdrawal
                 memory withdrawal = IDelegationManagerTypes.Withdrawal({
-                    staker: staker,
+                    staker: address(node),
                     delegatedTo: node.getOperatorDelegation(),
-                    withdrawer: staker,
+                    withdrawer: address(node),
                     nonce: nonce++,
                     startBlock: uint32(block.number),
                     strategies: requestStrategies,

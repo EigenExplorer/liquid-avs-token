@@ -6,16 +6,16 @@ import "forge-std/console.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockStrategy} from "./mocks/MockStrategy.sol";
+
 import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
 import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockStrategy} from "./mocks/MockStrategy.sol";
 
 contract RealWorldTokenPriceTest is BaseTest {
     // Network detection

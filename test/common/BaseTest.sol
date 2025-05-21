@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
-import "forge-std/console.sol";
 
+import "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
+
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IPauserRegistry} from "@eigenlayer/contracts/permissions/PauserRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -11,23 +12,26 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
-import {LiquidToken} from "../../src/core/LiquidToken.sol";
-import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
-import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
-import {StakerNode} from "../../src/core/StakerNode.sol";
-import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockStrategy} from "../mocks/MockStrategy.sol";
 import {MockChainlinkFeed} from "../mocks/MockChainlinkFeed.sol";
 import {MockCurvePool} from "../mocks/MockCurvePool.sol";
 import {MockProtocolToken} from "../mocks/MockProtocolToken.sol";
 import {MockFailingOracle} from "../mocks/MockFailingOracle.sol";
+import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
+
+import {LiquidToken} from "../../src/core/LiquidToken.sol";
+import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
+import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
+import {StakerNode} from "../../src/core/StakerNode.sol";
+import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
+import {WithdrawalManager} from "../../src/core/WithdrawalManager.sol";
 import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
-import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
+import {IWithdrawalManager} from "../../src/interfaces/IWithdrawalManager.sol";
 
 contract BaseTest is Test {
     // Source type constants
@@ -50,6 +54,7 @@ contract BaseTest is Test {
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
+    WithdrawalManager public withdrawalManager;
 
     // Mock contracts - base test tokens
     MockERC20 public testToken;
@@ -80,11 +85,12 @@ contract BaseTest is Test {
     address public user1 = address(3);
     address public user2 = address(4);
 
-    // Private variables (with leading underscore)
+    // Private variables
     LiquidToken private _liquidTokenImplementation;
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
+    WithdrawalManager private _withdrawalManagerImplementation;
 
     // Helper method to use deployer for proxy interactions
     modifier asDeployer() {
@@ -382,6 +388,7 @@ contract BaseTest is Test {
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
+        _withdrawalManagerImplementation = new WithdrawalManager();
         stakerNodeImplementation = new StakerNode();
     }
 
@@ -418,6 +425,15 @@ contract BaseTest is Test {
                 new TransparentUpgradeableProxy(
                     address(_stakerNodeCoordinatorImplementation),
                     proxyAdminAddress,
+                    ""
+                )
+            )
+        );
+        withdrawalManager = WithdrawalManager(
+            address(
+                new TransparentUpgradeableProxy(
+                    address(_withdrawalManagerImplementation),
+                    address(admin),
                     ""
                 )
             )
@@ -533,6 +549,7 @@ contract BaseTest is Test {
             tokenRegistryOracle: ITokenRegistryOracle(
                 address(tokenRegistryOracle)
             ),
+            withdrawalManager: withdrawalManager,
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
@@ -559,6 +576,7 @@ contract BaseTest is Test {
         console.log("Initializing StakerNodeCoordinator...");
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: withdrawalManager,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
@@ -601,7 +619,8 @@ contract BaseTest is Test {
             ),
             tokenRegistryOracle: ITokenRegistryOracle(
                 address(tokenRegistryOracle)
-            )
+            ),
+            withdrawalManager: withdrawalManager
         });
 
         vm.prank(deployer);
@@ -611,6 +630,28 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
         liquidToken.grantRole(liquidToken.DEFAULT_ADMIN_ROLE(), address(this));
         liquidToken.grantRole(liquidToken.PAUSER_ROLE(), pauser);
+        vm.stopPrank();
+    }
+
+    function _initializeWithdrawalManager() private {
+        console.log("Initializing WithdrawalManager...");
+        IWithdrawalManager.Init memory init = IWithdrawalManager.Init({
+            initialOwner: deployer,
+            delegationManager: delegationManager,
+            liquidToken: liquidToken,
+            liquidTokenManager: liquidTokenManager,
+            stakerNodeCoordinator: stakerNodeCoordinator
+        });
+
+        vm.prank(deployer);
+        withdrawalManager.initialize(init);
+
+        // Grant roles
+        vm.startPrank(deployer);
+        withdrawalManager.grantRole(
+            withdrawalManager.DEFAULT_ADMIN_ROLE(),
+            address(this)
+        );
         vm.stopPrank();
     }
 

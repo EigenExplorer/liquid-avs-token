@@ -2,12 +2,13 @@
 pragma solidity ^0.8.27;
 
 import {BaseTest} from "./common/BaseTest.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+
 import {StakerNodeCoordinator} from "../src/core/StakerNodeCoordinator.sol";
 import {StakerNode} from "../src/core/StakerNode.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
-import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract StakerNodeCoordinatorTest is BaseTest {
     function setUp() public override {
@@ -152,6 +153,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         // Initialize with zero maxNodes
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: withdrawalManager,
             delegationManager: delegationManager,
             strategyManager: strategyManager,
             maxNodes: 0, // Set maxNodes to 0
@@ -230,6 +232,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         // 5. Initialize with maxNodes = 1 (normal case) using deployer as caller
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: withdrawalManager,
             delegationManager: delegationManager,
             strategyManager: strategyManager,
             maxNodes: 1, // Allow 1 node

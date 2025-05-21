@@ -2,20 +2,22 @@
 pragma solidity ^0.8.27;
 
 import "forge-std/Test.sol";
+
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
-import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
-import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
-import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
-import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
 import {MockCurvePool} from "./mocks/MockCurvePool.sol";
 import {MockProtocolToken} from "./mocks/MockProtocolToken.sol";
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+
+import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
+import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
+import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
+import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 
 contract TokenRateProviderTest is BaseTest {
     // For role assignments
