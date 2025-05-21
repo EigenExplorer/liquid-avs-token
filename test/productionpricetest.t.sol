@@ -4,14 +4,15 @@ pragma solidity ^0.8.27;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import {BaseTest} from "./common/BaseTest.sol";
 import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
 import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
@@ -130,141 +131,144 @@ contract RealWorldTokenPriceTest is BaseTest {
     bytes32 internal constant RATE_UPDATER_ROLE =
         keccak256("RATE_UPDATER_ROLE");
 
-   function setUp() public override {
-    // Detect network before doing anything else
-    _detectNetwork();
+    function setUp() public override {
+        // Detect network before doing anything else
+        _detectNetwork();
 
-    // Now call parent setup (which initializes all contracts)
-    super.setUp();
+        // Now call parent setup (which initializes all contracts)
+        super.setUp();
 
-    // CRITICAL FIX: Address that Foundry is using internally for test execution
-    address foundryInternalCaller = 0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7;
+        // CRITICAL FIX: Address that Foundry is using internally for test execution
+        address foundryInternalCaller = 0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7;
 
-    // Grant necessary roles to various accounts
-    vm.startPrank(admin);
+        // Grant necessary roles to various accounts
+        vm.startPrank(admin);
 
-    // LiquidTokenManager roles - include Foundry internal address
-    liquidTokenManager.grantRole(
-        liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-        foundryInternalCaller
-    );
-    liquidTokenManager.grantRole(
-        liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-        foundryInternalCaller
-    );
-    liquidTokenManager.grantRole(
-        liquidTokenManager.PRICE_UPDATER_ROLE(),
-        foundryInternalCaller
-    );
+        // LiquidTokenManager roles - include Foundry internal address
+        liquidTokenManager.grantRole(
+            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
+            foundryInternalCaller
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+            foundryInternalCaller
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.PRICE_UPDATER_ROLE(),
+            foundryInternalCaller
+        );
 
-    // TokenRegistryOracle roles - this is the critical part
-    tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
-    tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, foundryInternalCaller);
+        // TokenRegistryOracle roles - this is the critical part
+        tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
+        tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, foundryInternalCaller);
 
-    // Also grant roles to the test contract itself
-    tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, address(this));
-    tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
+        // Also grant roles to the test contract itself
+        tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, address(this));
+        tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
 
-    vm.stopPrank();
+        vm.stopPrank();
 
-    // Create mock deposit token and mock strategy for testing
-    mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
-    mockDepositToken.mint(user1, 1000 ether);
-    mockTokenStrategy = new MockStrategy(
-        strategyManager,
-        IERC20(address(mockDepositToken))
-    );
+        // Create mock deposit token and mock strategy for testing
+        mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
+        mockDepositToken.mint(user1, 1000 ether);
+        mockTokenStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(mockDepositToken))
+        );
 
-    // Set up token categories and lists based on detected network
-    if (isHolesky) {
-        _setupHoleskyTokenLists();
-        console.log("\n=== RUNNING TESTS ON HOLESKY TESTNET ===\n");
-    } else {
-        _setupTokenLists(); // Original mainnet setup
-        console.log("\n=== RUNNING TESTS ON ETHEREUM MAINNET ===\n");
+        // Set up token categories and lists based on detected network
+        if (isHolesky) {
+            _setupHoleskyTokenLists();
+            console.log("\n=== RUNNING TESTS ON HOLESKY TESTNET ===\n");
+        } else {
+            _setupTokenLists(); // Original mainnet setup
+            console.log("\n=== RUNNING TESTS ON ETHEREUM MAINNET ===\n");
+        }
+
+        // Add tokens to LiquidTokenManager
+        _addTokensToManager();
+
+        // Mock the oracle price getter - ADDED THIS
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(mockDepositToken)
+            ),
+            abi.encode(1e18, true) // price = 1e18, success = true
+        );
+
+        // Add mock token to LiquidTokenManager with proper configuration
+        vm.startPrank(admin);
+        liquidTokenManager.addToken(
+            IERC20(address(mockDepositToken)),
+            18,
+            0,
+            mockTokenStrategy,
+            SOURCE_TYPE_CHAINLINK, // Use valid source type
+            address(1), // Use a dummy non-zero address to pass validation
+            0, // No arg needed
+            address(0), // No fallback
+            bytes4(0) // No fallback selector
+        );
+        tokenAdded[address(mockDepositToken)] = true;
+
+        // Manually set the mock token price
+        tokenRegistryOracle.updateRate(IERC20(address(mockDepositToken)), 1e18);
+        vm.stopPrank();
+
+        // Approve token for LiquidToken contract
+        vm.startPrank(user1);
+        mockDepositToken.approve(address(liquidToken), type(uint256).max);
+        vm.stopPrank();
+
+        // Create token status report
+        _createTokenStatusReport();
+
+        console.log(
+            "Foundry internal caller has ORACLE_ADMIN_ROLE:",
+            tokenRegistryOracle.hasRole(
+                ORACLE_ADMIN_ROLE,
+                foundryInternalCaller
+            )
+        );
+        console.log(
+            "Foundry internal caller has RATE_UPDATER_ROLE:",
+            tokenRegistryOracle.hasRole(
+                RATE_UPDATER_ROLE,
+                foundryInternalCaller
+            )
+        );
+        mockNativeToken = new MockERC20("EigenInu Token", "EINU");
+        mockNativeToken.mint(user1, 1000 ether);
+
+        // Create strategy for native token
+        nativeTokenStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(mockNativeToken))
+        );
+
+        // Approve native token for LiquidToken contract
+        vm.startPrank(user1);
+        mockNativeToken.approve(address(liquidToken), type(uint256).max);
+        vm.stopPrank();
+
+        // For native token, we don't need to mock Oracle calls since it uses fixed 1e18 price
+        vm.startPrank(admin);
+        liquidTokenManager.addToken(
+            IERC20(address(mockNativeToken)),
+            18,
+            0, // No volatility threshold
+            nativeTokenStrategy,
+            0, // SOURCE_TYPE_NATIVE = 0
+            address(0), // No price source (critical)
+            0, // No args
+            address(0), // No fallback
+            bytes4(0) // No fallback selector
+        );
+        tokenAdded[address(mockNativeToken)] = true;
+        vm.stopPrank();
     }
-
-    // Add tokens to LiquidTokenManager
-    _addTokensToManager();
-
-    // Mock the oracle price getter - ADDED THIS
-    vm.mockCall(
-        address(tokenRegistryOracle),
-        abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(mockDepositToken)),
-        abi.encode(1e18, true) // price = 1e18, success = true
-    );
-
-    // Add mock token to LiquidTokenManager with proper configuration
-    vm.startPrank(admin);
-    liquidTokenManager.addToken(
-        IERC20(address(mockDepositToken)),
-        18,
-        0,
-        mockTokenStrategy,
-        SOURCE_TYPE_CHAINLINK, // Use valid source type
-        address(1), // Use a dummy non-zero address to pass validation
-        0, // No arg needed
-        address(0), // No fallback
-        bytes4(0) // No fallback selector
-    );
-    tokenAdded[address(mockDepositToken)] = true;
-
-    // Manually set the mock token price
-    tokenRegistryOracle.updateRate(IERC20(address(mockDepositToken)), 1e18);
-    vm.stopPrank();
-
-    // Approve token for LiquidToken contract
-    vm.startPrank(user1);
-    mockDepositToken.approve(address(liquidToken), type(uint256).max);
-    vm.stopPrank();
-
-    // Create token status report
-    _createTokenStatusReport();
-
-    console.log(
-        "Foundry internal caller has ORACLE_ADMIN_ROLE:",
-        tokenRegistryOracle.hasRole(
-            ORACLE_ADMIN_ROLE,
-            foundryInternalCaller
-        )
-    );
-    console.log(
-        "Foundry internal caller has RATE_UPDATER_ROLE:",
-        tokenRegistryOracle.hasRole(
-            RATE_UPDATER_ROLE,
-            foundryInternalCaller
-        )
-    );
-    mockNativeToken = new MockERC20("EigenInu Token", "EINU");
-    mockNativeToken.mint(user1, 1000 ether);
-
-    // Create strategy for native token
-    nativeTokenStrategy = new MockStrategy(
-        strategyManager,
-        IERC20(address(mockNativeToken))
-    );
-
-    // Approve native token for LiquidToken contract
-    vm.startPrank(user1);
-    mockNativeToken.approve(address(liquidToken), type(uint256).max);
-    vm.stopPrank();
-
-    // For native token, we don't need to mock Oracle calls since it uses fixed 1e18 price
-    vm.startPrank(admin);
-    liquidTokenManager.addToken(
-        IERC20(address(mockNativeToken)),
-        18,
-        0, // No volatility threshold
-        nativeTokenStrategy,
-        0, // SOURCE_TYPE_NATIVE = 0
-        address(0), // No price source (critical)
-        0, // No args
-        address(0), // No fallback
-        bytes4(0) // No fallback selector
-    );
-    tokenAdded[address(mockNativeToken)] = true;
-    vm.stopPrank();
-}
 
     // Simplified network detection that just checks the chain ID
     function _detectNetwork() internal {
@@ -936,8 +940,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18; // 10 tokens
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockDepositToken));
+        IERC20[] memory tokens = new IERC20[](1);
+        tokens[0] = mockDepositToken;
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
@@ -992,8 +996,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18; // 10 tokens
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockNativeToken));
+        IERC20[] memory tokens = new IERC20[](1);
+        tokens[0] = IERC20(mockNativeToken);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;

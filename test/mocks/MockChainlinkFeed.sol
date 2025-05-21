@@ -6,9 +6,9 @@ contract MockChainlinkFeed {
     uint8 private _decimals;
     uint256 private _updatedAt;
 
-    constructor(int256 initialAnswer, uint8 decimals) {
+    constructor(int256 initialAnswer, uint8 tokenDecimals) {
         _answer = initialAnswer;
-        _decimals = decimals;
+        _decimals = tokenDecimals;
         _updatedAt = block.timestamp;
     }
 

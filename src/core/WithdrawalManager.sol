@@ -9,7 +9,6 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -82,7 +81,7 @@ contract WithdrawalManager is
     /// @param user The requesting user's address
     /// @param requestId The unique identifier of the withdrawal request
     function createWithdrawalRequest(
-        IERC20Upgradeable[] memory assets,
+        IERC20[] memory assets,
         uint256[] memory amounts,
         address user,
         bytes32 requestId
@@ -208,7 +207,7 @@ contract WithdrawalManager is
     /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
     function recordRedemptionCompleted(
         bytes32 redemptionId,
-        IERC20Upgradeable[] calldata assets,
+        IERC20[] calldata assets,
         uint256[] calldata receivedAmounts
     ) external override returns (uint256[] memory) {
         if (msg.sender != address(liquidTokenManager))
@@ -297,9 +296,7 @@ contract WithdrawalManager is
         }
 
         if (slashedCount > 0) {
-            IERC20Upgradeable[] memory slashedAssets = new IERC20Upgradeable[](
-                slashedCount
-            );
+            IERC20[] memory slashedAssets = new IERC20[](slashedCount);
             uint256[] memory slashedAmounts = new uint256[](slashedCount);
 
             uint256 index = 0;

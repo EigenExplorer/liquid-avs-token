@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
-import "forge-std/console.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
+
 import {LiquidToken} from "../src/core/LiquidToken.sol";
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 
 contract LiquidTokenTest is BaseTest {
@@ -142,7 +143,7 @@ contract LiquidTokenTest is BaseTest {
         amounts[0] = 10 ether;
 
         uint256[] memory mintedShares = liquidToken.deposit(
-            _convertToUpgradeable(assets),
+            assets,
             amounts,
             user1
         );
@@ -169,19 +170,16 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256[] memory amountsToTransfer = new uint256[](1);
         amountsToTransfer[0] = 5 ether;
 
         vm.prank(address(liquidTokenManager));
         liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
+            assets,
+            amountsToTransfer,
+            address(liquidTokenManager)
         );
 
         assertEq(
@@ -205,7 +203,7 @@ contract LiquidTokenTest is BaseTest {
         testToken2.approve(address(liquidToken), 5 ether);
 
         uint256[] memory mintedShares = liquidToken.deposit(
-            _convertToUpgradeable(assets),
+            assets,
             amountsToDeposit,
             user1
         );
@@ -243,11 +241,7 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), 10 ether);
         testToken2.approve(address(liquidToken), 5 ether);
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
         vm.stopPrank();
 
         uint256[] memory amountsToTransfer = new uint256[](2);
@@ -256,8 +250,9 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(address(liquidTokenManager));
         liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
+            assets,
+            amountsToTransfer,
+            address(liquidTokenManager)
         );
 
         assertEq(
@@ -281,11 +276,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(ILiquidToken.ArrayLengthMismatch.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositZeroAmount() public {
@@ -296,11 +287,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 0 ether;
 
         vm.expectRevert(ILiquidToken.ZeroAmount.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositUnsupportedAsset() public {
@@ -318,11 +305,7 @@ contract LiquidTokenTest is BaseTest {
                 address(unsupportedToken)
             )
         );
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositZeroShares() public {
@@ -344,11 +327,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(ILiquidToken.ZeroShares.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testTransferAssetsNotLiquidTokenManager() public {
@@ -364,7 +343,11 @@ contract LiquidTokenTest is BaseTest {
                 user1
             )
         );
-        liquidToken.transferAssets(_convertToUpgradeable(assets), amounts);
+        liquidToken.transferAssets(
+            assets,
+            amounts,
+            address(liquidTokenManager)
+        );
     }
 
     function testTransferAssetsInsufficientBalance() public {
@@ -374,11 +357,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 10 ether;
 
         vm.prank(user1);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256[] memory amountsToTransfer = new uint256[](1);
         amountsToTransfer[0] = 20 ether; // More than available
@@ -393,8 +372,9 @@ contract LiquidTokenTest is BaseTest {
             )
         );
         liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
+            assets,
+            amountsToTransfer,
+            address(liquidTokenManager)
         );
     }
 
@@ -413,11 +393,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testUnpause() public {
@@ -436,11 +412,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testPauseUnauthorized() public {
@@ -464,7 +436,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = maxAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1);
+        liquidToken.deposit(assets, amounts, user1);
 
         // Verify total assets matches deposit
         assertEq(
@@ -481,7 +453,7 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), smallAmount);
         amounts[0] = smallAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user2);
+        liquidToken.deposit(assets, amounts, user2);
 
         // Verify small amounts are tracked correctly
         assertEq(
@@ -506,7 +478,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1);
+        liquidToken.deposit(assets, amounts, user1);
 
         // Verify initial total assets
         assertEq(
@@ -1558,17 +1530,4 @@ contract LiquidTokenTest is BaseTest {
         assertEq(liquidToken.queuedAssetBalances(address(testToken)), 0, "Queued assets should be 0 until withdrawal is fulfilled");
     }
     */
-
-    // Helper function to convert IERC20[] to IERC20Upgradeable[](for test)
-    function _convertToUpgradeable(
-        IERC20[] memory tokens
-    ) internal pure returns (IERC20Upgradeable[] memory) {
-        IERC20Upgradeable[] memory upgradeableTokens = new IERC20Upgradeable[](
-            tokens.length
-        );
-        for (uint256 i = 0; i < tokens.length; i++) {
-            upgradeableTokens[i] = IERC20Upgradeable(address(tokens[i]));
-        }
-        return upgradeableTokens;
-    }
 }

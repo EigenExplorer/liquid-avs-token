@@ -5,7 +5,6 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
@@ -159,7 +158,7 @@ interface ILiquidTokenManager {
     /// @param receivedAmounts Array of actually received share amounts for each asset after any slashing
     event RedemptionCompleted(
         bytes32 indexed redemptionId,
-        IERC20Upgradeable[] assets,
+        IERC20[] assets,
         uint256[] requestedAmounts,
         uint256[] receivedAmounts
     );

@@ -2,11 +2,17 @@
 pragma solidity ^0.8.27;
 
 import "forge-std/Test.sol";
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+
 import {BaseTest} from "./common/BaseTest.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
 import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
@@ -14,12 +20,6 @@ import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
-
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
-import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
@@ -845,8 +845,8 @@ contract LiquidTokenManagerTest is BaseTest {
         );
 
         // Mock the balances to be zero for this token
-        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
-        assets[0] = IERC20Upgradeable(address(tokenToRemove));
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = tokenToRemove;
 
         uint256[] memory zeroBalances = new uint256[](1);
         zeroBalances[0] = 0;
@@ -885,12 +885,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Remove the token
         vm.prank(admin);
-        liquidTokenManager.removeToken(IERC20(address(tokenToRemove)));
+        liquidTokenManager.removeToken(tokenToRemove);
 
         // Verify token is no longer supported
-        assertFalse(
-            liquidTokenManager.tokenIsSupported(IERC20(address(tokenToRemove)))
-        );
+        assertFalse(liquidTokenManager.tokenIsSupported(tokenToRemove));
     }
 
     function testRemoveTokenFailsForUnsupportedToken() public {
@@ -931,7 +929,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Deposit tokens
         vm.startPrank(user1);
-        try liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1) {
+        try liquidToken.deposit(assets, amounts, user1) {
             vm.stopPrank();
 
             // Stake assets to a node
@@ -991,13 +989,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Deposit tokens to LiquidToken
         vm.startPrank(user1);
-        try
-            liquidToken.deposit(
-                _convertToUpgradeable(assets),
-                amountsToDeposit,
-                user1
-            )
-        {} catch {
+        try liquidToken.deposit(assets, amountsToDeposit, user1) {} catch {
             // If deposit fails, skip test
             vm.stopPrank();
             return;
@@ -1140,7 +1132,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser1),
+                assetsToDepositUser1,
                 amountsToDepositUser1,
                 user1
             )
@@ -1161,7 +1153,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser2),
+                assetsToDepositUser2,
                 amountsToDepositUser2,
                 user2
             )
@@ -1244,7 +1236,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser1),
+                assetsToDepositUser1,
                 amountsToDepositUser1,
                 user1
             )
@@ -1265,7 +1257,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser2),
+                assetsToDepositUser2,
                 amountsToDepositUser2,
                 user2
             )
@@ -1635,8 +1627,8 @@ contract LiquidTokenManagerTest is BaseTest {
         );
 
         // Mock that the token has no balance
-        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
-        assets[0] = IERC20Upgradeable(address(token));
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = token;
         uint256[] memory zeroBalances = new uint256[](1);
         zeroBalances[0] = 0;
 
@@ -1657,12 +1649,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Don't use expectEmit since it's causing problems
         vm.prank(admin);
-        liquidTokenManager.removeToken(IERC20(address(token)));
+        liquidTokenManager.removeToken(token);
 
         // Verify token is removed
-        assertFalse(
-            liquidTokenManager.tokenIsSupported(IERC20(address(token)))
-        );
+        assertFalse(liquidTokenManager.tokenIsSupported(token));
     }
     // Helper to convert bytes32 to hex string
     function bytes32ToHexString(
@@ -1734,8 +1724,8 @@ contract LiquidTokenManagerTest is BaseTest {
         );
 
         // Setup mock liquidToken to report non-zero asset balance
-        IERC20Upgradeable[] memory assets = new IERC20Upgradeable[](1);
-        assets[0] = IERC20Upgradeable(address(tokenWithBalance));
+        IERC20[] memory assets = new IERC20[](1);
+        assets[0] = tokenWithBalance;
 
         uint256[] memory balances = new uint256[](1);
         balances[0] = 1000; // Non-zero balance
@@ -1754,7 +1744,7 @@ contract LiquidTokenManagerTest is BaseTest {
                 address(tokenWithBalance)
             )
         );
-        liquidTokenManager.removeToken(IERC20(address(tokenWithBalance)));
+        liquidTokenManager.removeToken(tokenWithBalance);
     }
 
     function testBasicTokenFunctionality() public {
@@ -2594,17 +2584,4 @@ contract LiquidTokenManagerTest is BaseTest {
         vm.stopPrank();
     }
     */
-
-    // Helper function to convert IERC20[] to IERC20Upgradeable[]
-    function _convertToUpgradeable(
-        IERC20[] memory tokens
-    ) internal pure returns (IERC20Upgradeable[] memory) {
-        IERC20Upgradeable[] memory upgradeableTokens = new IERC20Upgradeable[](
-            tokens.length
-        );
-        for (uint256 i = 0; i < tokens.length; i++) {
-            upgradeableTokens[i] = IERC20Upgradeable(address(tokens[i]));
-        }
-        return upgradeableTokens;
-    }
 }

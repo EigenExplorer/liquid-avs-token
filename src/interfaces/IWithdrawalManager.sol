@@ -6,7 +6,6 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {ILiquidTokenManager} from "./ILiquidTokenManager.sol";
@@ -137,7 +136,7 @@ interface IWithdrawalManager {
     /// @param user The requesting user's address
     /// @param requestId The unique identifier for the withdrawal request
     function createWithdrawalRequest(
-        IERC20Upgradeable[] memory assets,
+        IERC20[] memory assets,
         uint256[] memory amounts,
         address user,
         bytes32 requestId
@@ -168,7 +167,7 @@ interface IWithdrawalManager {
     /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
     function recordRedemptionCompleted(
         bytes32 redemptionId,
-        IERC20Upgradeable[] calldata assets,
+        IERC20[] calldata assets,
         uint256[] calldata receivedAmounts
     ) external returns (uint256[] memory);
 

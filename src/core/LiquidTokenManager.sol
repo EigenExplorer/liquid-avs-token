@@ -9,7 +9,6 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -204,18 +203,11 @@ contract LiquidTokenManager is
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            1
-        );
-        upgradeableAssets[0] = IERC20Upgradeable(address(token));
-
         // Check for unstaked balances
-        if (liquidToken.balanceAssets(upgradeableAssets)[0] > 0)
-            revert TokenInUse(token);
+        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(upgradeableAssets)[0] > 0)
+        if (liquidToken.balanceQueuedAssets(assets)[0] > 0)
             revert TokenInUse(token);
 
         // Cache nodes array and length
@@ -413,6 +405,7 @@ contract LiquidTokenManager is
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
 
+        // Each asset is deposited into its corresponding strategy ie, we never convert assets
         IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
         for (uint256 i = 0; i < assetsLength; i++) {
             IERC20 asset = assets[i];
@@ -426,32 +419,21 @@ contract LiquidTokenManager is
             strategiesForNode[i] = strategy;
         }
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            assetsLength
-        );
-        for (uint256 i = 0; i < assetsLength; i++) {
-            upgradeableAssets[i] = IERC20Upgradeable(address(assets[i]));
-        }
-
-        liquidToken.transferAssets(upgradeableAssets, amounts, address(this));
-
-        IERC20[] memory depositAssets = new IERC20[](assetsLength);
-        uint256[] memory depositAmounts = new uint256[](amountsLength);
+        // Fund the staker node with assets from `LiquidToken`
+        liquidToken.transferAssets(assets, amounts, address(this));
 
         for (uint256 i = 0; i < assetsLength; i++) {
-            depositAssets[i] = assets[i];
-            depositAmounts[i] = amounts[i];
             assets[i].safeTransfer(address(node), amounts[i]);
         }
 
         emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
 
-        node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
+        // Instruct node to stake on EL
+        node.depositAssets(assets, amounts, strategiesForNode);
 
         emit AssetsDepositedToEigenlayer(
-            depositAssets,
-            depositAmounts,
+            assets,
+            amounts,
             strategiesForNode,
             address(node)
         );
@@ -1156,9 +1138,7 @@ contract LiquidTokenManager is
         }
 
         // Track unique tokens received from completion of all withdrawals across all nodes
-        IERC20Upgradeable[] memory receivedTokens = new IERC20Upgradeable[](
-            supportedTokens.length
-        );
+        IERC20[] memory receivedTokens = new IERC20[](supportedTokens.length);
 
         uint256 uniqueTokenCount = 0;
         for (uint256 k = 0; k < elActions; k++) {
@@ -1178,7 +1158,7 @@ contract LiquidTokenManager is
 
         // Transfer all withdrawn assets to `receiver`
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
-            IERC20 token = IERC20(address(receivedTokens[i]));
+            IERC20 token = receivedTokens[i];
             uint256 balance = token.balanceOf(address(this));
             receivedAmounts[i] = balance;
 
@@ -1201,8 +1181,8 @@ contract LiquidTokenManager is
         uint256[] memory requestedAmounts = withdrawalManager
             .recordRedemptionCompleted(
                 redemptionId,
-                receivedAmounts,
-                receivedTokens
+                receivedTokens,
+                receivedAmounts
             );
 
         emit RedemptionCompleted(
@@ -1221,7 +1201,7 @@ contract LiquidTokenManager is
     function _completeELWithdrawals(
         uint256 nodeId,
         bytes32[] calldata withdrawalRoots,
-        IERC20Upgradeable[] memory uniqueTokens,
+        IERC20[] memory uniqueTokens,
         uint256 uniqueTokenCount
     ) private returns (uint256) {
         uint256 arrayLength = withdrawalRoots.length;
@@ -1251,9 +1231,7 @@ contract LiquidTokenManager is
 
         // Track received tokens
         for (uint256 j = 0; j < receivedTokens.length; j++) {
-            IERC20Upgradeable token = IERC20Upgradeable(
-                address(receivedTokens[j])
-            );
+            IERC20 token = receivedTokens[j];
 
             bool found = false;
             for (uint256 k = 0; k < uniqueTokenCount; k++) {
