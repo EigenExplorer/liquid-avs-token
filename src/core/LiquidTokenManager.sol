@@ -132,10 +132,9 @@ contract LiquidTokenManager is
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
         ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
-        // Ensure the strategy isn't already assigned to another token
-        IERC20 existingToken = strategyTokens[strategy];
-        if (address(existingToken) != address(0) && address(existingToken) != address(token)) {
-            revert StrategyAlreadyAssigned(address(strategy), address(existingToken));
+        // Check if the strategy already exists in the system
+        if (address(strategyTokens[strategy]) != address(0)) {
+            revert StrategyAlreadyAssigned(address(strategy), address(strategyTokens[strategy]));
         }
 
         // Price source validation and configuration
