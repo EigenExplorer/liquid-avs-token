@@ -40,9 +40,6 @@ contract WithdrawalManager is
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
     mapping(address => bytes32[]) public userWithdrawalRequests;
 
-    /// @notice EigenLayer Withdrawals
-    mapping(bytes32 => ELWithdrawalRequest) public elWithdrawalRequests;
-
     /// @notice Redemptions
     mapping(bytes32 => ILiquidTokenManager.Redemption) public redemptions;
 
@@ -170,29 +167,12 @@ contract WithdrawalManager is
     /// @notice Called by `LiquidTokenManger` when a new redemption is created
     /// @param redemptionId The unique identifier of the redemption
     /// @param redemption The details of the redemption
-    /// @param withdrawals The withdrawal structs associated with the redemption, needed to complete withdrawal on EL
-    /// @param assets The array assets associated with each withdrawal, needed to complete withdrawal on EL
     function recordRedemptionCreated(
         bytes32 redemptionId,
-        ILiquidTokenManager.Redemption calldata redemption,
-        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata assets
+        ILiquidTokenManager.Redemption calldata redemption
     ) external override {
         if (msg.sender != address(liquidTokenManager))
             revert NotLiquidTokenManager(msg.sender);
-        uint256 arrayLength = redemption.withdrawalRoots.length;
-
-        if (withdrawals.length != arrayLength || assets.length != arrayLength)
-            revert LengthMismatch();
-
-        // Record all EL withdrawals for the redemption
-        for (uint256 i = 0; i < arrayLength; i++) {
-            ELWithdrawalRequest memory elRequest = ELWithdrawalRequest({
-                withdrawal: withdrawals[i],
-                assets: assets[i]
-            });
-            elWithdrawalRequests[redemption.withdrawalRoots[i]] = elRequest;
-        }
 
         // Record the redemption
         redemptions[redemptionId] = redemption;
@@ -203,7 +183,7 @@ contract WithdrawalManager is
     /// @dev The function back-calculates the % of funds slashed with the discrepancy between the
     /// @dev requested withdrawal amounts (recorded in `withdrawalRequests`) and the actual returned amounts
     /// @param redemptionId The ID of the redemption
-    /// @param assets The assets corresponding to the share amounts
+    /// @param assets The set of assets that received from EL withdrawals
     /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
     function recordRedemptionCompleted(
         bytes32 redemptionId,
@@ -239,7 +219,7 @@ contract WithdrawalManager is
         }
 
         // Calculate slashing factors per asset by looking at the difference between
-        // requested amounts and received amounts (1e18 = 100% = nothing slashed)
+        // requested and received amounts (1e18 = 100% = nothing slashed)
         uint256[] memory slashingFactors = new uint256[](assets.length);
 
         for (uint256 i = 0; i < assets.length; i++) {
@@ -308,17 +288,12 @@ contract WithdrawalManager is
                 }
             }
 
-            // No shares to burn or corresponding credit, because funds are taken by AVS
+            // No shares to burn and no corresponding credit, because funds are taken by AVS
             liquidToken.debitQueuedAssetBalances(
                 slashedAssets,
                 slashedAmounts,
                 0
             );
-        }
-
-        // Delete all EL withdrawals for the redemption
-        for (uint256 i = 0; i < redemption.withdrawalRoots.length; i++) {
-            delete elWithdrawalRequests[redemption.withdrawalRoots[i]];
         }
 
         // Delete the redemption
@@ -355,28 +330,6 @@ contract WithdrawalManager is
         }
 
         return requests;
-    }
-
-    /// @notice Returns all EL withdrawal request details for a set of withdrawal roots
-    /// @param withdrawalRoots The EL withdrawal roots
-    function getELWithdrawalRequests(
-        bytes32[] calldata withdrawalRoots
-    ) external view override returns (ELWithdrawalRequest[] memory) {
-        uint256 arrayLength = withdrawalRoots.length;
-        ELWithdrawalRequest[] memory elRequests = new ELWithdrawalRequest[](
-            arrayLength
-        );
-
-        for (uint256 i = 0; i < arrayLength; i++) {
-            ELWithdrawalRequest memory elRequest = elWithdrawalRequests[
-                withdrawalRoots[i]
-            ];
-            if (elRequest.assets.length == 0)
-                revert ELWithdrawalRequestNotFound(withdrawalRoots[i]);
-            elRequests[i] = elRequest;
-        }
-
-        return elRequests;
     }
 
     /// @notice Returns all redemption details for a given redemption ID

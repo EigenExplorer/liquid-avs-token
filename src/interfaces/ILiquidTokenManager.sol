@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
@@ -118,36 +119,48 @@ interface ILiquidTokenManager {
     /// @notice Emitted when a redemption is created due to node undelegation
     /// @param redemptionId Unique identifier for the redemption
     /// @param requestId ID of the withdrawal request
-    /// @param withdrawalRoots Array of EigenLayer withdrawal roots
+    /// @param withdrawalRoots Array of EL withdrawal roots
+    /// @param withdrawals Array of EL Withdrawal structs (required for completing withdrawal on EL)
+    /// @param assets Array of assets redeemed against corresponding withdrawals (required for completing withdrawal on EL)
     /// @param nodeId ID of the node being undelegated
     event RedemptionCreatedForNodeUndelegation(
         bytes32 redemptionId,
         bytes32 requestId,
         bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[][] assets,
         uint256 nodeId
     );
 
     /// @notice Emitted when a redemption is created to settle user withdrawals
     /// @param redemptionId Unique identifier for the redemption
     /// @param requestIds Array of user withdrawal request IDs
-    /// @param withdrawalRoots Array of EigenLayer withdrawal roots
+    /// @param withdrawalRoots Array of EL withdrawal roots
+    /// @param withdrawals Array of EL Withdrawal structs, required for completing withdrawal on EL
+    /// @param assets Array of assets redeemed against corresponding withdrawals (required for completing withdrawal on EL)
     /// @param nodeIds Array of node IDs involved in the withdrawal
     event RedemptionCreatedForUserWithdrawals(
         bytes32 redemptionId,
         bytes32[] requestIds,
         bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[][] assets,
         uint256[] nodeIds
     );
 
     /// @notice Emitted when a redemption is created for rebalancing
     /// @param redemptionId Unique identifier for the redemption
     /// @param requestIds Array of request IDs
-    /// @param withdrawalRoots Array of EigenLayer withdrawal roots
+    /// @param withdrawalRoots Array of EL withdrawal roots
+    /// @param withdrawals Array of EL Withdrawal structs, required for completing withdrawal on EL
+    /// @param assets Array of assets redeemed against corresponding withdrawals (required for completing withdrawal on EL)
     /// @param nodeIds Array of node IDs involved in the rebalancing
     event RedemptionCreatedForRebalancing(
         bytes32 redemptionId,
         bytes32[] requestIds,
         bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[][] assets,
         uint256[] nodeIds
     );
 
@@ -446,16 +459,20 @@ interface ILiquidTokenManager {
     ) external;
 
     /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
-    /// @dev The caller must make sure every i-th element of `withdrawalRoots[][]` aligns with the corresponding `nodeIds[i]`
-    /// @dev The burden is on the caller to keep track of (node, withdrawal roots) pairs via corresponding events emitted during redemption creation
-    /// @dev A redemption can never be partially completed, ie. if any withdrawal roots are missing from the input, the fn will revert
+    /// @dev The caller must make sure every `withdrawals[i][]` aligns with the corresponding `nodeIds[i]`
+    /// @dev The caller must make sure every `assets[i][j][]` aligns with the corresponding `withdrawals[i][]`
+    /// @dev The burden is on the caller to keep track of (node, withdrawal, asset) pairs via corresponding events emitted during redemption creation
+    /// @dev A redemption can never be partially completed, ie. if any withdrawal is missing from the input, the fn will revert
+    /// @dev Fn will revert if a withdrawal that wasn't part of the redemption is provided as input
     /// @param redemptionId The ID of the redemption to complete
     /// @param nodeIds The set of all node IDs concerned with the redemption
-    /// @param withdrawalRoots The set of all withdrawal roots concerned with the redemption per node ID
+    /// @param withdrawals The set of EL Withdrawal structs concerned with the redemption per node ID
+    /// @param assets The set of assets redeemed by the corresponding EL withdrawals
     function completeRedemption(
         bytes32 redemptionId,
         uint256[] calldata nodeIds,
-        bytes32[][] calldata withdrawalRoots
+        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
+        IERC20[][][] calldata assets
     ) external;
 
     /// @notice Returns the LiquidToken contract

@@ -555,12 +555,12 @@ contract LiquidTokenManager is
             _createRedemption(
                 requestIds,
                 withdrawalRoots,
-                withdrawals,
-                assets,
                 address(liquidToken)
             ),
             requestIds[0],
             withdrawalRoots,
+            withdrawals,
+            assets,
             nodeId
         );
     }
@@ -726,12 +726,12 @@ contract LiquidTokenManager is
             _createRedemption(
                 requestIds,
                 withdrawalRoots,
-                withdrawals,
-                assets,
                 address(liquidToken)
             ),
             requestIds,
             withdrawalRoots,
+            withdrawals,
+            assets,
             nodeIds
         );
     }
@@ -984,12 +984,12 @@ contract LiquidTokenManager is
             _createRedemption(
                 requestIds,
                 withdrawalRoots,
-                withdrawals,
-                assets,
                 address(withdrawalManager)
             ),
             requestIds,
             withdrawalRoots,
+            withdrawals,
+            assets,
             nodeIds
         );
     }
@@ -1049,8 +1049,6 @@ contract LiquidTokenManager is
     function _createRedemption(
         bytes32[] memory requestIds,
         bytes32[] memory withdrawalRoots,
-        IDelegationManagerTypes.Withdrawal[] memory withdrawals,
-        IERC20[][] memory assets,
         address receiver
     ) private returns (bytes32) {
         bytes32 redemptionId = keccak256(
@@ -1069,12 +1067,7 @@ contract LiquidTokenManager is
         });
 
         // Update `WithdrawalManager` with the new redemption
-        withdrawalManager.recordRedemptionCreated(
-            redemptionId,
-            redemption,
-            withdrawals,
-            assets
-        );
+        withdrawalManager.recordRedemptionCreated(redemptionId, redemption);
 
         return redemptionId;
     }
@@ -1085,16 +1078,21 @@ contract LiquidTokenManager is
     /// @dev A redemption can never be partially completed, ie. if any withdrawal roots are missing from the input, the fn will revert
     /// @param redemptionId The ID of the redemption to complete
     /// @param nodeIds The set of all node IDs concerned with the redemption
-    /// @param withdrawalRoots The set of all withdrawal roots concerned with the redemption per node ID
+    /// @param withdrawals The set of EL Withdrawal structs concerned with the redemption per node ID
+    /// @param assets The set of assets redeemed by the corresponding EL withdrawals
     function completeRedemption(
         bytes32 redemptionId,
         uint256[] calldata nodeIds,
-        bytes32[][] calldata withdrawalRoots
+        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
+        IERC20[][][] calldata assets
     ) external override nonReentrant onlyRole(STRATEGY_CONTROLLER_ROLE) {
         uint256 elActions = nodeIds.length;
 
-        if (withdrawalRoots.length != elActions)
-            revert LengthMismatch(withdrawalRoots.length, elActions);
+        if (withdrawals.length != elActions)
+            revert LengthMismatch(withdrawals.length, elActions);
+
+        if (assets.length != elActions)
+            revert LengthMismatch(withdrawals.length, elActions);
 
         Redemption memory redemption = withdrawalManager.getRedemption(
             redemptionId
@@ -1108,17 +1106,31 @@ contract LiquidTokenManager is
             receiver != address(liquidToken)
         ) revert InvalidReceiver(receiver);
 
-        // Check if all withdrawal roots for the redemption have been provided
+        // Check if the exact set of withdrawals concerned the redemption have been provided
+        // Partial completion of a redemption is not accepted
+        // Withdrawals that weren't part of the original redemption are not accepted
+        uint256 totalWithdrawals = 0;
+        for (uint256 j = 0; j < elActions; j++) {
+            totalWithdrawals += withdrawals[j].length;
+        }
+
+        bytes32[] memory allWithdrawalHashes = new bytes32[](totalWithdrawals);
+        uint256 index = 0;
+        for (uint256 j = 0; j < elActions; j++) {
+            for (uint256 k = 0; k < withdrawals[j].length; k++) {
+                allWithdrawalHashes[index++] = keccak256(
+                    abi.encode(withdrawals[j][k])
+                );
+            }
+        }
+
         for (uint256 i = 0; i < redemptionWithdrawalRoots.length; i++) {
             bool found = false;
-            for (uint256 j = 0; j < elActions; j++) {
-                for (uint256 k = 0; k < withdrawalRoots[j].length; k++) {
-                    if (withdrawalRoots[j][k] == redemptionWithdrawalRoots[i]) {
-                        found = true;
-                        break;
-                    }
+            for (uint256 h = 0; h < allWithdrawalHashes.length; h++) {
+                if (allWithdrawalHashes[h] == redemptionWithdrawalRoots[i]) {
+                    found = true;
+                    break;
                 }
-                if (found) break;
             }
             if (!found)
                 revert WithdrawalRootMissing(redemptionWithdrawalRoots[i]);
@@ -1131,7 +1143,8 @@ contract LiquidTokenManager is
         for (uint256 k = 0; k < elActions; k++) {
             uniqueTokenCount = _completeELWithdrawals(
                 nodeIds[k],
-                withdrawalRoots[k],
+                withdrawals[k],
+                assets[k],
                 receivedTokens,
                 uniqueTokenCount
             );
@@ -1182,38 +1195,21 @@ contract LiquidTokenManager is
 
     /// @notice For a given node ID, completes a set of withdrawals and keeps tracks of corresponding funds entering this contract
     /// @param nodeId The ID of the node to complete a set of EL withdrawals on
-    /// @param withdrawalRoots The withdrawal roots of the EL withdrawals to complete
+    /// @param withdrawals The withdrawal structs of the EL withdrawals to complete
+    /// @param assets The set of assets redeemed by the corresponding EL withdrawals
     /// @param uniqueTokens The set of all expected assets from all withdrawal completions across all nodes concerned with the redemption
     /// @param uniqueTokenCount The length of `uniqueTokens`
     function _completeELWithdrawals(
         uint256 nodeId,
-        bytes32[] calldata withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata assets,
         IERC20[] memory uniqueTokens,
         uint256 uniqueTokenCount
     ) private returns (uint256) {
-        uint256 arrayLength = withdrawalRoots.length;
-
-        IDelegationManagerTypes.Withdrawal[]
-            memory nodeWithdrawals = new IDelegationManagerTypes.Withdrawal[](
-                arrayLength
-            );
-        IERC20[][] memory nodeTokens = new IERC20[][](arrayLength);
-
-        IWithdrawalManager.ELWithdrawalRequest[]
-            memory elRequests = withdrawalManager.getELWithdrawalRequests(
-                withdrawalRoots
-            );
-
-        // Complete withdrawals on EL
-        for (uint256 i = 0; i < arrayLength; i++) {
-            nodeWithdrawals[i] = elRequests[i].withdrawal;
-            nodeTokens[i] = elRequests[i].assets;
-        }
-
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         IERC20[] memory receivedTokens = node.completeWithdrawals(
-            nodeWithdrawals,
-            nodeTokens
+            withdrawals,
+            assets
         );
 
         // Track received tokens
@@ -1262,7 +1258,7 @@ contract LiquidTokenManager is
         uint256 nodeId,
         IERC20[] memory assets,
         uint256[] memory shares
-    ) internal returns (uint256[] memory) {
+    ) internal view returns (uint256[] memory) {
         address nodeAddress = address(
             stakerNodeCoordinator.getNodeById(nodeId)
         );

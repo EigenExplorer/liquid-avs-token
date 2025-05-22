@@ -171,7 +171,7 @@ contract Deploy is Script, Test {
     // Helper function to count array entries
     function _countTokens(
         string memory deployConfigData
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         uint256 i = 0;
         while (true) {
             string memory prefix = string.concat(
@@ -1231,13 +1231,13 @@ contract Deploy is Script, Test {
     }
 
     function _getAddableTokens(
-        TokenConfig[] memory tokens
+        TokenConfig[] memory allTokens
     ) internal pure returns (TokenConfig[] memory) {
         uint256 count = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
+        for (uint256 i = 0; i < allTokens.length; ++i) {
             if (
-                tokens[i].oracle.sourceType == 0 &&
-                tokens[i].oracle.primarySource == address(0)
+                allTokens[i].oracle.sourceType == 0 &&
+                allTokens[i].oracle.primarySource == address(0)
             ) {
                 continue; // Skip native tokens (like Eigen)
             }
@@ -1245,14 +1245,14 @@ contract Deploy is Script, Test {
         }
         TokenConfig[] memory filtered = new TokenConfig[](count);
         uint256 j = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
+        for (uint256 i = 0; i < allTokens.length; ++i) {
             if (
-                tokens[i].oracle.sourceType == 0 &&
-                tokens[i].oracle.primarySource == address(0)
+                allTokens[i].oracle.sourceType == 0 &&
+                allTokens[i].oracle.primarySource == address(0)
             ) {
                 continue;
             }
-            filtered[j++] = tokens[i];
+            filtered[j++] = allTokens[i];
         }
         return filtered;
     }

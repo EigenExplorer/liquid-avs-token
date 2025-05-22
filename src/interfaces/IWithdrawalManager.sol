@@ -42,14 +42,6 @@ interface IWithdrawalManager {
         bool canFulfill;
     }
 
-    /// @notice Represents a withdrawal request from a staker node to EigenLayer
-    /// @param withdrawal The EigenLayer withdrawal struct containing delegation details
-    /// @param assets Array of token addresses being withdrawn
-    struct ELWithdrawalRequest {
-        IDelegationManagerTypes.Withdrawal withdrawal;
-        IERC20[] assets;
-    }
-
     /// @notice Emitted when a user initiates a withdrawal request
     /// @param requestId Unique identifier for the withdrawal request
     /// @param user Address of the user requesting withdrawal
@@ -108,10 +100,6 @@ interface IWithdrawalManager {
     /// @param requestId The withdrawal request ID that wasn't found
     error WithdrawalRequestNotFound(bytes32 requestId);
 
-    /// @notice Error thrown when an EigenLayer withdrawal request doesn't exist
-    /// @param withdrawalRoot The withdrawal root that wasn't found
-    error ELWithdrawalRequestNotFound(bytes32 withdrawalRoot);
-
     /// @notice Error thrown when a redemption ID doesn't exist
     /// @param redemptionId The redemption ID that wasn't found
     error RedemptionNotFound(bytes32 redemptionId);
@@ -149,13 +137,9 @@ interface IWithdrawalManager {
     /// @notice Records the creation of a new redemption by LiquidTokenManager
     /// @param redemptionId The unique identifier of the redemption
     /// @param redemption The redemption details
-    /// @param withdrawals The withdrawal structs needed to complete withdrawal on EigenLayer
-    /// @param assets The assets associated with each withdrawal
     function recordRedemptionCreated(
         bytes32 redemptionId,
-        ILiquidTokenManager.Redemption calldata redemption,
-        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
-        IERC20[][] calldata assets
+        ILiquidTokenManager.Redemption calldata redemption
     ) external;
 
     /// @notice Called by `LiquidTokenManger` when a redemption is completed
@@ -163,7 +147,7 @@ interface IWithdrawalManager {
     /// @dev The function back-calculates the % of funds slashed with the discrepancy between the
     /// @dev requested withdrawal amounts (recorded in `withdrawalRequests`) and the actual returned amounts
     /// @param redemptionId The ID of the redemption
-    /// @param assets The assets corresponding to the share amounts
+    /// @param assets The set of assets that received from EL withdrawals
     /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
     function recordRedemptionCompleted(
         bytes32 redemptionId,
@@ -184,13 +168,6 @@ interface IWithdrawalManager {
     function getWithdrawalRequests(
         bytes32[] calldata requestIds
     ) external view returns (WithdrawalRequest[] memory);
-
-    /// @notice Gets EigenLayer withdrawal request details for multiple withdrawal roots
-    /// @param withdrawalRoots Array of EigenLayer withdrawal roots
-    /// @return Array of EigenLayer withdrawal request details
-    function getELWithdrawalRequests(
-        bytes32[] calldata withdrawalRoots
-    ) external view returns (ELWithdrawalRequest[] memory);
 
     /// @notice Gets redemption details for a redemption ID
     /// @param redemptionId The ID of the redemption
