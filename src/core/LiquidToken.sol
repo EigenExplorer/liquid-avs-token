@@ -171,7 +171,7 @@ contract LiquidToken is
         return sharesArray;
     }
 
-    /// @notice Allows users to initiate a withdrawal request against their shares
+    /// @notice Allows users to initiate a withdrawal request against their LAT shares
     /// @param assets The ERC20 assets to withdraw
     /// @param amounts The amount of tokens to withdraw for each asset
     function initiateWithdrawal(
@@ -180,15 +180,18 @@ contract LiquidToken is
     ) external nonReentrant whenNotPaused returns (bytes32) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
+        // Check if we have enough funds of assets from staked and unstaked balances
         if (!_previewWithdrawal(assets, amounts))
             revert InvalidWithdrawalRequest();
 
+        // Calculate the amount of LAT shares to receive from the user in exchange for the
+        // withdrawal request with the right to fulfill after a period delay
         uint256 totalShares = 0;
         for (uint256 i = 0; i < assets.length; i++) {
             if (!liquidTokenManager.tokenIsSupported(assets[i]))
                 revert UnsupportedAsset(assets[i]);
             if (amounts[i] == 0) revert ZeroAmount();
-            totalShares += amounts[i];
+            totalShares += calculateShares(assets[i], amounts[i]);
         }
 
         if (balanceOf(msg.sender) < totalShares)
@@ -198,7 +201,7 @@ contract LiquidToken is
                 balanceOf(msg.sender)
             );
 
-        // Receive escrow shares to burn on returning assets to user
+        // Receive escrow LAT shares, which will be burnt when user fulfills the withdrawal
         _transfer(msg.sender, address(this), totalShares);
 
         bytes32 requestId = keccak256(
@@ -322,6 +325,7 @@ contract LiquidToken is
         if (assetsToRetrieve.length != amounts.length)
             revert ArrayLengthMismatch();
 
+        // Only `LiquidTokenManager` and `WithdrawalManager` can receive funds from this contract
         if (
             receiver != address(liquidTokenManager) &&
             receiver != address(withdrawalManager)
@@ -334,6 +338,7 @@ contract LiquidToken is
             if (!liquidTokenManager.tokenIsSupported(asset))
                 revert UnsupportedAsset(asset);
 
+            // Check if the contract holds enough funds
             if (amount > assetBalances[address(asset)])
                 revert InsufficientBalance(
                     asset,
@@ -341,7 +346,10 @@ contract LiquidToken is
                     amount
                 );
 
+            // Debit asset balances
             assetBalances[address(asset)] -= amount;
+
+            // Transfer funds to `receiver`
             asset.safeTransfer(receiver, amount);
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this)))

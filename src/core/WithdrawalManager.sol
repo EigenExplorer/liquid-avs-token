@@ -89,7 +89,7 @@ contract WithdrawalManager is
         WithdrawalRequest memory request = WithdrawalRequest({
             user: user,
             assets: assets,
-            shareAmounts: amounts,
+            amounts: amounts,
             requestTime: block.timestamp,
             canFulfill: false
         });
@@ -106,6 +106,7 @@ contract WithdrawalManager is
         );
     }
 
+    /// TODO: Account for slashing
     /// @notice Allows users to fulfill a withdrawal request after the delay period and receive all corresponding funds
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(
@@ -121,13 +122,13 @@ contract WithdrawalManager is
         uint256[] memory amounts = new uint256[](request.assets.length);
         uint256 totalShares = 0;
 
-        // Calculate amounts for each asset and transfer them to the user
+        // Calculate the amount of shares to be burned on withdrawal
         for (uint256 i = 0; i < request.assets.length; i++) {
-            amounts[i] = liquidToken.calculateAmount(
-                request.assets[i],
-                request.shareAmounts[i]
-            );
-            totalShares += request.shareAmounts[i];
+            amounts[i] = liquidToken.calculateAmount( // <-- wrong because we are already in native unit of asset
+                    request.assets[i],
+                    request.amounts[i]
+                );
+            totalShares += request.amounts[i];
         }
 
         for (uint256 i = 0; i < amounts.length; i++) {
@@ -211,7 +212,7 @@ contract WithdrawalManager is
             for (uint256 j = 0; j < request.assets.length; j++) {
                 for (uint256 k = 0; k < assets.length; k++) {
                     if (address(request.assets[j]) == address(assets[k])) {
-                        requestedAmounts[k] += request.shareAmounts[j];
+                        requestedAmounts[k] += request.amounts[j];
                         break;
                     }
                 }
@@ -243,10 +244,10 @@ contract WithdrawalManager is
             for (uint256 j = 0; j < request.assets.length; j++) {
                 for (uint256 k = 0; k < assets.length; k++) {
                     if (address(request.assets[j]) == address(assets[k])) {
-                        uint256 originalAmount = request.shareAmounts[j];
+                        uint256 originalAmount = request.amounts[j];
 
                         // Apply slashing factor
-                        request.shareAmounts[j] = Math.mulDiv(
+                        request.amounts[j] = Math.mulDiv(
                             originalAmount,
                             slashingFactors[k],
                             1e18
@@ -255,7 +256,7 @@ contract WithdrawalManager is
                         // Calculate slashed amount and add to total
                         if (slashingFactors[k] < 1e18) {
                             uint256 slashedAmount = originalAmount -
-                                request.shareAmounts[j];
+                                request.amounts[j];
                             totalSlashedAmounts[k] += slashedAmount;
                         }
                         break;

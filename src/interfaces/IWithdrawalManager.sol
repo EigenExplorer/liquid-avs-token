@@ -31,13 +31,13 @@ interface IWithdrawalManager {
     /// @notice Represents a user's withdrawal request
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
-    /// @param shareAmounts Array of share amounts being withdrawn per asset
+    /// @param amounts Array of amounts being withdrawn per asset (in the unit of the asset)
     /// @param requestTime Timestamp when the withdrawal was requested
     /// @param canFulfill Whether the withdrawal can be fulfilled by the user (set to true after redemption completion)
     struct WithdrawalRequest {
         address user;
         IERC20[] assets;
-        uint256[] shareAmounts;
+        uint256[] amounts;
         uint256 requestTime;
         bool canFulfill;
     }
@@ -46,13 +46,13 @@ interface IWithdrawalManager {
     /// @param requestId Unique identifier for the withdrawal request
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
-    /// @param shareAmounts Array of share amounts being withdrawn per asset
+    /// @param amounts Array of amounts being withdrawn per asset
     /// @param timestamp Block timestamp when the request was made
     event WithdrawalInitiated(
         bytes32 indexed requestId,
         address indexed user,
         IERC20[] assets,
-        uint256[] shareAmounts,
+        uint256[] amounts,
         uint256 timestamp
     );
 
@@ -148,7 +148,7 @@ interface IWithdrawalManager {
     /// @dev requested withdrawal amounts (recorded in `withdrawalRequests`) and the actual returned amounts
     /// @param redemptionId The ID of the redemption
     /// @param assets The set of assets that received from EL withdrawals
-    /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
+    /// @param receivedAmounts Total amounts per asset that were received from EL withdrawals
     function recordRedemptionCompleted(
         bytes32 redemptionId,
         IERC20[] calldata assets,

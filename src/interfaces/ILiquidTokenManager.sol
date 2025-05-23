@@ -291,9 +291,9 @@ interface ILiquidTokenManager {
         uint256 requestAmount
     );
 
-    /// @notice Error thrown when a required withdrawal root is missing during redemption completion
+    /// @notice Error thrown when a withdrawal is missing when attempting redemption completion
     /// @param withdrawalRoot The missing withdrawal root
-    error WithdrawalRootMissing(bytes32 withdrawalRoot);
+    error WithdrawalMissing(bytes32 withdrawalRoot);
 
     /// @notice Error thrown when a price update exceeds the volatility threshold
     /// @param token The token address

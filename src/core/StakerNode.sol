@@ -135,7 +135,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Creates a withdrawal request of EL for a set of strategies
     /// @dev EL creates one withdrawal request regardless of the number of strategies
     /// @param strategies The set of strategies to withdraw from
-    /// @param shareAmounts The amount of shares to withdraw per strategy
+    /// @param shareAmounts The amount of shares (unscaled `depositShares`) to withdraw per strategy
     function withdrawAssets(
         IStrategy[] calldata strategies,
         uint256[] calldata shareAmounts
