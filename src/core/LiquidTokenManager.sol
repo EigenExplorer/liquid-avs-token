@@ -505,9 +505,8 @@ contract LiquidTokenManager is
     */
 
     /// @notice Gets the staked deposits balance of an asset for all nodes
-    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
-    /// @return The staked balance of the asset for all nodes
     function getDepositAssetBalance(
         IERC20 asset
     ) external view returns (uint256) {
@@ -526,10 +525,9 @@ contract LiquidTokenManager is
     }
 
     /// @notice Gets the staked deposits balance of an asset for a specific node
-    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
     /// @param nodeId The ID of the node
-    /// @return The staked balance of the asset for the node
     function getDepositAssetBalanceNode(
         IERC20 asset,
         uint256 nodeId
@@ -545,10 +543,9 @@ contract LiquidTokenManager is
     }
 
     /// @notice Gets the staked deposits balance of an asset for a specific node
-    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
     /// @param node The node to get the staked balance for
-    /// @return The staked balance of the asset for the node
     function _getDepositAssetBalanceNode(
         IERC20 asset,
         IStakerNode node
@@ -557,13 +554,12 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
-        return strategy.userUnderlyingView(address(node));
+        return strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
     }
 
     /// @notice Gets the staked deposits balance of all assets for a specific node
-    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param node The node to get the staked balance for
-    /// @return The staked balances of all assets for the node
     function _getAllDepositAssetBalanceNode(
         IStakerNode node
     ) internal view returns (uint256[] memory) {
@@ -573,9 +569,73 @@ contract LiquidTokenManager is
             if (address(strategy) == address(0)) {
                 revert StrategyNotFound(address(supportedTokens[i]));
             }
-            balances[i] = strategy.userUnderlyingView(address(node));
+            balances[i] = strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
         }
         return balances;
+    }
+
+    /// @notice Gets the withdrawable balance of an asset for all nodes
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    function getWithdrawableAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        uint256 totalBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i]);
+        }
+
+        return totalBalance;
+    }
+
+    /// @notice Gets the withdrawable balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    /// @param nodeId The ID of the node
+    function getWithdrawableAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId
+    ) public view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+
+        return _getWithdrawableAssetBalanceNode(asset, node);
+    }
+
+    /// @notice Gets the withdrawable balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    /// @param node The node to get the staked balance for
+    function _getWithdrawableAssetBalanceNode(
+        IERC20 asset,
+        IStakerNode node
+    ) internal view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStrategy[] memory strategies = new IStrategy[](1);
+        strategies[0] = strategy;
+
+        (uint256[] memory withdrawableShares, ) = delegationManager
+            .getWithdrawableShares(address(node), strategies);
+
+        if (withdrawableShares[0] == 0) {
+            return 0;
+        }
+
+        return strategy.sharesToUnderlyingView(withdrawableShares[0]); // Converts EL shares to underlying asset value
     }
 
     /// @notice Sets the volatility threshold for a given asset
