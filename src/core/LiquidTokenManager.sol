@@ -211,7 +211,7 @@ contract LiquidTokenManager is
         // Use unchecked for counter increment since i < len
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                uint256 stakedBalance = getStakedAssetBalanceNode(
+                uint256 stakedBalance = getDepositAssetBalanceNode(
                     token,
                     nodes[i].getId()
                 );
@@ -504,10 +504,11 @@ contract LiquidTokenManager is
     }
     */
 
-    /// @notice Gets the staked balance of an asset for all nodes
+    /// @notice Gets the staked deposits balance of an asset for all nodes
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
     /// @return The staked balance of the asset for all nodes
-    function getStakedAssetBalance(
+    function getDepositAssetBalance(
         IERC20 asset
     ) external view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
@@ -518,17 +519,18 @@ contract LiquidTokenManager is
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 totalBalance = 0;
         for (uint256 i = 0; i < nodes.length; i++) {
-            totalBalance += _getStakedAssetBalanceNode(asset, nodes[i]);
+            totalBalance += _getDepositAssetBalanceNode(asset, nodes[i]);
         }
 
         return totalBalance;
     }
 
-    /// @notice Gets the staked balance of an asset for a specific node
+    /// @notice Gets the staked deposits balance of an asset for a specific node
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the node
-    function getStakedAssetBalanceNode(
+    function getDepositAssetBalanceNode(
         IERC20 asset,
         uint256 nodeId
     ) public view returns (uint256) {
@@ -539,14 +541,15 @@ contract LiquidTokenManager is
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
 
-        return _getStakedAssetBalanceNode(asset, node);
+        return _getDepositAssetBalanceNode(asset, node);
     }
 
-    /// @notice Gets the staked balance of an asset for a specific node
+    /// @notice Gets the staked deposits balance of an asset for a specific node
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param asset The asset token address
     /// @param node The node to get the staked balance for
     /// @return The staked balance of the asset for the node
-    function _getStakedAssetBalanceNode(
+    function _getDepositAssetBalanceNode(
         IERC20 asset,
         IStakerNode node
     ) internal view returns (uint256) {
@@ -557,10 +560,11 @@ contract LiquidTokenManager is
         return strategy.userUnderlyingView(address(node));
     }
 
-    /// @notice Gets the staked balance of all assets for a specific node
+    /// @notice Gets the staked deposits balance of all assets for a specific node
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param node The node to get the staked balance for
     /// @return The staked balances of all assets for the node
-    function _getAllStakedAssetBalancesNode(
+    function _getAllDepositAssetBalanceNode(
         IStakerNode node
     ) internal view returns (uint256[] memory) {
         uint256[] memory balances = new uint256[](supportedTokens.length);

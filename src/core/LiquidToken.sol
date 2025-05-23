@@ -457,9 +457,9 @@ contract LiquidToken is
             );
 
             // Staked Asset Balances
-            total += liquidTokenManager.getStakedAssetBalance(
-                supportedTokens[i]
-            );
+            total += liquidTokenManager.getDepositAssetBalance( // TODO: this inflates AUM, need new function that gets withdrawable shares
+                    supportedTokens[i]
+                );
         }
 
         return total;

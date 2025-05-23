@@ -182,28 +182,28 @@ TOTAL_RETH_DEPOSIT=$STAKER_2_RETH_DEPOSIT_AMOUNT
 
 NODE_1_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_1)
 NODE_1_OPERATOR_DELEGATION=$(cast call $NODE_1_ADDRESS "getOperatorDelegation()(address)")
-NODE_1_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_1 | cast --to-dec | cast --from-wei)
-NODE_1_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_1 | cast --to-dec | cast --from-wei)
+NODE_1_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_1 | cast --to-dec | cast --from-wei)
+NODE_1_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_1 | cast --to-dec | cast --from-wei)
 
 NODE_2_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_2)
 NODE_2_OPERATOR_DELEGATION=$(cast call $NODE_2_ADDRESS "getOperatorDelegation()(address)")
-NODE_2_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_2 | cast --to-dec | cast --from-wei)
-NODE_2_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_2 | cast --to-dec | cast --from-wei)
+NODE_2_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_2 | cast --to-dec | cast --from-wei)
+NODE_2_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_2 | cast --to-dec | cast --from-wei)
 
 NODE_3_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_3)
 NODE_3_OPERATOR_DELEGATION=$(cast call $NODE_3_ADDRESS "getOperatorDelegation()(address)")
-NODE_3_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_3 | cast --to-dec | cast --from-wei)
-NODE_3_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_3 | cast --to-dec | cast --from-wei)
+NODE_3_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_3 | cast --to-dec | cast --from-wei)
+NODE_3_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_3 | cast --to-dec | cast --from-wei)
 
 NODE_4_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_4)
 NODE_4_OPERATOR_DELEGATION=$(cast call $NODE_4_ADDRESS "getOperatorDelegation()(address)")
-NODE_4_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_4 | cast --to-dec | cast --from-wei)
-NODE_4_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_4 | cast --to-dec | cast --from-wei)
+NODE_4_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_4 | cast --to-dec | cast --from-wei)
+NODE_4_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_4 | cast --to-dec | cast --from-wei)
 
 NODE_5_ADDRESS=$(cast call $STAKER_NODE_COORDINATOR "getNodeById(uint256)(address)" $NODE_5)
 NODE_5_OPERATOR_DELEGATION=$(cast call $NODE_5_ADDRESS "getOperatorDelegation()(address)")
-NODE_5_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_5 | cast --to-dec | cast --from-wei)
-NODE_5_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getStakedAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_5 | cast --to-dec | cast --from-wei)
+NODE_5_STAKED_STETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $STETH_TOKEN $NODE_5 | cast --to-dec | cast --from-wei)
+NODE_5_STAKED_RETH_BALANCE=$(cast call $LIQUID_TOKEN_MANAGER "getDepositAssetBalanceNode(address,uint256)" $RETH_TOKEN $NODE_5 | cast --to-dec | cast --from-wei)
 
 LIQUID_TOKEN_STETH_BALANCE=$(cast call $STETH_TOKEN "balanceOf(address)(uint256)" $LIQUID_TOKEN | awk '{print $1}' | cast --from-wei)
 LIQUID_TOKEN_RETH_BALANCE=$(cast call $RETH_TOKEN "balanceOf(address)(uint256)" $LIQUID_TOKEN | awk '{print $1}' | cast --from-wei)
