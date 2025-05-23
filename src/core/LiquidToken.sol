@@ -240,7 +240,7 @@ contract LiquidToken is
             IERC20 asset = assets[i];
             if (
                 (assetBalances[address(asset)] +
-                    liquidTokenManager.getStakedAssetBalance(asset)) <
+                    liquidTokenManager.getDepositAssetBalance(asset)) < // Preview with pre-slashing balances
                 amounts[i]
             ) {
                 isPossible = false;
@@ -416,8 +416,8 @@ contract LiquidToken is
                 _balanceQueuedAsset(supportedTokens[i])
             );
 
-            // Staked Asset Balances
-            total += liquidTokenManager.getStakedAssetBalance(
+            // Staked Withdrawable Asset Balances
+            total += liquidTokenManager.getWithdrawableAssetBalance(
                 supportedTokens[i]
             );
         }

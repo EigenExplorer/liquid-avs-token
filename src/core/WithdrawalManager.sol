@@ -179,6 +179,7 @@ contract WithdrawalManager is
         redemptions[redemptionId] = redemption;
     }
 
+    /// TODO: Account for slashing
     /// @notice Called by `LiquidTokenManger` when a redemption is completed
     /// @dev Slashing, if any, is accounted for here
     /// @dev The function back-calculates the % of funds slashed with the discrepancy between the
@@ -200,6 +201,7 @@ contract WithdrawalManager is
         ];
 
         // Calculate total requested shares per asset across all withdrawal requests
+        // TODO: Check redemption for withdrawable amounts at time of queuing withdrawal, not requested amounts
         uint256[] memory requestedAmounts = new uint256[](assets.length);
 
         for (uint256 i = 0; i < redemption.requestIds.length; i++) {

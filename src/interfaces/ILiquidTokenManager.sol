@@ -65,10 +65,12 @@ interface ILiquidTokenManager {
     ///     iii. undelegate nodes from Operators (and hence withdraw all assets)
     /// @param requestIds Array of request IDs associated with this redemption
     /// @param withdrawalRoots Array of withdrawal roots from EigenLayer withdrawals
-    /// @param receiver Address that will receive the withdrawn funds
+    /// @param receiver Contract that will receive the withdrawn funds (`LiquidToken` or `WithdrawalManager`)
     struct Redemption {
         bytes32[] requestIds;
         bytes32[] withdrawalRoots;
+        IERC20[] assets;
+        uint256[] withdrawableAmounts;
         address receiver;
     }
 
@@ -117,6 +119,7 @@ interface ILiquidTokenManager {
     event NodeUndelegated(uint256 nodeId, address indexed operator);
 
     /// @notice Emitted when a redemption is created due to node undelegation
+    /// @dev `assets` is a 1D array since each withdrawal will have only 1 corresponding asset
     /// @param redemptionId Unique identifier for the redemption
     /// @param requestId ID of the withdrawal request
     /// @param withdrawalRoots Array of EL withdrawal roots
@@ -128,7 +131,7 @@ interface ILiquidTokenManager {
         bytes32 requestId,
         bytes32[] withdrawalRoots,
         IDelegationManagerTypes.Withdrawal[] withdrawals,
-        IERC20[][] assets,
+        IERC20[] assets,
         uint256 nodeId
     );
 
@@ -405,18 +408,34 @@ interface ILiquidTokenManager {
     /// @param nodeIds The IDs of the staker nodes
     function undelegateNodes(uint256[] calldata nodeIds) external;
 
-    /// @notice Gets the staked asset balance for all nodes
+    /// @notice Gets the staked deposits balance of an asset for all nodes
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
-    /// @return The total staked balance of the asset across all nodes
-    function getStakedAssetBalance(
+    function getDepositAssetBalance(
         IERC20 asset
     ) external view returns (uint256);
 
-    /// @notice Gets the staked asset balance for a specific node
+    /// @notice Gets the staked deposits balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
-    /// @return The staked balance of the asset for the specific node
-    function getStakedAssetBalanceNode(
+    function getDepositAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId
+    ) external view returns (uint256);
+
+    /// @notice Gets the withdrawable balance of an asset for all nodes
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    function getWithdrawableAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256);
+
+    /// @notice Gets the withdrawable balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    /// @param nodeId The ID of the node
+    function getWithdrawableAssetBalanceNode(
         IERC20 asset,
         uint256 nodeId
     ) external view returns (uint256);
@@ -448,14 +467,14 @@ interface ILiquidTokenManager {
     /// @param ltAmounts The amounts for `ltAssets`
     /// @param nodeIds The node IDs from which funds will be withdrawn
     /// @param elAssets The array of assets to be withdrawn for a given node
-    /// @param elShares The array of shares to be withdrawn for the corresponding array of `elAssets`
+    /// @param elAmounts The amounts for `elAssets`
     function settleUserWithdrawals(
         bytes32[] calldata requestIds,
         IERC20[] calldata ltAssets,
         uint256[] calldata ltAmounts,
         uint256[] calldata nodeIds,
         IERC20[][] calldata elAssets,
-        uint256[][] calldata elShares
+        uint256[][] calldata elAmounts
     ) external;
 
     /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
