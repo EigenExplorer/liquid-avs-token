@@ -211,7 +211,7 @@ contract LiquidTokenManager is
         // Use unchecked for counter increment since i < len
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                uint256 stakedBalance = getDepositAssetBalanceNode(
+                uint256 stakedBalance = getWithdrawableAssetBalanceNode(
                     token,
                     nodes[i].getId()
                 );
