@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
@@ -34,7 +34,8 @@ contract WithdrawalManager is
     ILiquidToken public liquidToken;
     ILiquidTokenManager public liquidTokenManager;
     IStakerNodeCoordinator public stakerNodeCoordinator;
-    uint256 public constant WITHDRAWAL_DELAY = 14 days;
+
+    uint256 public withdrawalDelay;
 
     /// @notice User Withdrawals
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
@@ -70,6 +71,8 @@ contract WithdrawalManager is
         liquidToken = init.liquidToken;
         liquidTokenManager = init.liquidTokenManager;
         stakerNodeCoordinator = init.stakerNodeCoordinator;
+
+        withdrawalDelay = 14 days;
     }
 
     /// @notice Creates a withdrawal request for a user when they initate one via `LiquidToken`
@@ -89,7 +92,8 @@ contract WithdrawalManager is
         WithdrawalRequest memory request = WithdrawalRequest({
             user: user,
             assets: assets,
-            amounts: amounts,
+            requestedAmounts: amounts,
+            withdrawableAmounts: amounts,
             requestTime: block.timestamp,
             canFulfill: false
         });
@@ -106,7 +110,6 @@ contract WithdrawalManager is
         );
     }
 
-    /// TODO: Account for slashing
     /// @notice Allows users to fulfill a withdrawal request after the delay period and receive all corresponding funds
     /// @param requestId The unique identifier of the withdrawal request
     function fulfillWithdrawal(
@@ -114,26 +117,15 @@ contract WithdrawalManager is
     ) external override nonReentrant {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
 
-        if (request.user != msg.sender) revert InvalidWithdrawalRequest();
-        if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
+        if (request.user == address(0)) revert InvalidWithdrawalRequest();
+        if (request.user != msg.sender) revert UnauthorizedAccess(msg.sender);
+        if (block.timestamp < request.requestTime + withdrawalDelay)
             revert WithdrawalDelayNotMet();
         if (request.canFulfill == false) revert WithdrawalNotReadyToFulfill();
 
-        uint256[] memory amounts = new uint256[](request.assets.length);
-        uint256 totalShares = 0;
-
-        // Calculate the amount of shares to be burned on withdrawal
         for (uint256 i = 0; i < request.assets.length; i++) {
-            amounts[i] = liquidToken.calculateAmount( // <-- wrong because we are already in native unit of asset
-                    request.assets[i],
-                    request.amounts[i]
-                );
-            totalShares += request.amounts[i];
-        }
-
-        for (uint256 i = 0; i < amounts.length; i++) {
-            uint256 amount = amounts[i];
             IERC20 asset = request.assets[i];
+            uint256 amount = request.withdrawableAmounts[i];
 
             if (asset.balanceOf(address(this)) < amount) {
                 revert InsufficientBalance(
@@ -146,23 +138,22 @@ contract WithdrawalManager is
             asset.safeTransfer(msg.sender, amount);
         }
 
-        // Fulfillment is complete and escrow shares to be burnt
+        // Fulfillment is complete
         liquidToken.debitQueuedAssetBalances(
             request.assets,
-            amounts,
-            totalShares
+            request.withdrawableAmounts
         );
 
         emit WithdrawalFulfilled(
             requestId,
             msg.sender,
             request.assets,
-            amounts,
+            request.withdrawableAmounts,
             block.timestamp
         );
 
         delete withdrawalRequests[requestId];
-        delete userWithdrawalRequests[msg.sender];
+        delete userWithdrawalRequests[request.user];
     }
 
     /// @notice Called by `LiquidTokenManger` when a new redemption is created
@@ -179,130 +170,114 @@ contract WithdrawalManager is
         redemptions[redemptionId] = redemption;
     }
 
-    /// TODO: Account for slashing
     /// @notice Called by `LiquidTokenManger` when a redemption is completed
-    /// @dev Slashing, if any, is accounted for here
-    /// @dev The function back-calculates the % of funds slashed with the discrepancy between the
-    /// @dev requested withdrawal amounts (recorded in `withdrawalRequests`) and the actual returned amounts
+    /// @dev If there was any slashing during the withdrawal queue period, its accounting is handled here
     /// @param redemptionId The ID of the redemption
-    /// @param assets The set of assets that received from EL withdrawals
-    /// @param receivedAmounts Total share amounts per asset that were received from EL withdrawals
+    /// @param receivedAssets The set of assets that received from all EL withdrawals
+    /// @param receivedAmounts Total amounts per for `receivedAssets` (after any slashing)
     function recordRedemptionCompleted(
         bytes32 redemptionId,
-        IERC20[] calldata assets,
+        IERC20[] calldata receivedAssets,
         uint256[] calldata receivedAmounts
     ) external override returns (uint256[] memory) {
         if (msg.sender != address(liquidTokenManager))
             revert NotLiquidTokenManager(msg.sender);
-        if (receivedAmounts.length != assets.length) revert LengthMismatch();
+        if (receivedAmounts.length != receivedAssets.length)
+            revert LengthMismatch();
 
         ILiquidTokenManager.Redemption memory redemption = redemptions[
             redemptionId
         ];
 
-        // Calculate total requested shares per asset across all withdrawal requests
-        // TODO: Check redemption for withdrawable amounts at time of queuing withdrawal, not requested amounts
-        uint256[] memory requestedAmounts = new uint256[](assets.length);
+        // We have already accounted for slashing up until the point of creating the withdrawal request on EL
+        // Now we compare the received amounts with the original withdrawable amounts (recorded during withdrawal request creation)
+        // to check for any slashing during the withdrawal queue period
+        uint256[] memory slashedFactors = new uint256[](receivedAssets.length);
+        uint256[] memory slashedAmounts = new uint256[](receivedAssets.length);
 
-        for (uint256 i = 0; i < redemption.requestIds.length; i++) {
-            bytes32 requestId = redemption.requestIds[i];
-            WithdrawalRequest storage request = withdrawalRequests[requestId];
+        for (uint256 i = 0; i < receivedAssets.length; i++) {
+            uint256 originalWithdrawableAmount = redemption.withdrawableAmounts[
+                i
+            ];
 
-            if (request.user == address(0))
-                revert WithdrawalRequestNotFound(requestId);
+            if (originalWithdrawableAmount == 0) {
+                slashedFactors[i] = 1e18;
+                slashedAmounts[i] = 0;
+            } else if (receivedAmounts[i] != originalWithdrawableAmount) {
+                slashedFactors[i] =
+                    (receivedAmounts[i] * 1e18) /
+                    originalWithdrawableAmount;
 
-            for (uint256 j = 0; j < request.assets.length; j++) {
-                for (uint256 k = 0; k < assets.length; k++) {
-                    if (address(request.assets[j]) == address(assets[k])) {
-                        requestedAmounts[k] += request.amounts[j];
-                        break;
-                    }
-                }
+                slashedAmounts[i] =
+                    originalWithdrawableAmount -
+                    receivedAmounts[i];
+            } else {
+                slashedFactors[i] = 1e18;
+                slashedAmounts[i] = 0;
             }
         }
 
-        // Calculate slashing factors per asset by looking at the difference between
-        // requested and received amounts (1e18 = 100% = nothing slashed)
-        uint256[] memory slashingFactors = new uint256[](assets.length);
+        // Track the aggregated requested amounts per asset
+        uint256[] memory redemptionRequestedAmounts = new uint256[](
+            receivedAssets.length
+        );
 
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (requestedAmounts[i] > 0) {
-                slashingFactors[i] = Math.mulDiv(
-                    receivedAmounts[i],
-                    1e18,
-                    requestedAmounts[i]
-                );
-            }
-        }
+        // If the redemption is for user withdrawasl, slash their withdrawable amounts by the slashing factor
+        if (
+            redemption.requestIds.length > 0 &&
+            withdrawalRequests[redemption.requestIds[0]].user != address(0) // If one user withdrawal is found, all redemptions are for user withdrawals
+        ) {
+            for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+                bytes32 requestId = redemption.requestIds[i];
+                WithdrawalRequest storage request = withdrawalRequests[
+                    requestId
+                ];
 
-        // Track total slashed amount per asset
-        uint256[] memory totalSlashedAmounts = new uint256[](assets.length);
+                for (uint256 j = 0; j < request.assets.length; j++) {
+                    for (uint256 k = 0; k < receivedAssets.length; k++) {
+                        if (
+                            address(request.assets[j]) ==
+                            address(receivedAssets[k])
+                        ) {
+                            uint256 originalAmount = request.requestedAmounts[
+                                j
+                            ];
+                            redemptionRequestedAmounts[k] += originalAmount;
 
-        // Slash requested amounts per asset from all withdrawal requests related to this redemption
-        for (uint256 i = 0; i < redemption.requestIds.length; i++) {
-            bytes32 requestId = redemption.requestIds[i];
-            WithdrawalRequest storage request = withdrawalRequests[requestId];
+                            // Slash the user's withdrawable amount by applying the slashed factor
+                            request.withdrawableAmounts[j] = Math.mulDiv(
+                                originalAmount,
+                                slashedFactors[k],
+                                1e18
+                            );
 
-            for (uint256 j = 0; j < request.assets.length; j++) {
-                for (uint256 k = 0; k < assets.length; k++) {
-                    if (address(request.assets[j]) == address(assets[k])) {
-                        uint256 originalAmount = request.amounts[j];
-
-                        // Apply slashing factor
-                        request.amounts[j] = Math.mulDiv(
-                            originalAmount,
-                            slashingFactors[k],
-                            1e18
-                        );
-
-                        // Calculate slashed amount and add to total
-                        if (slashingFactors[k] < 1e18) {
-                            uint256 slashedAmount = originalAmount -
-                                request.amounts[j];
-                            totalSlashedAmounts[k] += slashedAmount;
+                            // Emit slashing event if amount was actually slashed
+                            if (slashedFactors[k] < 1e18) {
+                                emit UserSlashed(
+                                    requestId,
+                                    request.user,
+                                    request.assets[j],
+                                    originalAmount,
+                                    request.withdrawableAmounts[j]
+                                );
+                            }
                         }
-                        break;
                     }
                 }
-            }
-
-            // Mark withdrawal as ready to fulfill
-            request.canFulfill = true;
-        }
-
-        // Debit the slashed amounts, if any, from queued asset balances
-        uint256 slashedCount = 0;
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (totalSlashedAmounts[i] > 0) {
-                slashedCount++;
+                // Mark withdrawal as ready to fulfill
+                request.canFulfill = true;
             }
         }
 
-        if (slashedCount > 0) {
-            IERC20[] memory slashedAssets = new IERC20[](slashedCount);
-            uint256[] memory slashedAmounts = new uint256[](slashedCount);
-
-            uint256 index = 0;
-            for (uint256 i = 0; i < assets.length; i++) {
-                if (totalSlashedAmounts[i] > 0) {
-                    slashedAssets[index] = assets[i];
-                    slashedAmounts[index] = totalSlashedAmounts[i];
-                    index++;
-                }
-            }
-
-            // No shares to burn and no corresponding credit, because funds are taken by AVS
-            liquidToken.debitQueuedAssetBalances(
-                slashedAssets,
-                slashedAmounts,
-                0
-            );
-        }
+        // Account for withdrawal period slashing in queued withdrawal balances
+        // If the redemption is for rebalancing or undelegation, all internal accounting will now be complete
+        // If the redemption is for user withdrawals, the queued balances will still contain the withdrawable amounts
+        liquidToken.debitQueuedAssetBalances(receivedAssets, slashedAmounts);
 
         // Delete the redemption
         delete redemptions[redemptionId];
 
-        return requestedAmounts;
+        return redemptionRequestedAmounts;
     }
 
     /// @notice Returns all withdrawal request IDs for a given user
@@ -347,5 +322,21 @@ contract WithdrawalManager is
             revert RedemptionNotFound(redemptionId);
 
         return redemption;
+    }
+
+    /// @notice Updates the withdrawal delay period
+    /// @dev Only callable by admin role
+    /// @param newDelay The new withdrawal delay in seconds
+    function setWithdrawalDelay(
+        uint256 newDelay
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newDelay < 7 days || newDelay > 30 days) {
+            revert InvalidWithdrawalDelay(newDelay);
+        }
+
+        uint256 oldDelay = withdrawalDelay;
+        withdrawalDelay = newDelay;
+
+        emit WithdrawalDelayUpdated(oldDelay, newDelay);
     }
 }

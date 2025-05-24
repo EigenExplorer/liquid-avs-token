@@ -223,6 +223,9 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when a zero address is provided where a non-zero address is required
     error ZeroAddress();
 
+    /// @notice Error for zero amount
+    error ZeroAmount();
+
     /// @notice Error thrown when an invalid (zero) staking amount is provided
     /// @param amount The invalid amount that was provided
     error InvalidStakingAmount(uint256 amount);

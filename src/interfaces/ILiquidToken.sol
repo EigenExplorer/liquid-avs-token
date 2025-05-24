@@ -123,14 +123,12 @@ interface ILiquidToken is IERC20Upgradeable {
         uint256[] calldata amounts
     ) external;
 
-    /// @notice Debits queued balances for a given set of assets & burns the corresponding shares
+    /// @notice Debits queued balances for a given set of assets
     /// @param assets The assets to debit
     /// @param amounts The debit amounts expressed in native token
-    /// @param sharesToBurn Amount of shares to burn
     function debitQueuedAssetBalances(
         IERC20[] calldata assets,
-        uint256[] calldata amounts,
-        uint256 sharesToBurn
+        uint256[] calldata amounts
     ) external;
 
     /// @notice Credits asset balances for a given set of assets

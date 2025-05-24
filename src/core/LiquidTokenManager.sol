@@ -795,13 +795,20 @@ contract LiquidTokenManager is
                 IERC20 asset = nodeAssets[i][j];
                 uint256 amount = nodeAmounts[i][j];
 
+                if (amount == 0) {
+                    revert ZeroAmount();
+                }
+
                 // Track the actual withdrawable amounts after slashing, for internal accounting
                 uint256 depositAssetBalanceNode = getDepositAssetBalanceNode(
                     asset,
                     nodeIds[i]
                 );
-                // Existing EL deposits for the asset must be equal to or more than proposed clawback amount
-                if (depositAssetBalanceNode < amount) {
+                // EL deposits for the asset must exist and cannot be less than proposed clawback amount
+                if (
+                    depositAssetBalanceNode == 0 ||
+                    depositAssetBalanceNode < amount
+                ) {
                     revert InsufficientBalance(
                         asset,
                         amount,
@@ -812,22 +819,22 @@ contract LiquidTokenManager is
                         asset,
                         nodeIds[i]
                     );
-                uint256 slashedFactor = withdrawableAssetBalanceNode /
-                    depositAssetBalanceNode;
 
                 bool found = false;
                 for (uint256 k = 0; k < uniqueTokenCount; k++) {
                     if (redemptionAssets[k] == asset) {
-                        redemptionWithdrawableAmounts[k] += (amount *
-                            slashedFactor);
+                        redemptionWithdrawableAmounts[k] +=
+                            (amount * withdrawableAssetBalanceNode) /
+                            depositAssetBalanceNode; // Factor in any slashing
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
                     redemptionAssets[uniqueTokenCount] = asset;
-                    redemptionWithdrawableAmounts[uniqueTokenCount] = (amount *
-                        slashedFactor);
+                    redemptionWithdrawableAmounts[uniqueTokenCount] =
+                        (amount * withdrawableAssetBalanceNode) /
+                        depositAssetBalanceNode; // Factor in any slashing
                     uniqueTokenCount++;
                 }
 
@@ -1072,14 +1079,15 @@ contract LiquidTokenManager is
                 bool found = false;
                 for (uint256 k = 0; k < uniqueTokenCount; k++) {
                     if (redemptionAssets[k] == token) {
-                        redemptionAmounts[k] += request.amounts[j];
+                        redemptionAmounts[k] += request.requestedAmounts[j];
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
                     redemptionAssets[uniqueTokenCount] = token;
-                    redemptionAmounts[uniqueTokenCount] = request.amounts[j];
+                    redemptionAmounts[uniqueTokenCount] = request
+                        .requestedAmounts[j];
                     uniqueTokenCount++;
                 }
             }
@@ -1132,13 +1140,20 @@ contract LiquidTokenManager is
                 IERC20 token = elAssets[i][j];
                 uint256 amount = elAmounts[i][j];
 
+                if (amount == 0) {
+                    revert ZeroAmount();
+                }
+
                 // For settlement verification, record total value of deposits (without slashing) to be requested from EL, across all nodes for each asset
                 uint256 depositAssetBalanceNode = getDepositAssetBalanceNode(
                     token,
                     nodeIds[i]
                 );
-                // Existing EL deposits for the asset must be equal to or more than proposed clawback amount
-                if (depositAssetBalanceNode < amount) {
+                // EL deposits for the asset must exist and cannot be less than proposed clawback amount
+                if (
+                    depositAssetBalanceNode == 0 ||
+                    depositAssetBalanceNode < amount
+                ) {
                     revert InsufficientBalance(
                         token,
                         amount,
@@ -1150,14 +1165,12 @@ contract LiquidTokenManager is
                         token,
                         nodeIds[i]
                     );
-                uint256 slashedFactor = withdrawableAssetBalanceNode /
-                    depositAssetBalanceNode;
-
                 for (uint256 k = 0; k < uniqueTokenCount; k++) {
                     if (redemptionAssets[k] == token) {
                         proposedRedemptionAmounts[k] += amount;
-                        redemptionWithdrawableAmounts[k] += (amount *
-                            slashedFactor);
+                        redemptionWithdrawableAmounts[k] +=
+                            (amount * withdrawableAssetBalanceNode) /
+                            depositAssetBalanceNode; // Factor in any slashing
                         break;
                     }
                 }
@@ -1380,7 +1393,7 @@ contract LiquidTokenManager is
             supportedTokens.length
         );
 
-        // Transfer all withdrawn assets to `receiver`
+        // Transfer all withdrawn assets to `receiver`, either `LiquidToken` or `WithdrawalManager`
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
             IERC20 token = receivedTokens[i];
             uint256 balance = token.balanceOf(address(this));
@@ -1391,20 +1404,21 @@ contract LiquidTokenManager is
             }
         }
 
-        // If receiver is `LiquidToken`, fulfillment is complete & no shares to be burnt
+        // If receiver is `WithdrawalManager`, fulfillment is yet to be done by users, hence there is no update to accounting yet
+        // If receiver is `LiquidToken`, fulfillment is complete since the request has come from rebalancing or node undelegation
         if (receiver == address(liquidToken)) {
-            // Debit the received amounts, leaving any slashed amounts pending to be debited
+            // If there was slashing during the withdrawal queue period, we handle its accounting in the call to `recordRedemptionCompleted()`
             liquidToken.debitQueuedAssetBalances(
                 receivedTokens,
-                receivedAmounts,
-                0
+                receivedAmounts
             );
+            // Credit LiquidToken's asset balances
             liquidToken.creditAssetBalances(receivedTokens, receivedAmounts);
         }
 
         // Update Withdrawal Manager and retrieve the original requested amounts
         uint256[] memory requestedAmounts = withdrawalManager
-            .recordRedemptionCompleted( // Slashing is handled here
+            .recordRedemptionCompleted( // Accounting for any slashing during withdrawal queue period handled here
                 redemptionId,
                 receivedTokens,
                 receivedAmounts

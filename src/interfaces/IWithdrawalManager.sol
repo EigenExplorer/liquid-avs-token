@@ -31,13 +31,15 @@ interface IWithdrawalManager {
     /// @notice Represents a user's withdrawal request
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
-    /// @param amounts Array of amounts being withdrawn per asset (in the unit of the asset)
+    /// @param requestedAmounts Array of amounts being withdrawn per asset (in the unit of the asset)
+    /// @param withdrawableAmounts Array of amounts withdrawable per asset after any slashing (in the unit of the asset)
     /// @param requestTime Timestamp when the withdrawal was requested
     /// @param canFulfill Whether the withdrawal can be fulfilled by the user (set to true after redemption completion)
     struct WithdrawalRequest {
         address user;
         IERC20[] assets;
-        uint256[] amounts;
+        uint256[] requestedAmounts;
+        uint256[] withdrawableAmounts;
         uint256 requestTime;
         bool canFulfill;
     }
@@ -70,6 +72,25 @@ interface IWithdrawalManager {
         uint256 timestamp
     );
 
+    /// @notice Emitted when a user is slashed and the slashing is applied to the corresponding withdrawable amount on their withdrawal request
+    /// @param requestId Unique identifier for the withdrawal request
+    /// @param user Address of the user whose withdrawal was fulfilled
+    /// @param asset The ERC20 token that was slashed
+    /// @param originalAmount The original withdrawal amount requested by the user on creating the withdrawal request
+    /// @param withdrawableAmount The final withdrawable amount after slashing
+    event UserSlashed(
+        bytes32 indexed requestId,
+        address indexed user,
+        IERC20 indexed asset,
+        uint256 originalAmount,
+        uint256 withdrawableAmount
+    );
+
+    /// @notice Emitted when the withdrawal delay is updated
+    /// @param oldDelay Previous withdrawal delay value
+    /// @param newDelay Newly updated withdrawal delay value
+    event WithdrawalDelayUpdated(uint256 oldDelay, uint256 newDelay);
+
     /// @notice Error thrown when a zero address is provided where a non-zero address is required
     error ZeroAddress();
 
@@ -84,8 +105,11 @@ interface IWithdrawalManager {
     /// @notice Error thrown when array lengths don't match in function parameters
     error LengthMismatch();
 
-    /// @notice Error thrown when a withdrawal request is invalid (e.g., wrong user)
+    /// @notice Error thrown when a withdrawal request is invalid
     error InvalidWithdrawalRequest();
+
+    /// @notice Error for unauthorized access
+    error UnauthorizedAccess(address sender);
 
     /// @notice Error thrown when a redemption is invalid
     error InvalidRedemption();
@@ -95,6 +119,9 @@ interface IWithdrawalManager {
 
     /// @notice Error thrown when withdrawal cannot be fulfilled yet (redemption not completed)
     error WithdrawalNotReadyToFulfill();
+
+    /// @notice Error when withdrawal delay value was attempted with an invalid delay value
+    error InvalidWithdrawalDelay(uint256 delay);
 
     /// @notice Error thrown when a withdrawal request ID doesn't exist
     /// @param requestId The withdrawal request ID that wasn't found
