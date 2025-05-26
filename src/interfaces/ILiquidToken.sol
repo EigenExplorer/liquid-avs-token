@@ -31,17 +31,11 @@ interface ILiquidToken is IERC20Upgradeable {
     }
     */
 
-    /// @notice Custom errors for price update failures
-    error PriceUpdateFailed(); // Generic price update failure
-    error PriceUpdateRejected(); // Update returned false
-    error PricesRemainStale(); // Prices still stale after update
-    error AssetPriceInvalid(address token); // Specific token has invalid price
-
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
     /// @notice Emitted when prices are updated during a deposit
     event PricesUpdatedBeforeDeposit(address indexed depositor);
-
-    /// @notice Emitted when a price update fails during deposit
-    event PriceUpdateFailedDuringDeposit(address indexed depositor);
 
     /// @notice Emitted when an asset is deposited
     event AssetDeposited(
@@ -84,6 +78,9 @@ interface ILiquidToken is IERC20Upgradeable {
         address indexed initiator
     );
 
+    // ============================================================================
+    // CUSTOM ERRORS
+    // ============================================================================
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20Upgradeable asset);
 
@@ -95,6 +92,12 @@ interface ILiquidToken is IERC20Upgradeable {
 
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
+
+    /// @notice Error for zero address parameters in initialization
+    error ZeroAddressOwner();
+    error ZeroAddressPauser();
+    error ZeroAddressLiquidTokenManager();
+    error ZeroAddressTokenRegistryOracle();
 
     /// @notice Error for invalid withdrawal request
     /// @dev OUT OF SCOPE FOR V1
@@ -128,6 +131,15 @@ interface ILiquidToken is IERC20Upgradeable {
         uint256 actualBalance
     );
 
+    /// @notice Custom errors for price update failures
+    error PriceUpdateFailed(); // Generic price update failure
+    error PriceUpdateRejected(); // Update returned false
+    error PricesRemainStale(); // Prices still stale after update
+    error AssetPriceInvalid(address token); // Specific token has invalid price
+
+    // ============================================================================
+    //  FUNCTIONS
+    // ============================================================================
     /// @notice Deposits multiple assets and mints shares
     /// @param assets The array of assets to deposit
     /// @param amounts The array of amounts to deposit for each asset
