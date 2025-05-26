@@ -728,9 +728,9 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encode(0, true) // price = 0, success = true
         );
 
-        // Since we're configured to check for price > 0 in addToken, it should revert
+        // Update expectRevert to use custom error
         vm.prank(deployer);
-        vm.expectRevert("Token price fetch failed");
+        vm.expectRevert(ILiquidTokenManager.TokenPriceFetchFailed.selector);
         liquidTokenManager.addToken(
             newToken,
             decimals,
@@ -743,7 +743,6 @@ contract LiquidTokenManagerTest is BaseTest {
             bytes4(0) // fallbackFn
         );
     }
-
     function testAddTokenFailsForInvalidThreshold() public {
         IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
