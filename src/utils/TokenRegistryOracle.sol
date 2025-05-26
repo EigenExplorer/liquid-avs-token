@@ -391,9 +391,6 @@ contract TokenRegistryOracle is
     /**
      * @notice Get price from Chainlink with maximum gas efficiency
      */
-    /**
-     * @notice Get price from Chainlink with maximum gas efficiency
-     */
     function _getChainlinkPrice(
         address feed
     ) internal view returns (uint256 price, bool success) {
@@ -472,60 +469,49 @@ contract TokenRegistryOracle is
     function _getCurvePrice(
         address pool
     ) internal returns (uint256 price, bool success) {
-        // if no pool, bail
         if (pool == address(0)) return (0, false);
 
-        // only trigger the 0-value remove_liquidity when configured to do so
         if (requiresReentrancyLock[pool]) {
-            // this forces Curve’s nonReentrant('lock') modifier
-            try ICurvePool(pool).remove_liquidity(0, new uint256[](2)) {
-                // no-op
-            } catch {
-                // ignore any failure (e.g. not supported or no permission)
-            }
+            try
+                ICurvePool(pool).remove_liquidity(0, new uint256[](2))
+            {} catch {}
         }
 
-        // now run the three-step assembly lookup
         assembly {
             let ptr := mload(0x40)
 
-            // 1) try get_virtual_price() -> selector 0xbb7b8b80
+            // Try get_virtual_price
             mstore(ptr, shl(224, 0xbb7b8b80))
             let ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
             if and(ok, gt(mload(ptr), 0)) {
                 price := mload(ptr)
                 success := 1
-                return(0, 0)
             }
 
-            // 2) try price_oracle() -> selector 0x2df9529b
-            mstore(ptr, shl(224, 0x2df9529b))
-            ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
-            if and(ok, gt(mload(ptr), 0)) {
-                price := mload(ptr)
-                success := 1
-                return(0, 0)
+            // Try price_oracle
+            if iszero(success) {
+                mstore(ptr, shl(224, 0x2df9529b))
+                ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
+                if and(ok, gt(mload(ptr), 0)) {
+                    price := mload(ptr)
+                    success := 1
+                }
             }
 
-            // 3) try get_dy(0,1,1e18) -> selector 0x5e0d443f + args
-            mstore(ptr, shl(224, 0x5e0d443f))
-            mstore(add(ptr, 4), 0) // i = 0
-            mstore(add(ptr, 36), 1) // j = 1
-            mstore(add(ptr, 68), 0x0DE0B6B3A7640000) // 1e18
-            ok := staticcall(
-                gas(),
-                pool,
-                ptr,
-                100, // calldata size = 4 + 32*3
-                ptr,
-                32
-            )
-            if and(ok, gt(mload(ptr), 0)) {
-                price := mload(ptr)
-                success := 1
-                // fall through
+            // Try get_dy(0,1,1e18)
+            if iszero(success) {
+                mstore(ptr, shl(224, 0x5e0d443f))
+                mstore(add(ptr, 4), 0)
+                mstore(add(ptr, 36), 1)
+                mstore(add(ptr, 68), 0x0DE0B6B3A7640000)
+                ok := staticcall(gas(), pool, ptr, 100, ptr, 32)
+                if and(ok, gt(mload(ptr), 0)) {
+                    price := mload(ptr)
+                    success := 1
+                }
             }
         }
+        return (price, success);
     }
 
     /**
@@ -547,7 +533,7 @@ contract TokenRegistryOracle is
             let ptr := mload(0x40)
 
             // Store function selector at memory position ptr
-            mstore(ptr, shl(224, selector))
+            mstore(ptr, selector)
 
             // Prepare call data parameters
             let callSize := 4 // Selector size
@@ -578,7 +564,6 @@ contract TokenRegistryOracle is
             }
         }
     }
-
     /**
      * @notice Get token price directly (for external calls)
      */
