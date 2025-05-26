@@ -425,11 +425,10 @@ contract LiquidTokenManager is
             assets[i].safeTransfer(address(node), amounts[i]);
         }
 
-        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
-
         // Instruct node to stake on EL
         node.depositAssets(assets, amounts, strategiesForNode);
 
+        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
         emit AssetsDepositedToEigenlayer(
             assets,
             amounts,
@@ -1337,7 +1336,6 @@ contract LiquidTokenManager is
         );
 
         address receiver = redemption.receiver;
-
         if (
             receiver != address(withdrawalManager) &&
             receiver != address(liquidToken)
@@ -1375,8 +1373,8 @@ contract LiquidTokenManager is
 
         // Track unique tokens received from completion of all withdrawals across all nodes
         IERC20[] memory receivedTokens = new IERC20[](supportedTokens.length);
-
         uint256 uniqueTokenCount = 0;
+
         for (uint256 k = 0; k < elActions; k++) {
             uniqueTokenCount = _completeELWithdrawals(
                 nodeIds[k],

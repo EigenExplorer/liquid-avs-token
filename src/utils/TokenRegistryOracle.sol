@@ -395,7 +395,7 @@ contract TokenRegistryOracle is
             let ptr := mload(0x40)
 
             // Call latestRoundData() - 0xfeaf968c
-            mstore(ptr, 0xfeaf968c)
+            mstore(ptr, shl(224, 0xfeaf968c))
             let callSuccess := staticcall(
                 gas(), // Gas
                 feed, // Target
@@ -421,7 +421,7 @@ contract TokenRegistryOracle is
                     // Check staleness - invert the condition to handle fresh prices first
                     if iszero(lt(add(updatedAt, 86400), timestamp())) {
                         // Call decimals() - 0x313ce567
-                        mstore(ptr, 0x313ce567)
+                        mstore(ptr, shl(224, 0x313ce567))
                         let decSuccess := staticcall(
                             gas(),
                             feed,
@@ -478,7 +478,7 @@ contract TokenRegistryOracle is
             let ptr := mload(0x40)
 
             // Try get_virtual_price() - 0xbb7b8b80
-            mstore(ptr, 0xbb7b8b80)
+            mstore(ptr, shl(224, 0xbb7b8b80))
             let callSuccess := staticcall(gas(), pool, ptr, 4, ptr, 32)
 
             if and(callSuccess, gt(mload(ptr), 0)) {
@@ -488,7 +488,7 @@ contract TokenRegistryOracle is
             // If we didn't get a price yet, try the next method
             if iszero(success) {
                 // Try price_oracle() - 0x2df9529b
-                mstore(ptr, 0x2df9529b)
+                mstore(ptr, shl(224, 0x2df9529b))
                 callSuccess := staticcall(gas(), pool, ptr, 4, ptr, 32)
 
                 if and(callSuccess, gt(mload(ptr), 0)) {
@@ -500,7 +500,7 @@ contract TokenRegistryOracle is
             // If we still don't have a price, try the final method
             if iszero(success) {
                 // Try get_dy(0,1,1e18) - 0x5e0d443f
-                mstore(ptr, 0x5e0d443f) // Function selector
+                mstore(ptr, shl(224, 0x5e0d443f))
                 mstore(add(ptr, 4), 0) // i = 0 (int128)
                 mstore(add(ptr, 36), 1) // j = 1 (int128)
                 // Correct hex for 1e18 (use full 32 bytes)

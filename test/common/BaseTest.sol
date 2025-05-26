@@ -123,13 +123,16 @@ contract BaseTest is Test {
         // 5. Initialize StakerNodeCoordinator (depends on LiquidTokenManager)
         _initializeStakerNodeCoordinator();
 
-        // 6. Add tokens after all initializations
+        // 6. Initializa WithdrawalManager
+        _initializeWithdrawalManager();
+
+        // 7. Add tokens after all initializations
         _addTestTokens();
 
-        // 7. Setup test token balances
+        // 8. Setup test token balances
         _setupTestTokens();
 
-        // 8. Renounce roles at the end
+        // 9. Renounce roles at the end
         _renounceAllRoles();
     }
 
@@ -433,7 +436,7 @@ contract BaseTest is Test {
             address(
                 new TransparentUpgradeableProxy(
                     address(_withdrawalManagerImplementation),
-                    address(admin),
+                    proxyAdminAddress,
                     ""
                 )
             )
@@ -567,6 +570,10 @@ contract BaseTest is Test {
         );
         liquidTokenManager.grantRole(
             liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
+            address(this)
+        );
+        liquidTokenManager.grantRole(
+            liquidTokenManager.PRICE_UPDATER_ROLE(),
             address(this)
         );
         vm.stopPrank();

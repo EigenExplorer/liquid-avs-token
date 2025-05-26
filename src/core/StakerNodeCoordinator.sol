@@ -22,7 +22,6 @@ contract StakerNodeCoordinator is
     AccessControlUpgradeable
 {
     ILiquidTokenManager public override liquidTokenManager;
-    IWithdrawalManager public override withdrawalManager;
     IStrategyManager public override strategyManager;
     IDelegationManager public override delegationManager;
     uint256 public override maxNodes;
@@ -34,6 +33,8 @@ contract StakerNodeCoordinator is
         keccak256("STAKER_NODES_DELEGATOR_ROLE");
     bytes32 public constant STAKER_NODE_CREATOR_ROLE =
         keccak256("STAKER_NODE_CREATOR_ROLE");
+
+    IWithdrawalManager public override withdrawalManager;
 
     constructor() {
         _disableInitializers();

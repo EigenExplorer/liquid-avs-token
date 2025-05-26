@@ -119,7 +119,7 @@ contract WithdrawalManager is
 
         if (request.user == address(0)) revert InvalidWithdrawalRequest();
         if (request.user != msg.sender) revert UnauthorizedAccess(msg.sender);
-        if (block.timestamp < request.requestTime + withdrawalDelay)
+        if (block.timestamp <= request.requestTime + withdrawalDelay)
             revert WithdrawalDelayNotMet();
         if (request.canFulfill == false) revert WithdrawalNotReadyToFulfill();
 
@@ -134,26 +134,36 @@ contract WithdrawalManager is
                     asset.balanceOf(address(this))
                 );
             }
+        }
 
-            asset.safeTransfer(msg.sender, amount);
+        address user = request.user;
+        IERC20[] memory assets = request.assets;
+        uint256[] memory amounts = request.withdrawableAmounts;
+
+        delete withdrawalRequests[requestId];
+        bytes32[] storage userRequests = userWithdrawalRequests[user];
+        for (uint256 i = 0; i < userRequests.length; i++) {
+            if (userRequests[i] == requestId) {
+                userRequests[i] = userRequests[userRequests.length - 1];
+                userRequests.pop();
+                break;
+            }
         }
 
         // Fulfillment is complete
-        liquidToken.debitQueuedAssetBalances(
-            request.assets,
-            request.withdrawableAmounts
-        );
+        liquidToken.debitQueuedAssetBalances(assets, amounts);
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            assets[i].safeTransfer(msg.sender, amounts[i]);
+        }
 
         emit WithdrawalFulfilled(
             requestId,
-            msg.sender,
-            request.assets,
-            request.withdrawableAmounts,
+            user,
+            assets,
+            amounts,
             block.timestamp
         );
-
-        delete withdrawalRequests[requestId];
-        delete userWithdrawalRequests[request.user];
     }
 
     /// @notice Called by `LiquidTokenManger` when a new redemption is created
@@ -196,14 +206,25 @@ contract WithdrawalManager is
         uint256[] memory slashedAmounts = new uint256[](receivedAssets.length);
 
         for (uint256 i = 0; i < receivedAssets.length; i++) {
-            uint256 originalWithdrawableAmount = redemption.withdrawableAmounts[
-                i
-            ];
+            uint256 originalWithdrawableAmount = 0;
+            bool assetFound = false;
 
-            if (originalWithdrawableAmount == 0) {
-                slashedFactors[i] = 1e18;
-                slashedAmounts[i] = 0;
-            } else if (receivedAmounts[i] != originalWithdrawableAmount) {
+            for (uint256 j = 0; j < redemption.assets.length; j++) {
+                if (
+                    address(receivedAssets[i]) == address(redemption.assets[j])
+                ) {
+                    originalWithdrawableAmount = redemption.withdrawableAmounts[
+                        j
+                    ];
+                    assetFound = true;
+                    break;
+                }
+            }
+
+            if (
+                receivedAmounts[i] < originalWithdrawableAmount &&
+                originalWithdrawableAmount != 0
+            ) {
                 slashedFactors[i] =
                     (receivedAmounts[i] * 1e18) /
                     originalWithdrawableAmount;
@@ -225,7 +246,7 @@ contract WithdrawalManager is
         // If the redemption is for user withdrawasl, slash their withdrawable amounts by the slashing factor
         if (
             redemption.requestIds.length > 0 &&
-            withdrawalRequests[redemption.requestIds[0]].user != address(0) // If one user withdrawal is found, all redemptions are for user withdrawals
+            withdrawalRequests[redemption.requestIds[0]].user != address(0) // If one user withdrawal is found, all requests are for user withdrawals
         ) {
             for (uint256 i = 0; i < redemption.requestIds.length; i++) {
                 bytes32 requestId = redemption.requestIds[i];
@@ -261,6 +282,7 @@ contract WithdrawalManager is
                                     request.withdrawableAmounts[j]
                                 );
                             }
+                            break;
                         }
                     }
                 }
@@ -269,13 +291,13 @@ contract WithdrawalManager is
             }
         }
 
+        // Delete the redemption
+        delete redemptions[redemptionId];
+
         // Account for withdrawal period slashing in queued withdrawal balances
         // If the redemption is for rebalancing or undelegation, all internal accounting will now be complete
         // If the redemption is for user withdrawals, the queued balances will still contain the withdrawable amounts
         liquidToken.debitQueuedAssetBalances(receivedAssets, slashedAmounts);
-
-        // Delete the redemption
-        delete redemptions[redemptionId];
 
         return redemptionRequestedAmounts;
     }
