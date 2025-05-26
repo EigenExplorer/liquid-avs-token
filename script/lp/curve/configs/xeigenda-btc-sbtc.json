@@ -1,7 +1,7 @@
 {
   "name": "xEigenDA-BTC/SBTC Pool",
   "symbol": "latbtc1pool",
-  "token": "",
+  "token0": "0xLatAddress",
   "A": 100,
   "fee": 4000000
 }

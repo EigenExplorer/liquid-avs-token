@@ -6,16 +6,16 @@ import {console} from "forge-std/console.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @dev 2 token plain pool:
-// forge script script/lp/curve/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xPoolAddress" "[0xToken1,0xToken2]" "[1000000000000000000,1000000000000000000]" false -vvvv
+// forge script script/lp/curve/tasks/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xPoolAddress" "[0xToken1,0xToken2]" "[1000000000000000000,1000000000000000000]" false -vvvv
 
 /// @dev 2 token metapool:
-// forge script script/lp/curve/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xMetapoolAddress" "[0xToken,0xBaseLPToken]" "[1000000000000000000,1000000000000000000]" true -vvvv
+// forge script script/lp/curve/tasks/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xMetapoolAddress" "[0xToken,0xBaseLPToken]" "[1000000000000000000,1000000000000000000]" true -vvvv
 
 /// @dev 3 token plain pool with automatic minLP calculation:
-// forge script script/lp/curve/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "runWithMinLP(address,address[],uint256[],bool,uint256)" -- "0xPoolAddress" "[0xToken1,0xToken2,0xToken3]" "[1000000000000000000,2000000000000000000,1500000000000000000]" false 0 -vvvv
+// forge script script/lp/curve/tasks/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "runWithMinLP(address,address[],uint256[],bool,uint256)" -- "0xPoolAddress" "[0xToken1,0xToken2,0xToken3]" "[1000000000000000000,2000000000000000000,1500000000000000000]" false 0 -vvvv
 
 /// @dev 4 token plain pool:
-// forge script script/lp/curve/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xPoolAddress" "[0xToken1,0xToken2,0xToken3,0xToken4]" "[1000000000000000000,2000000000000000000,1500000000000000000,500000000000000000]" false -vvvv
+// forge script script/lp/curve/tasks/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xPoolAddress" "[0xToken1,0xToken2,0xToken3,0xToken4]" "[1000000000000000000,2000000000000000000,1500000000000000000,500000000000000000]" false -vvvv
 
 interface ICurvePool2 {
     function add_liquidity(
