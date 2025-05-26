@@ -63,17 +63,18 @@ contract LiquidToken is
 
         // Zero address checks
         if (init.initialOwner == address(0)) {
-            revert("Initial owner cannot be the zero address");
+            revert ZeroAddressOwner();
         }
         if (init.pauser == address(0)) {
-            revert("Pauser cannot be the zero address");
+            revert ZeroAddressPauser();
         }
         if (address(init.liquidTokenManager) == address(0)) {
-            revert("LiquidTokenManager cannot be the zero address");
+            revert ZeroAddressLiquidTokenManager();
         }
         if (address(init.tokenRegistryOracle) == address(0)) {
-            revert("TokenRegistryOracle cannot be the zero address");
+            revert ZeroAddressTokenRegistryOracle();
         }
+
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(PAUSER_ROLE, init.pauser);
 

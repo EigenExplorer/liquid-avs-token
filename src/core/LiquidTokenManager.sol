@@ -158,7 +158,7 @@ contract LiquidTokenManager is
         if (!isNative) {
             (uint256 price, bool ok) = tokenRegistryOracle
                 ._getTokenPrice_getter(address(token));
-            require(ok && price > 0, "Token price fetch failed");
+            if (!ok || price == 0) revert TokenPriceFetchFailed();
             fetchedPrice = price;
         } else {
             fetchedPrice = 1e18;
@@ -444,8 +444,8 @@ contract LiquidTokenManager is
     /// @param approverSignatureAndExpiries The signatures authorizing the delegations
     /// @param approverSalts The salts used in the signatures
     function delegateNodes(
-        uint256[] memory nodeIds,
-        address[] memory operators,
+        uint256[] calldata nodeIds,
+        address[] calldata operators,
         ISignatureUtilsMixinTypes.SignatureWithExpiry[]
             calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
