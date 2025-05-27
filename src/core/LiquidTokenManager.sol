@@ -610,24 +610,26 @@ contract LiquidTokenManager is
         tokens[asset].volatilityThreshold = newThreshold;
     }
 
-    /// @notice Get the token for a strategy
-    /// @param strategy The strategy address
-    /// @return The token address
-    function getTokenForStrategy(IStrategy strategy) external view returns (IERC20) {
-        return strategyTokens[strategy];
-    }
+    /// @notice Returns the token for a given strategy
+    /// @param strategy Strategy to get the token for
+    /// @return IERC20 Interface for the corresponding token
+    function getStrategyToken(IStrategy strategy) external view returns (IERC20) {
+        if (address(strategy) == address(0)) revert ZeroAddress();
 
-    /// @notice Get the strategy for a token
-    /// @param token The token address
-    /// @return The strategy address
-    function getStrategyForToken(IERC20 token) external view returns (IStrategy) {
-        return tokenStrategies[token];
+        IERC20 token = strategyTokens[strategy];
+
+        if (address(token) == address(0)) {
+            revert TokenForStrategyNotFound(address(strategy));
+        }
+
+        return token;
     }
 
     /// @notice Check if a strategy is supported
     /// @param strategy The strategy address
     /// @return True if the strategy is supported
     function isStrategySupported(IStrategy strategy) external view returns (bool) {
+        if (address(strategy) == address(0)) return false;
         return address(strategyTokens[strategy]) != address(0);
     }
 }

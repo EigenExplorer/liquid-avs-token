@@ -1453,30 +1453,30 @@ contract LiquidTokenManagerTest is BaseTest {
         
         vm.stopPrank();
         
-        // Test getStrategyForToken function
+        // Test getTokenStrategy function
         assertEq(
-            address(liquidTokenManager.getStrategyForToken(IERC20(address(tokenA)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)))),
             address(strategyA),
-            "getStrategyForToken for tokenA should return strategyA"
+            "getTokenStrategy for tokenA should return strategyA"
         );
         
         assertEq(
-            address(liquidTokenManager.getStrategyForToken(IERC20(address(tokenB)))),
+            address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenB)))),
             address(strategyB),
-            "getStrategyForToken for tokenB should return strategyB"
+            "getTokenStrategy for tokenB should return strategyB"
         );
         
-        // Test getTokenForStrategy function
+        // Test getStrategyToken function
         assertEq(
-            address(liquidTokenManager.getTokenForStrategy(IStrategy(address(strategyA)))),
+            address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyA)))),
             address(tokenA),
-            "getTokenForStrategy for strategyA should return tokenA"
+            "getStrategyToken for strategyA should return tokenA"
         );
         
         assertEq(
-            address(liquidTokenManager.getTokenForStrategy(IStrategy(address(strategyB)))),
+            address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyB)))),
             address(tokenB),
-            "getTokenForStrategy for strategyB should return tokenB"
+            "getStrategyToken for strategyB should return tokenB"
         );
         
         // Test isStrategySupported function
@@ -1493,10 +1493,16 @@ contract LiquidTokenManagerTest is BaseTest {
         // Test with a strategy that doesn't exist
         MockERC20 unknownToken = new MockERC20("Unknown Token", "UNK");
         MockStrategy unknownStrategy = new MockStrategy(strategyManager, IERC20(address(unknownToken)));
+        
+        // Test isStrategySupported with unknown strategy
         assertFalse(
             liquidTokenManager.isStrategySupported(IStrategy(address(unknownStrategy))),
             "Unknown strategy should not be supported"
         );
+        
+        // Test getStrategyToken with unknown strategy - should revert with TokenForStrategyNotFound
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.TokenForStrategyNotFound.selector, address(unknownStrategy)));
+        liquidTokenManager.getStrategyToken(IStrategy(address(unknownStrategy)));
         
         // Verify mappings are cleared when token is removed
         vm.startPrank(admin);
@@ -1509,12 +1515,9 @@ contract LiquidTokenManagerTest is BaseTest {
             "strategyA should no longer be supported after removing tokenA"
         );
         
-        // The direct mapping should be cleared too
-        assertEq(
-            address(liquidTokenManager.getStrategyForToken(IERC20(address(tokenA)))),
-            address(0),
-            "tokenA should no longer have a strategy after removal"
-        );
+        // The direct mapping should be cleared too - this should revert with StrategyNotFound
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.StrategyNotFound.selector, address(tokenA)));
+        liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)));
     }
     
     /// @notice Test that attempting to add a strategy that's already assigned to another token fails
