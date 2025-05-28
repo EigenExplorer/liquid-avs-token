@@ -131,7 +131,10 @@ contract Deploy is Script, Test {
     uint256 public stakerNodeCoordinatorInitTimestamp;
     uint256 public oracleSalt;
 
-    function run(string memory deployConfigFileName, string memory chain) external {
+    function run(
+        string memory deployConfigFileName,
+        string memory chain
+    ) external {
         // Load config file
         loadConfig(deployConfigFileName, chain);
         oracleSalt = vm.envUint("ORACLE_SALT");
@@ -145,8 +148,7 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
-        addAndConfigureTokens();
-        configureOracle();
+        addAndConfigureTokens(chain);
         transferOwnership();
 
         verifyDeployment();
@@ -183,9 +185,16 @@ contract Deploy is Script, Test {
         return stdJson.readAddress(deployConfigData, jsonPath);
     }
 
-    function loadConfig(string memory deployConfigFileName, string memory chain) internal {
+    function loadConfig(
+        string memory deployConfigFileName,
+        string memory chain
+    ) internal {
         // Load network-specific config
-        string memory networkConfigPath = string.concat("script/configs/", chain, ".json");
+        string memory networkConfigPath = string.concat(
+            "script/configs/",
+            chain,
+            ".json"
+        );
         string memory networkConfigData = vm.readFile(networkConfigPath);
         require(
             stdJson.readUint(networkConfigData, ".network.chainId") ==
@@ -204,9 +213,7 @@ contract Deploy is Script, Test {
 
         // Load deployment-specific config
         string memory deployConfigPath = string(
-            bytes(
-                string.concat("script/configs/local/", deployConfigFileName)
-            )
+            bytes(string.concat("script/configs/local/", deployConfigFileName))
         );
         string memory deployConfigData = vm.readFile(deployConfigPath);
 
@@ -470,7 +477,7 @@ contract Deploy is Script, Test {
         );
     }
 
-    function addAndConfigureTokens() internal {
+    function addAndConfigureTokens(string memory chain) internal {
         TokenConfig[] memory addable = _getAddableTokens(tokens);
         for (uint256 i = 0; i < addable.length; ++i) {
             liquidTokenManager.addToken(
@@ -485,39 +492,47 @@ contract Deploy is Script, Test {
                 addable[i].oracle.fallbackSelector
             );
         }
-    }
 
-    function configureOracle() internal {
-        // Must grant TOKEN_CONFIGURATOR_ROLE to self first
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
+        // Configure curve pools that require reentrancy locks
+        string memory networkConfigPath = string.concat(
+            "script/configs/",
+            chain,
+            ".json"
         );
+        string memory networkConfigData = vm.readFile(networkConfigPath);
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            // Skip native tokens (sourceType==0 and primarySource==0)
-            if (
-                tokens[i].oracle.sourceType == 0 &&
-                tokens[i].oracle.primarySource == address(0)
-            ) {
-                continue;
-            }
-
-            tokenRegistryOracle.configureToken(
-                address(tokens[i].addresses.token),
-                tokens[i].oracle.sourceType,
-                tokens[i].oracle.primarySource,
-                tokens[i].oracle.needsArg,
-                tokens[i].oracle.fallbackSource,
-                tokens[i].oracle.fallbackSelector
+        uint256 poolCount = 0;
+        while (true) {
+            string memory poolPath = string.concat(
+                ".curvePoolsRequireLock[",
+                vm.toString(poolCount),
+                "]"
             );
+            try this._readAddress(networkConfigData, poolPath) returns (
+                address
+            ) {
+                poolCount++;
+            } catch {
+                break;
+            }
         }
 
-        // Revoke the role after use
-        tokenRegistryOracle.revokeRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
+        if (poolCount > 0) {
+            address[] memory pools = new address[](poolCount);
+            bool[] memory settings = new bool[](poolCount);
+
+            for (uint256 i = 0; i < poolCount; i++) {
+                string memory poolPath = string.concat(
+                    ".curvePoolsRequireLock[",
+                    vm.toString(i),
+                    "]"
+                );
+                pools[i] = stdJson.readAddress(networkConfigData, poolPath);
+                settings[i] = true;
+            }
+
+            tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+        }
     }
 
     function transferOwnership() internal {

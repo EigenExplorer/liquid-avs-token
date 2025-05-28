@@ -11,5 +11,8 @@
     "gasLimit": 6000000,
     "verificationDelay": 60,
     "timeoutBlocks": 200
+  },
+  "curvePoolsRequireLock": {
+    "ankrETH-ETH": "0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2"
   }
 }
