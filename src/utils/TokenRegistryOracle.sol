@@ -463,10 +463,28 @@ contract TokenRegistryOracle is
     ) internal returns (uint256 price, bool success) {
         if (pool == address(0)) return (0, false);
 
+        // For pools that require reentrancy lock check
         if (requiresReentrancyLock[pool]) {
-            try
-                ICurvePool(pool).remove_liquidity(0, new uint256[](2))
-            {} catch {}
+            bool lockEngaged = false;
+            
+            try ICurvePool(pool).remove_liquidity(0, new uint256[](2)) {
+                // If this succeeds (no revert), it means there's no reentrancy lock
+                // This is unexpected for pools marked as requiresReentrancyLock
+                lockEngaged = false;
+            } catch {
+                // This is expected - the revert indicates the reentrancy lock is active
+                lockEngaged = true;
+            }
+            
+            // Log the status of the reentrancy lock for this pool
+            emit CurvePoolReentrancyLockStatus(pool, lockEngaged);
+            
+            // If we expected a lock but didn't see one, this is a security concern
+            if (!lockEngaged) {
+                // For maximum security, we reject the price from pools with missing reentrancy locks
+                // This is exactly what the Halborn audit was concerned about
+                return (0, false);
+            }
         }
 
         assembly {
