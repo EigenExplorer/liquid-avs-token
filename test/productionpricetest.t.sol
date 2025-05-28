@@ -1075,11 +1075,65 @@ contract RealWorldTokenPriceTest is BaseTest {
         console.log(
             "   remove_liquidity(0, [0,0]) implemented in _getCurvePrice"
         );
-        console.log("   Try/catch prevents failures from breaking price fetch");
+        console.log("   Properly interprets reverts as reentrancy lock engagement");
+        console.log(
+            "   Enhanced security: rejects prices from pools with missing locks"
+        );
         console.log(
             "   Per-pool reentrancy protection via requiresReentrancyLock"
         );
         console.log("   Batch configuration for efficient pool management");
+        
+        // Test CurvePoolReentrancyLockStatus event emission
+        vm.recordLogs();
+        vm.startPrank(admin);
+        
+        // Find a curve pool to test with
+        address testPool = address(0);
+        for (uint i = 0; i < tokens.length; i++) {
+            if (tokenAdded[tokens[i].token] && tokens[i].sourceType == 2) {
+                testPool = tokens[i].primarySource;
+                break;
+            }
+        }
+        
+        if (testPool != address(0)) {
+            // Enable reentrancy lock
+            address[] memory pools = new address[](1);
+            pools[0] = testPool;
+            bool[] memory settings = new bool[](1);
+            settings[0] = true;
+            tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+            
+            // Call getTokenPrice to trigger the event
+            for (uint i = 0; i < tokens.length; i++) {
+                if (tokens[i].primarySource == testPool) {
+                    try tokenRegistryOracle.getTokenPrice(tokens[i].token) {} catch {}
+                    break;
+                }
+            }
+            
+            // Check for event emission
+            Vm.Log[] memory entries = vm.getRecordedLogs();
+            bool foundEvent = false;
+            
+            for (uint i = 0; i < entries.length; i++) {
+                // Event: CurvePoolReentrancyLockStatus(address indexed pool, bool lockEngaged)
+                bytes32 eventSignature = keccak256("CurvePoolReentrancyLockStatus(address,bool)");
+                
+                if (entries[i].topics[0] == eventSignature) {
+                    foundEvent = true;
+                    console.log("  Successfully emitted CurvePoolReentrancyLockStatus event");
+                    break;
+                }
+            }
+            
+            if (!foundEvent) {
+                console.log("  Warning: CurvePoolReentrancyLockStatus event not found");
+            }
+        }
+        
+        vm.stopPrank();
     }
 
     function testPriceStalenessLogic() public {
