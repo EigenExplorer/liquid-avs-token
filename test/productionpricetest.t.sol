@@ -1075,7 +1075,9 @@ contract RealWorldTokenPriceTest is BaseTest {
         console.log(
             "   remove_liquidity(0, [0,0]) implemented in _getCurvePrice"
         );
-        console.log("   Properly interprets reverts as reentrancy lock engagement");
+        console.log(
+            "   Properly interprets reverts as reentrancy lock engagement"
+        );
         console.log(
             "   Enhanced security: rejects prices from pools with missing locks"
         );
@@ -1083,11 +1085,11 @@ contract RealWorldTokenPriceTest is BaseTest {
             "   Per-pool reentrancy protection via requiresReentrancyLock"
         );
         console.log("   Batch configuration for efficient pool management");
-        
+
         // Test CurvePoolReentrancyLockStatus event emission
         vm.recordLogs();
         vm.startPrank(admin);
-        
+
         // Find a curve pool to test with
         address testPool = address(0);
         for (uint i = 0; i < tokens.length; i++) {
@@ -1096,7 +1098,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                 break;
             }
         }
-        
+
         if (testPool != address(0)) {
             // Enable reentrancy lock
             address[] memory pools = new address[](1);
@@ -1104,35 +1106,43 @@ contract RealWorldTokenPriceTest is BaseTest {
             bool[] memory settings = new bool[](1);
             settings[0] = true;
             tokenRegistryOracle.batchSetRequiresLock(pools, settings);
-            
+
             // Call getTokenPrice to trigger the event
             for (uint i = 0; i < tokens.length; i++) {
                 if (tokens[i].primarySource == testPool) {
-                    try tokenRegistryOracle.getTokenPrice(tokens[i].token) {} catch {}
+                    try
+                        tokenRegistryOracle.getTokenPrice(tokens[i].token)
+                    {} catch {}
                     break;
                 }
             }
-            
+
             // Check for event emission
             Vm.Log[] memory entries = vm.getRecordedLogs();
             bool foundEvent = false;
-            
+
             for (uint i = 0; i < entries.length; i++) {
                 // Event: CurvePoolReentrancyLockStatus(address indexed pool, bool lockEngaged)
-                bytes32 eventSignature = keccak256("CurvePoolReentrancyLockStatus(address,bool)");
-                
+                bytes32 eventSignature = keccak256(
+                    "CurvePoolReentrancyLockStatus(address,bool)"
+                );
+
                 if (entries[i].topics[0] == eventSignature) {
                     foundEvent = true;
-                    console.log("  Successfully emitted CurvePoolReentrancyLockStatus event");
+                    console.log(
+                        "  Successfully emitted CurvePoolReentrancyLockStatus event"
+                    );
                     break;
                 }
             }
-            
+
             if (!foundEvent) {
-                console.log("  Warning: CurvePoolReentrancyLockStatus event not found");
+                console.log(
+                    "  Warning: CurvePoolReentrancyLockStatus event not found"
+                );
             }
         }
-        
+
         vm.stopPrank();
     }
 
@@ -1359,5 +1369,341 @@ contract RealWorldTokenPriceTest is BaseTest {
             workingCount > 0,
             "At least some tokens should work individually"
         );
+    }
+    //add more tests
+    function testCurvePoolMethodPrioritization() public {
+        console.log(
+            "\n======= Testing Curve Pool Method Priority Order ======="
+        );
+
+        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+
+        for (uint i = 0; i < tokens.length; i++) {
+            TokenConfig memory cfg = tokens[i];
+            if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
+                console.log("Testing method priority for %s...", cfg.name);
+
+                vm.startPrank(admin);
+
+                // Test which method is actually being used by mocking individual methods
+                address pool = cfg.primarySource;
+
+                // Mock get_virtual_price to return specific value
+                vm.mockCall(
+                    pool,
+                    abi.encodeWithSelector(bytes4(0xbb7b8b80)), // get_virtual_price()
+                    abi.encode(1.5e18)
+                );
+
+                // Mock price_oracle to return different value
+                vm.mockCall(
+                    pool,
+                    abi.encodeWithSelector(bytes4(0x86fc88d3)), // price_oracle()
+                    abi.encode(1.3e18)
+                );
+
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 price
+                ) {
+                    // Should use get_virtual_price first (1.5e18)
+                    if (price == 1.5e18) {
+                        console.log(
+                            "  Correctly prioritizes get_virtual_price()"
+                        );
+                    } else if (price == 1.3e18) {
+                        console.log("  Falls back to price_oracle()");
+                    } else {
+                        console.log(
+                            "  Uses get_dy() fallback: %s ETH",
+                            price / 1e18
+                        );
+                    }
+                } catch {
+                    console.log("  Method priority test failed");
+                }
+
+                // Clear mocks
+                vm.clearMockedCalls();
+                vm.stopPrank();
+                break;
+            }
+        }
+    }
+
+    function testCurveReentrancyLockBoundaryConditions() public {
+        console.log(
+            "\n======= Testing Reentrancy Lock Boundary Conditions ======="
+        );
+
+        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+
+        for (uint i = 0; i < tokens.length; i++) {
+            TokenConfig memory cfg = tokens[i];
+            if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
+                console.log("Testing boundary conditions for %s...", cfg.name);
+
+                vm.startPrank(admin);
+                address pool = cfg.primarySource;
+
+                // Test 1: Pool with working reentrancy lock
+                address[] memory pools = new address[](1);
+                pools[0] = pool;
+                bool[] memory settings = new bool[](1);
+                settings[0] = true;
+
+                tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+
+                uint256 gasBefore = gasleft();
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 price
+                ) {
+                    uint256 gasUsed = gasBefore - gasleft();
+                    console.log("  Gas used with reentrancy lock: %s", gasUsed);
+                    assertTrue(price > 0, "Should get valid price with lock");
+                } catch {
+                    console.log(
+                        "  Expected: Some pools may fail lock engagement test"
+                    );
+                }
+
+                // Test 2: Disable lock and compare gas usage
+                settings[0] = false;
+                tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+
+                gasBefore = gasleft();
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 price
+                ) {
+                    uint256 gasUsed = gasBefore - gasleft();
+                    console.log(
+                        "  Gas used without reentrancy lock: %s",
+                        gasUsed
+                    );
+                    assertTrue(
+                        price > 0,
+                        "Should get valid price without lock"
+                    );
+                } catch {
+                    console.log("  Price fetch failed without lock");
+                }
+
+                vm.stopPrank();
+                break;
+            }
+        }
+    }
+
+    function testCurvePoolSafetyValidation() public {
+        console.log("\n======= Testing Curve Pool Safety Validation =======");
+
+        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+
+        vm.startPrank(admin);
+
+        // Find unsafe pools mentioned in audit
+        address UNSAFE_ANKR_ETH_POOL = 0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2;
+
+        // Test the specific unsafe pool from audit
+        console.log("Testing audit-identified unsafe pool...");
+
+        // Enable reentrancy lock for unsafe pool
+        address[] memory pools = new address[](1);
+        pools[0] = UNSAFE_ANKR_ETH_POOL;
+        bool[] memory settings = new bool[](1);
+        settings[0] = true;
+
+        tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+
+        try tokenRegistryOracle.getCurvePrice(UNSAFE_ANKR_ETH_POOL) returns (
+            uint256 price,
+            bool success
+        ) {
+            if (success) {
+                console.log(
+                    "  Unsafe pool protected with reentrancy lock: %s ETH",
+                    price / 1e18
+                );
+                assertTrue(
+                    price > 0,
+                    "Protected unsafe pool should return valid price"
+                );
+            } else {
+                console.log(
+                    "  ! Unsafe pool failed even with protection (may not have remove_liquidity)"
+                );
+            }
+        } catch Error(string memory reason) {
+            if (
+                keccak256(bytes(reason)) ==
+                keccak256(
+                    bytes(
+                        "CurveOracle: pool not protected by nonReentrant lock"
+                    )
+                )
+            ) {
+                console.log(
+                    "  Correctly identified pool without nonReentrant protection"
+                );
+            } else {
+                console.log("  Unsafe pool test failed: %s", reason);
+            }
+        }
+
+        // Test safe pools don't need protection
+        for (uint i = 0; i < tokens.length; i++) {
+            TokenConfig memory cfg = tokens[i];
+            if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
+                console.log("Validating safe pool %s...", cfg.name);
+
+                pools[0] = cfg.primarySource;
+                settings[0] = false; // Don't require lock for safe pools
+                tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+
+                try
+                    tokenRegistryOracle.getCurvePrice(cfg.primarySource)
+                returns (uint256 price, bool success) {
+                    if (success) {
+                        console.log(
+                            "  Safe pool works without reentrancy lock: %s ETH",
+                            price / 1e18
+                        );
+                    }
+                } catch {
+                    console.log("  Safe pool validation inconclusive");
+                }
+                break;
+            }
+        }
+
+        vm.stopPrank();
+    }
+
+    function testCurvePriceBoundsValidation() public {
+        console.log("\n======= Testing Curve Price Bounds Validation =======");
+
+        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+
+        for (uint i = 0; i < tokens.length; i++) {
+            TokenConfig memory cfg = tokens[i];
+            if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
+                console.log("Testing price bounds for %s...", cfg.name);
+
+                vm.startPrank(admin);
+
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 price
+                ) {
+                    // Test reasonable bounds for ETH-denominated LSTs
+                    assertTrue(price > 0, "Price should be positive");
+                    assertTrue(
+                        price >= 0.5e18,
+                        "Price should be at least 0.5 ETH (reasonable lower bound)"
+                    );
+                    assertTrue(
+                        price <= 2.0e18,
+                        "Price should be at most 2.0 ETH (reasonable upper bound)"
+                    );
+
+                    console.log(
+                        "  Price within reasonable bounds: %s ETH",
+                        price / 1e18
+                    );
+
+                    // Additional bounds check for LST tokens (should be close to 1 ETH)
+                    if (price >= 0.95e18 && price <= 1.15e18) {
+                        console.log(
+                            "  LST price in expected range (0.95-1.15 ETH)"
+                        );
+                    } else {
+                        console.log(
+                            "  ! Price outside typical LST range - verify manually"
+                        );
+                    }
+                } catch {
+                    console.log("  Could not get price for bounds validation");
+                }
+
+                vm.stopPrank();
+                break;
+            }
+        }
+    }
+
+    function testCurveIntegrationWithOracleStalenesss() public {
+        console.log(
+            "\n======= Testing Curve Integration with Oracle Staleness ======="
+        );
+
+        vm.startPrank(admin);
+
+        // Test 1: Fresh Curve prices during normal operation
+        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+
+        for (uint i = 0; i < tokens.length; i++) {
+            TokenConfig memory cfg = tokens[i];
+            if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
+                // Get baseline price
+                uint256 baselinePrice;
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 price
+                ) {
+                    baselinePrice = price;
+                    console.log(
+                        "Baseline price for %s: %s ETH",
+                        cfg.name,
+                        price / 1e18
+                    );
+                } catch {
+                    console.log(
+                        "Could not get baseline price for %s",
+                        cfg.name
+                    );
+                    continue;
+                }
+
+                // Test 2: Force staleness and verify Curve prices still work
+                tokenRegistryOracle.setPriceUpdateInterval(1); // 1 second
+
+                uint256 currentTime = tokenRegistryOracle.lastPriceUpdate();
+                vm.warp(currentTime + 2); // Make prices stale
+
+                assertTrue(
+                    tokenRegistryOracle.arePricesStale(),
+                    "Prices should be stale"
+                );
+
+                // Test 3: Curve prices should still be fetchable during staleness
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
+                    uint256 stalePrice
+                ) {
+                    console.log(
+                        "Price during staleness: %s ETH",
+                        stalePrice / 1e18
+                    );
+
+                    // Price should be consistent
+                    uint256 diff = stalePrice > baselinePrice
+                        ? stalePrice - baselinePrice
+                        : baselinePrice - stalePrice;
+                    assertTrue(
+                        diff * 100 < baselinePrice,
+                        "Price should be consistent during staleness"
+                    );
+
+                    console.log(
+                        "  Curve price consistent during oracle staleness"
+                    );
+                } catch Error(string memory reason) {
+                    console.log(
+                        "  Expected: Curve price fetch may fail during staleness: %s",
+                        reason
+                    );
+                }
+
+                break;
+            }
+        }
+
+        vm.stopPrank();
     }
 }

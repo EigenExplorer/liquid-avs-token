@@ -46,13 +46,6 @@ interface ITokenRegistryOracle {
     event TokenRemoved(address token);
 
     /**
-     * @notice Emitted when checking a Curve pool's reentrancy lock status
-     * @param pool Address of the Curve pool being checked
-     * @param lockEngaged Whether the reentrancy lock was successfully engaged
-     */
-    event CurvePoolReentrancyLockStatus(address indexed pool, bool lockEngaged);
-    
-    /**
      * @notice Emitted when multiple pool safety settings are updated
      * @param pools The pool addresses affected
      * @param settings Whether each pool requires the reentrancy lock
