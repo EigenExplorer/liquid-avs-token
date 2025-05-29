@@ -1,4 +1,4 @@
-/*// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
 import {BaseTest} from "./common/BaseTest.sol";
@@ -262,4 +262,3 @@ contract StakerNodeCoordinatorTest is BaseTest {
         vm.stopPrank();
     }
 }
-*/
