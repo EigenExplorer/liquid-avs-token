@@ -463,27 +463,14 @@ contract TokenRegistryOracle is
     ) internal returns (uint256 price, bool success) {
         if (pool == address(0)) return (0, false);
 
-        // For pools that require reentrancy lock check
+        // Engage nonReentrant lock if required
         if (requiresReentrancyLock[pool]) {
-            bool lockEngaged = false;
-            
+            // Zero-liquidity call flips the lock on revert
             try ICurvePool(pool).remove_liquidity(0, new uint256[](2)) {
-                // If this succeeds (no revert), it means there's no reentrancy lock
-                // This is unexpected for pools marked as requiresReentrancyLock
-                lockEngaged = false;
+                // If this succeeds, no nonReentrant guard present -> unsafe
+                revert("CurveOracle: pool not protected by nonReentrant lock");
             } catch {
-                // This is expected - the revert indicates the reentrancy lock is active
-                lockEngaged = true;
-            }
-            
-            // Log the status of the reentrancy lock for this pool
-            emit CurvePoolReentrancyLockStatus(pool, lockEngaged);
-            
-            // If we expected a lock but didn't see one, this is a security concern
-            if (!lockEngaged) {
-                // For maximum security, we reject the price from pools with missing reentrancy locks
-                // This is exactly what the Halborn audit was concerned about
-                return (0, false);
+                // Revert means lock engaged -> safe to proceed
             }
         }
 
@@ -500,7 +487,7 @@ contract TokenRegistryOracle is
 
             // Try price_oracle
             if iszero(success) {
-                mstore(ptr, shl(224, 0x2df9529b))
+                mstore(ptr, shl(224, 0x86fc88d3))
                 ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
                 if and(ok, gt(mload(ptr), 0)) {
                     price := mload(ptr)
@@ -610,6 +597,21 @@ contract TokenRegistryOracle is
     ) external returns (uint256 price, bool success) {
         return _getTokenPrice(token);
     }
+
+    //EXPOSED xposed one only for testing it should be removed for prouction
+    /**
+     * @notice Get price from Curve pool directly (for testing/external calls)
+     * @dev This function exposes the internal _getCurvePrice for testing purposes
+     * @param pool The Curve pool address to get the price from
+     * @return price The price in ETH terms (18 decimals)
+     * @return success Whether the price fetch was successful
+     */
+    function getCurvePrice(
+        address pool
+    ) external returns (uint256 price, bool success) {
+        return _getCurvePrice(pool);
+    }
+    //FINISHED
 
     /**
      * @notice Set reentrancy lock requirements for multiple pools in one transaction
