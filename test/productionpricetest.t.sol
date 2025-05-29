@@ -1076,7 +1076,7 @@ contract RealWorldTokenPriceTest is BaseTest {
             "   remove_liquidity(0, [0,0]) implemented in _getCurvePrice"
         );
         console.log(
-            "   Properly interprets reverts as reentrancy lock engagement"
+            "   Properly detects reentrancy by checking if remove_liquidity reverts"
         );
         console.log(
             "   Enhanced security: rejects prices from pools with missing locks"
@@ -1537,12 +1537,12 @@ contract RealWorldTokenPriceTest is BaseTest {
                 keccak256(bytes(reason)) ==
                 keccak256(
                     bytes(
-                        "CurveOracle: pool not protected by nonReentrant lock"
+                        "CurveOracle: pool re-entrancy"
                     )
                 )
             ) {
                 console.log(
-                    "  Correctly identified pool without nonReentrant protection"
+                    "  Correctly detected reentrancy attempt"
                 );
             } else {
                 console.log("  Unsafe pool test failed: %s", reason);
