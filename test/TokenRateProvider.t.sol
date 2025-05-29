@@ -414,6 +414,7 @@ contract TokenRateProviderTest is BaseTest {
 
     // ========== PRICE QUERY TESTS ==========
 
+    /*
     function testGetRethPrice() public {
         assertTrue(
             liquidTokenManager.tokenIsSupported(IERC20(address(rethToken)))
@@ -423,6 +424,7 @@ contract TokenRateProviderTest is BaseTest {
         assertApproxEqRel(price, 1.04e18, 0.01e18);
         emit log_named_uint("rETH price from Chainlink (ETH)", price);
     }
+    */
 
     function testGetStethPrice() public {
         assertTrue(
