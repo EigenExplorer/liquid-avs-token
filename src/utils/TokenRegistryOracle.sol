@@ -465,12 +465,12 @@ contract TokenRegistryOracle is
 
         // Engage nonReentrant lock if required
         if (requiresReentrancyLock[pool]) {
-            // Zero-liquidity call flips the lock on revert
+            // Zero-liquidity call to check reentrancy context
             try ICurvePool(pool).remove_liquidity(0, new uint256[](2)) {
-                // If this succeeds, no nonReentrant guard present -> unsafe
-                revert("CurveOracle: pool not protected by nonReentrant lock");
+                // If this succeeds, we're not in a reentrancy context -> safe to proceed
             } catch {
-                // Revert means lock engaged -> safe to proceed
+                // Revert means we're in a reentrancy context -> unsafe
+                revert("CurveOracle: pool re-entrancy");
             }
         }
 
