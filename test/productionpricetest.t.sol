@@ -12,6 +12,7 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
@@ -19,7 +20,6 @@ import {MockStrategy} from "./mocks/MockStrategy.sol";
 contract RealWorldTokenPriceTest is BaseTest {
     // Network detection
     bool private isHolesky;
-    bool private setupSuccessful;
 
     // Mock token for deposit tests
     MockERC20 public mockDepositToken;
@@ -71,29 +71,13 @@ contract RealWorldTokenPriceTest is BaseTest {
     function setUp() public override {
         // Detect network before doing anything else
         _detectNetwork();
-        
-        // Use a try-catch around the entire setup process
-        try this.setupWrapper() {
-            setupSuccessful = true;
-        } catch Error(string memory reason) {
-            console.log("Setup encountered an error: %s", reason);
-            console.log("Tests will continue but some may be skipped");
-            setupSuccessful = false;
-        } catch {
-            console.log("Setup encountered an error (likely TokenPriceFetchFailed)");
-            console.log("Tests will continue but some may be skipped");
-            setupSuccessful = false;
-        }
-    }
-    
-    // External wrapper function that can be called with try-catch
-    function setupWrapper() external {
-        // Call parent setup (which initializes all contracts)
+
+        // Now call parent setup (which initializes all contracts)
         super.setUp();
-        
+
         // CRITICAL FIX: Address that Foundry is using internally for test execution
         address foundryInternalCaller = 0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7;
-        
+
         // Grant necessary roles to various accounts
         vm.startPrank(admin);
 
@@ -120,7 +104,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, address(this));
 
         vm.stopPrank();
-        
+
         // Create mock deposit token and mock strategy for testing
         mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
         mockDepositToken.mint(user1, 1000 ether);
@@ -163,21 +147,6 @@ contract RealWorldTokenPriceTest is BaseTest {
         } else {
             console.log("Detected Ethereum mainnet or other network");
         }
-    }
-    
-    // Helper function to check if a test should be skipped
-    function _shouldSkipTest(string memory testName) internal returns (bool) {
-        if (isHolesky && keccak256(bytes(testName)) == keccak256(bytes("testCurvePoolSafetyValidation"))) {
-            console.log("Skipping %s test on Holesky network", testName);
-            return true;
-        }
-        
-        if (!setupSuccessful) {
-            console.log("Skipping %s test due to setup failure", testName);
-            return true;
-        }
-        
-        return false;
     }
 
     function _initializeMainnetTokens() internal {
@@ -1526,17 +1495,18 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     function testCurvePoolSafetyValidation() public {
         console.log("\n======= Testing Curve Pool Safety Validation =======");
-        
-        // Check if test should be skipped
-        if (_shouldSkipTest("testCurvePoolSafetyValidation")) {
+
+        // Skip this test on Holesky as the specific Curve pools aren't available
+        if (isHolesky) {
+            console.log(
+                "Skipping Curve pool safety validation on Holesky testnet"
+            );
             return;
         }
-        
-        TokenConfig[] memory tokens = mainnetTokens;
 
         vm.startPrank(admin);
 
-        // Find unsafe pools mentioned in audit
+        // This unsafe pool is only available on mainnet
         address UNSAFE_ANKR_ETH_POOL = 0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2;
 
         // Test the specific unsafe pool from audit
@@ -1580,6 +1550,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         // Test safe pools don't need protection
+        TokenConfig[] memory tokens = mainnetTokens; // Use mainnet tokens since we're on mainnet
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
