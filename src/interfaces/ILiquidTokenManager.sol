@@ -131,6 +131,9 @@ interface ILiquidTokenManager {
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
 
+    /// @notice Error when token is not found for a strategy
+    error TokenForStrategyNotFound(address strategy);
+
     /// @notice Error for mismatched array lengths
     error LengthMismatch(uint256 length1, uint256 length2);
 
@@ -139,6 +142,12 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when an invalid decimals value is provided
     error InvalidDecimals();
+
+    /// @notice Error thrown when an address is not a valid contract
+    error NotAContract();
+
+    /// @notice Error thrown when a strategy is already assigned to another token
+    error StrategyAlreadyAssigned(address strategy, address existingToken);
 
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
@@ -309,4 +318,14 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
+
+    /// @notice Returns the token for a given strategy
+    /// @param strategy Strategy to get the token for
+    /// @return IERC20 Interface for the corresponding token
+    function getStrategyToken(IStrategy strategy) external view returns (IERC20);
+
+    /// @notice Check if a strategy is supported
+    /// @param strategy The strategy address
+    /// @return True if the strategy is supported
+    function isStrategySupported(IStrategy strategy) external view returns (bool);
 }
