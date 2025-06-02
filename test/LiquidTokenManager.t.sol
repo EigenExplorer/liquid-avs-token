@@ -930,7 +930,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Deposit tokens
         vm.startPrank(user1);
-        try liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1) {
+        try liquidToken.deposit(assets, amounts, user1) {
             vm.stopPrank();
 
             // Stake assets to a node
@@ -990,13 +990,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Deposit tokens to LiquidToken
         vm.startPrank(user1);
-        try
-            liquidToken.deposit(
-                _convertToUpgradeable(assets),
-                amountsToDeposit,
-                user1
-            )
-        {} catch {
+        try liquidToken.deposit(assets, amountsToDeposit, user1) {} catch {
             // If deposit fails, skip test
             vm.stopPrank();
             return;
@@ -1139,7 +1133,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser1),
+                assetsToDepositUser1,
                 amountsToDepositUser1,
                 user1
             )
@@ -1160,7 +1154,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser2),
+                assetsToDepositUser2,
                 amountsToDepositUser2,
                 user2
             )
@@ -1243,7 +1237,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser1),
+                assetsToDepositUser1,
                 amountsToDepositUser1,
                 user1
             )
@@ -1264,7 +1258,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try
             liquidToken.deposit(
-                _convertToUpgradeable(assetsToDepositUser2),
+                assetsToDepositUser2,
                 amountsToDepositUser2,
                 user2
             )
@@ -1397,34 +1391,46 @@ contract LiquidTokenManagerTest is BaseTest {
     /// @notice Test bidirectional mapping between tokens and strategies
     function testBidirectionalMapping() public {
         console.log("Starting testBidirectionalMapping");
-        
+
         // Create new tokens and strategies for this test
         MockERC20 tokenA = new MockERC20("Token A", "TKA");
-        MockStrategy strategyA = new MockStrategy(strategyManager, IERC20(address(tokenA)));
+        MockStrategy strategyA = new MockStrategy(
+            strategyManager,
+            IERC20(address(tokenA))
+        );
         MockERC20 tokenB = new MockERC20("Token B", "TKB");
-        MockStrategy strategyB = new MockStrategy(strategyManager, IERC20(address(tokenB)));
-        
+        MockStrategy strategyB = new MockStrategy(
+            strategyManager,
+            IERC20(address(tokenB))
+        );
+
         // Setup price feeds for the new tokens
         MockChainlinkFeed tokenAFeed = new MockChainlinkFeed(int256(1e18), 18);
         tokenAFeed.setAnswer(int256(1e18)); // $1.00
         MockChainlinkFeed tokenBFeed = new MockChainlinkFeed(int256(2e18), 18);
         tokenBFeed.setAnswer(int256(2e18)); // $2.00
-        
+
         // Mock the oracle price getter for our tokens
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(tokenA)),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenA)
+            ),
             abi.encode(uint256(1e18), true)
         );
-        
+
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(tokenB)),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenB)
+            ),
             abi.encode(uint256(2e18), true)
         );
-        
+
         vm.startPrank(admin);
-        
+
         // Add tokens with their strategies
         liquidTokenManager.addToken(
             IERC20(address(tokenA)),
@@ -1437,7 +1443,7 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        
+
         liquidTokenManager.addToken(
             IERC20(address(tokenB)),
             18,
@@ -1449,104 +1455,148 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        
+
         vm.stopPrank();
-        
+
         // Test getTokenStrategy function
         assertEq(
-            address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)))),
+            address(
+                liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)))
+            ),
             address(strategyA),
             "getTokenStrategy for tokenA should return strategyA"
         );
-        
+
         assertEq(
-            address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenB)))),
+            address(
+                liquidTokenManager.getTokenStrategy(IERC20(address(tokenB)))
+            ),
             address(strategyB),
             "getTokenStrategy for tokenB should return strategyB"
         );
-        
+
         // Test getStrategyToken function
         assertEq(
-            address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyA)))),
+            address(
+                liquidTokenManager.getStrategyToken(
+                    IStrategy(address(strategyA))
+                )
+            ),
             address(tokenA),
             "getStrategyToken for strategyA should return tokenA"
         );
-        
+
         assertEq(
-            address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyB)))),
+            address(
+                liquidTokenManager.getStrategyToken(
+                    IStrategy(address(strategyB))
+                )
+            ),
             address(tokenB),
             "getStrategyToken for strategyB should return tokenB"
         );
-        
+
         // Test isStrategySupported function
         assertTrue(
-            liquidTokenManager.isStrategySupported(IStrategy(address(strategyA))),
+            liquidTokenManager.isStrategySupported(
+                IStrategy(address(strategyA))
+            ),
             "strategyA should be supported"
         );
-        
+
         assertTrue(
-            liquidTokenManager.isStrategySupported(IStrategy(address(strategyB))),
+            liquidTokenManager.isStrategySupported(
+                IStrategy(address(strategyB))
+            ),
             "strategyB should be supported"
         );
-        
+
         // Test with a strategy that doesn't exist
         MockERC20 unknownToken = new MockERC20("Unknown Token", "UNK");
-        MockStrategy unknownStrategy = new MockStrategy(strategyManager, IERC20(address(unknownToken)));
-        
+        MockStrategy unknownStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(unknownToken))
+        );
+
         // Test isStrategySupported with unknown strategy
         assertFalse(
-            liquidTokenManager.isStrategySupported(IStrategy(address(unknownStrategy))),
+            liquidTokenManager.isStrategySupported(
+                IStrategy(address(unknownStrategy))
+            ),
             "Unknown strategy should not be supported"
         );
-        
+
         // Test getStrategyToken with unknown strategy - should revert with TokenForStrategyNotFound
-        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.TokenForStrategyNotFound.selector, address(unknownStrategy)));
-        liquidTokenManager.getStrategyToken(IStrategy(address(unknownStrategy)));
-        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenForStrategyNotFound.selector,
+                address(unknownStrategy)
+            )
+        );
+        liquidTokenManager.getStrategyToken(
+            IStrategy(address(unknownStrategy))
+        );
+
         // Verify mappings are cleared when token is removed
         vm.startPrank(admin);
         liquidTokenManager.removeToken(IERC20(address(tokenA)));
         vm.stopPrank();
-        
+
         // Check reverse mapping was properly cleared
         assertFalse(
-            liquidTokenManager.isStrategySupported(IStrategy(address(strategyA))),
+            liquidTokenManager.isStrategySupported(
+                IStrategy(address(strategyA))
+            ),
             "strategyA should no longer be supported after removing tokenA"
         );
-        
+
         // The direct mapping should be cleared too - this should revert with StrategyNotFound
-        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.StrategyNotFound.selector, address(tokenA)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyNotFound.selector,
+                address(tokenA)
+            )
+        );
         liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)));
     }
-    
+
     /// @notice Test that attempting to add a strategy that's already assigned to another token fails
     function testStrategyAlreadyAssigned() public {
         console.log("Starting testStrategyAlreadyAssigned");
-        
+
         // Create new tokens and a shared strategy
         MockERC20 tokenC = new MockERC20("Token C", "TKC");
         MockERC20 tokenD = new MockERC20("Token D", "TKD");
-        MockStrategy sharedStrategy = new MockStrategy(strategyManager, IERC20(address(tokenC)));
-        
+        MockStrategy sharedStrategy = new MockStrategy(
+            strategyManager,
+            IERC20(address(tokenC))
+        );
+
         // Setup price feed
         MockChainlinkFeed tokenCFeed = new MockChainlinkFeed(int256(1e18), 18);
         tokenCFeed.setAnswer(int256(1e18)); // $1.00
-        
+
         // Mock the oracle price getter for our tokens
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(tokenC)),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenC)
+            ),
             abi.encode(uint256(1e18), true)
         );
-        
+
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(tokenD)),
+            abi.encodeWithSelector(
+                ITokenRegistryOracle._getTokenPrice_getter.selector,
+                address(tokenD)
+            ),
             abi.encode(uint256(1e18), true)
         );
-        
+
         vm.startPrank(admin);
-        
+
         // Add first token with the strategy
         liquidTokenManager.addToken(
             IERC20(address(tokenC)),
@@ -1559,14 +1609,16 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        
+
         // Attempt to add second token with the same strategy - should revert
-        vm.expectRevert(abi.encodeWithSelector(
-            ILiquidTokenManager.StrategyAlreadyAssigned.selector, 
-            address(sharedStrategy),
-            address(tokenC)
-        ));
-        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILiquidTokenManager.StrategyAlreadyAssigned.selector,
+                address(sharedStrategy),
+                address(tokenC)
+            )
+        );
+
         liquidTokenManager.addToken(
             IERC20(address(tokenD)),
             18,
@@ -1578,7 +1630,7 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        
+
         vm.stopPrank();
     }
 

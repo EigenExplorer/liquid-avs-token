@@ -12,7 +12,6 @@ import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
@@ -667,13 +666,13 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18; // 10 tokens
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockDepositToken));
+        IERC20[] memory tokens = new IERC20[](1); // ← Changed
+        tokens[0] = IERC20(address(mockDepositToken)); // ← Changed
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
 
-        liquidToken.deposit(tokens, amounts, user1);
+        liquidToken.deposit(tokens, amounts, user1); // ← No conversion needed
 
         uint256 userLstBalance = liquidToken.balanceOf(user1);
         uint256 expectedSharesValue = (depositAmount * mockTokenPrice) / 1e18;
@@ -707,8 +706,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18;
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockNativeToken));
+        IERC20[] memory tokens = new IERC20[](1); // ← Changed
+        tokens[0] = IERC20(address(mockNativeToken)); // ← Changed
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
@@ -1535,15 +1534,9 @@ contract RealWorldTokenPriceTest is BaseTest {
         } catch Error(string memory reason) {
             if (
                 keccak256(bytes(reason)) ==
-                keccak256(
-                    bytes(
-                        "CurveOracle: pool re-entrancy"
-                    )
-                )
+                keccak256(bytes("CurveOracle: pool re-entrancy"))
             ) {
-                console.log(
-                    "  Correctly detected reentrancy attempt"
-                );
+                console.log("  Correctly detected reentrancy attempt");
             } else {
                 console.log("  Unsafe pool test failed: %s", reason);
             }

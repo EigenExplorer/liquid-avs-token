@@ -8,7 +8,6 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -134,7 +133,10 @@ contract LiquidTokenManager is
         if (address(strategy) == address(0)) revert ZeroAddress();
         // Check if the strategy already exists in the system
         if (address(strategyTokens[strategy]) != address(0)) {
-            revert StrategyAlreadyAssigned(address(strategy), address(strategyTokens[strategy]));
+            revert StrategyAlreadyAssigned(
+                address(strategy),
+                address(strategyTokens[strategy])
+            );
         }
 
         // Price source validation and configuration
@@ -199,18 +201,11 @@ contract LiquidTokenManager is
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            1
-        );
-        upgradeableAssets[0] = IERC20Upgradeable(address(token));
-
         // Check for unstaked balances
-        if (liquidToken.balanceAssets(upgradeableAssets)[0] > 0)
-            revert TokenInUse(token);
+        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(upgradeableAssets)[0] > 0)
+        if (liquidToken.balanceQueuedAssets(assets)[0] > 0)
             revert TokenInUse(token);
 
         // Cache nodes array and length
@@ -421,15 +416,7 @@ contract LiquidTokenManager is
             strategiesForNode[i] = strategy;
         }
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            assetsLength
-        );
-        for (uint256 i = 0; i < assetsLength; i++) {
-            upgradeableAssets[i] = IERC20Upgradeable(address(assets[i]));
-        }
-
-        liquidToken.transferAssets(upgradeableAssets, amounts);
+        liquidToken.transferAssets(assets, amounts);
 
         IERC20[] memory depositAssets = new IERC20[](assetsLength);
         uint256[] memory depositAmounts = new uint256[](amountsLength);
@@ -614,7 +601,9 @@ contract LiquidTokenManager is
     /// @notice Returns the token for a given strategy
     /// @param strategy Strategy to get the token for
     /// @return IERC20 Interface for the corresponding token
-    function getStrategyToken(IStrategy strategy) external view returns (IERC20) {
+    function getStrategyToken(
+        IStrategy strategy
+    ) external view returns (IERC20) {
         if (address(strategy) == address(0)) revert ZeroAddress();
 
         IERC20 token = strategyTokens[strategy];
@@ -629,7 +618,9 @@ contract LiquidTokenManager is
     /// @notice Check if a strategy is supported
     /// @param strategy The strategy address
     /// @return True if the strategy is supported
-    function isStrategySupported(IStrategy strategy) external view returns (bool) {
+    function isStrategySupported(
+        IStrategy strategy
+    ) external view returns (bool) {
         if (address(strategy) == address(0)) return false;
         return address(strategyTokens[strategy]) != address(0);
     }
