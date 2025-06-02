@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
-
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
-interface ILiquidToken is IERC20Upgradeable {
+interface ILiquidToken {
     /// @notice Initialization parameters for LiquidToken
     struct Init {
         string name;
@@ -24,7 +23,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /**
     struct WithdrawalRequest {
         address user;
-        IERC20Upgradeable[] assets;
+        IERC20[] assets;
         uint256[] shareAmounts;
         uint256 requestTime;
         bool fulfilled;
@@ -41,7 +40,7 @@ interface ILiquidToken is IERC20Upgradeable {
     event AssetDeposited(
         address indexed sender,
         address indexed receiver,
-        IERC20Upgradeable indexed asset,
+        IERC20 indexed asset,
         uint256 amount,
         uint256 shares
     );
@@ -52,7 +51,7 @@ interface ILiquidToken is IERC20Upgradeable {
     event WithdrawalRequested(
         bytes32 indexed requestId,
         address indexed user,
-        IERC20Upgradeable[] assets,
+        IERC20[] assets,
         uint256[] shareAmounts,
         uint256 timestamp
     );
@@ -64,7 +63,7 @@ interface ILiquidToken is IERC20Upgradeable {
     event WithdrawalFulfilled(
         bytes32 indexed requestId,
         address indexed user,
-        IERC20Upgradeable[] assets,
+        IERC20[] assets,
         uint256[] shareAmounts,
         uint256 timestamp
     );
@@ -72,7 +71,7 @@ interface ILiquidToken is IERC20Upgradeable {
 
     /// @notice Emitted when an asset is transferred
     event AssetTransferred(
-        IERC20Upgradeable indexed asset,
+        IERC20 indexed asset,
         uint256 amount,
         address indexed destination,
         address indexed initiator
@@ -82,7 +81,7 @@ interface ILiquidToken is IERC20Upgradeable {
     // CUSTOM ERRORS
     // ============================================================================
     /// @notice Error for unsupported asset
-    error UnsupportedAsset(IERC20Upgradeable asset);
+    error UnsupportedAsset(IERC20 asset);
 
     /// @notice Error for zero amount
     error ZeroAmount();
@@ -119,14 +118,14 @@ interface ILiquidToken is IERC20Upgradeable {
 
     /// @notice Error for insufficient balance
     error InsufficientBalance(
-        IERC20Upgradeable asset,
+        IERC20 asset,
         uint256 required,
         uint256 available
     );
 
     /// @notice Error when contract token balance is not in sync with accounting balance
     error AssetBalanceOutOfSync(
-        IERC20Upgradeable asset,
+        IERC20 asset,
         uint256 accountingBalance,
         uint256 actualBalance
     );
@@ -146,7 +145,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param receiver The address to receive the minted shares
     /// @return sharesArray The array of shares minted for each asset
     function deposit(
-        IERC20Upgradeable[] calldata assets,
+        IERC20[] calldata assets,
         uint256[] calldata amounts,
         address receiver
     ) external returns (uint256[] memory);
@@ -173,7 +172,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param assetsToRetrieve The assets to transfer
     /// @param amounts The amounts to transfer
     function transferAssets(
-        IERC20Upgradeable[] calldata assetsToRetrieve,
+        IERC20[] calldata assetsToRetrieve,
         uint256[] calldata amounts
     ) external;
 
@@ -181,7 +180,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
     function creditQueuedAssetBalances(
-        IERC20Upgradeable[] calldata assets,
+        IERC20[] calldata assets,
         uint256[] calldata amounts
     ) external;
 
@@ -190,7 +189,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param amount The amount of the asset
     /// @return The number of shares
     function calculateShares(
-        IERC20Upgradeable asset,
+        IERC20 asset,
         uint256 amount
     ) external view returns (uint256);
 
@@ -199,7 +198,7 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param shares The number of shares
     /// @return The amount of the asset
     function calculateAmount(
-        IERC20Upgradeable asset,
+        IERC20 asset,
         uint256 shares
     ) external view returns (uint256);
 
@@ -230,14 +229,14 @@ interface ILiquidToken is IERC20Upgradeable {
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
     function balanceAssets(
-        IERC20Upgradeable[] calldata assetList
+        IERC20[] calldata assetList
     ) external view returns (uint256[] memory);
 
     /// @notice Returns the queued balances of multiple assets
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
     function balanceQueuedAssets(
-        IERC20Upgradeable[] calldata assetList
+        IERC20[] calldata assetList
     ) external view returns (uint256[] memory);
 
     /// @notice Pauses the contract

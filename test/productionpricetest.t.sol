@@ -667,13 +667,13 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18; // 10 tokens
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockDepositToken));
+        IERC20[] memory tokens = new IERC20[](1); // ← Changed
+        tokens[0] = IERC20(address(mockDepositToken)); // ← Changed
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
 
-        liquidToken.deposit(tokens, amounts, user1);
+        liquidToken.deposit(tokens, amounts, user1); // ← No conversion needed
 
         uint256 userLstBalance = liquidToken.balanceOf(user1);
         uint256 expectedSharesValue = (depositAmount * mockTokenPrice) / 1e18;
@@ -707,8 +707,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(user1);
         uint256 depositAmount = 10e18;
 
-        IERC20Upgradeable[] memory tokens = new IERC20Upgradeable[](1);
-        tokens[0] = IERC20Upgradeable(address(mockNativeToken));
+        IERC20[] memory tokens = new IERC20[](1); // ← Changed
+        tokens[0] = IERC20(address(mockNativeToken)); // ← Changed
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
@@ -1496,11 +1496,17 @@ contract RealWorldTokenPriceTest is BaseTest {
     function testCurvePoolSafetyValidation() public {
         console.log("\n======= Testing Curve Pool Safety Validation =======");
 
-        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+        // Skip this test on Holesky as the specific Curve pools aren't available
+        if (isHolesky) {
+            console.log(
+                "Skipping Curve pool safety validation on Holesky testnet"
+            );
+            return;
+        }
 
         vm.startPrank(admin);
 
-        // Find unsafe pools mentioned in audit
+        // This unsafe pool is only available on mainnet
         address UNSAFE_ANKR_ETH_POOL = 0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2;
 
         // Test the specific unsafe pool from audit
@@ -1535,21 +1541,16 @@ contract RealWorldTokenPriceTest is BaseTest {
         } catch Error(string memory reason) {
             if (
                 keccak256(bytes(reason)) ==
-                keccak256(
-                    bytes(
-                        "CurveOracle: pool re-entrancy"
-                    )
-                )
+                keccak256(bytes("CurveOracle: pool re-entrancy"))
             ) {
-                console.log(
-                    "  Correctly detected reentrancy attempt"
-                );
+                console.log("  Correctly detected reentrancy attempt");
             } else {
                 console.log("  Unsafe pool test failed: %s", reason);
             }
         }
 
         // Test safe pools don't need protection
+        TokenConfig[] memory tokens = mainnetTokens; // Use mainnet tokens since we're on mainnet
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
