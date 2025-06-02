@@ -11,5 +11,6 @@
     "gasLimit": 6000000,
     "verificationDelay": 60,
     "timeoutBlocks": 200
-  }
+  },
+  "curvePoolsRequireLock": []
 }

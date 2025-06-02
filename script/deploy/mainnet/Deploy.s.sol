@@ -146,7 +146,6 @@ contract Deploy is Script, Test {
         deployProxies();
         initializeProxies();
         addAndConfigureTokens();
-        configureOracle();
         transferOwnership();
 
         verifyDeployment();
@@ -485,39 +484,43 @@ contract Deploy is Script, Test {
                 addable[i].oracle.fallbackSelector
             );
         }
-    }
 
-    function configureOracle() internal {
-        // Must grant TOKEN_CONFIGURATOR_ROLE to self first
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
+        // Configure curve pools that require reentrancy locks
+        string memory networkConfigPath = "script/configs/mainnet.json";
+        string memory networkConfigData = vm.readFile(networkConfigPath);
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            // Skip native tokens (sourceType==0 and primarySource==0)
-            if (
-                tokens[i].oracle.sourceType == 0 &&
-                tokens[i].oracle.primarySource == address(0)
-            ) {
-                continue;
-            }
-
-            tokenRegistryOracle.configureToken(
-                address(tokens[i].addresses.token),
-                tokens[i].oracle.sourceType,
-                tokens[i].oracle.primarySource,
-                tokens[i].oracle.needsArg,
-                tokens[i].oracle.fallbackSource,
-                tokens[i].oracle.fallbackSelector
+        uint256 poolCount = 0;
+        while (true) {
+            string memory poolPath = string.concat(
+                ".curvePoolsRequireLock[",
+                vm.toString(poolCount),
+                "]"
             );
+            try this._readAddress(networkConfigData, poolPath) returns (
+                address
+            ) {
+                poolCount++;
+            } catch {
+                break;
+            }
         }
 
-        // Revoke the role after use
-        tokenRegistryOracle.revokeRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            msg.sender
-        );
+        if (poolCount > 0) {
+            address[] memory pools = new address[](poolCount);
+            bool[] memory settings = new bool[](poolCount);
+
+            for (uint256 i = 0; i < poolCount; i++) {
+                string memory poolPath = string.concat(
+                    ".curvePoolsRequireLock[",
+                    vm.toString(i),
+                    "]"
+                );
+                pools[i] = stdJson.readAddress(networkConfigData, poolPath);
+                settings[i] = true;
+            }
+
+            tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+        }
     }
 
     function transferOwnership() internal {
