@@ -1494,8 +1494,14 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     function testCurvePoolSafetyValidation() public {
         console.log("\n======= Testing Curve Pool Safety Validation =======");
-
-        TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
+        
+        // Skip this test on Holesky network as the Curve pools don't exist there
+        if (isHolesky) {
+            console.log("Skipping Curve pool safety validation test on Holesky network");
+            return;
+        }
+        
+        TokenConfig[] memory tokens = mainnetTokens;
 
         vm.startPrank(admin);
 
