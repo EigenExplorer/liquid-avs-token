@@ -1,7 +1,7 @@
-import { revokeRole } from "../../tasks/system/revokeRole";
-import { ADMIN } from "../../utils/forge";
-import { apiKit } from "../../utils/safe";
-import { refreshDeployment } from "../../workflows/refreshDeployment";
+import { revokeRole } from '../../tasks/system/revokeRole'
+import { ADMIN } from '../../utils/forge'
+import { apiKit } from '../../utils/safe'
+import { refreshDeployment } from '../../workflows/refreshDeployment'
 
 /**
  * To run this script, edit the params and run
@@ -21,37 +21,37 @@ import { refreshDeployment } from "../../workflows/refreshDeployment";
  * =================================================================
  */
 async function manualRevokeRole() {
-  try {
-    if (!ADMIN) throw new Error("Env vars not set correctly.");
+    try {
+        if (!ADMIN) throw new Error('Env vars not set correctly.')
 
-    // ------------------------------------------------------------------------------------
-    // Function params, edit these!
-    // ------------------------------------------------------------------------------------
-    const contractAddress: string = "0x";
-    const role: string = "RATE_UPDATER_ROLE";
-    const addressToRevoke: string = "0x";
-    // ------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------
+        // Function params, edit these!
+        // ------------------------------------------------------------------------------------
+        const contractAddress: string = '0x'
+        const role: string = 'RATE_UPDATER_ROLE'
+        const addressToRevoke: string = '0x'
+        // ------------------------------------------------------------------------------------
 
-    await refreshDeployment();
-    await revokeRole(contractAddress, role, addressToRevoke);
+        await refreshDeployment()
+        await revokeRole(contractAddress, role, addressToRevoke)
 
-    const pendingTransactions = (
-      await apiKit.getPendingTransactions(ADMIN, {
-        limit: 1,
-      })
-    ).results;
+        const pendingTransactions = (
+            await apiKit.getPendingTransactions(ADMIN, {
+                limit: 1
+            })
+        ).results
 
-    if (pendingTransactions.length > 0) {
-      console.log(
-        `[Manual][System] Revoke role ${role}: nonce: ${pendingTransactions[0].nonce}`
-      );
+        if (pendingTransactions.length > 0) {
+            console.log(
+                `[Manual][System] Revoke role ${role}: nonce: ${pendingTransactions[0].nonce}`
+            )
+        }
+    } catch (error) {
+        console.log('[Manual] Error: ', error.message)
     }
-  } catch (error) {
-    console.log("[Manual] Error: ", error.message);
-  }
 }
 
-(async () => {
-  console.log("[Manual] Running manual tx proposal...");
-  await manualRevokeRole();
-})();
+;(async () => {
+    console.log('[Manual] Running manual tx proposal...')
+    await manualRevokeRole()
+})()

@@ -1,7 +1,7 @@
-import { removeToken } from "../../tasks/system/removeToken";
-import { ADMIN } from "../../utils/forge";
-import { apiKit } from "../../utils/safe";
-import { refreshDeployment } from "../../workflows/refreshDeployment";
+import { removeToken } from '../../tasks/system/removeToken'
+import { ADMIN } from '../../utils/forge'
+import { apiKit } from '../../utils/safe'
+import { refreshDeployment } from '../../workflows/refreshDeployment'
 
 /**
  * To run this script, edit the params and run
@@ -12,35 +12,35 @@ import { refreshDeployment } from "../../workflows/refreshDeployment";
  *
  */
 async function manualRemoveToken() {
-  try {
-    if (!ADMIN) throw new Error("Env vars not set correctly.");
+    try {
+        if (!ADMIN) throw new Error('Env vars not set correctly.')
 
-    // ------------------------------------------------------------------------------------
-    // Function params, edit these!
-    // ------------------------------------------------------------------------------------
-    const tokenAddress = "0x";
-    // ------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------
+        // Function params, edit these!
+        // ------------------------------------------------------------------------------------
+        const tokenAddress = '0x'
+        // ------------------------------------------------------------------------------------
 
-    await refreshDeployment();
-    await removeToken(tokenAddress);
+        await refreshDeployment()
+        await removeToken(tokenAddress)
 
-    const pendingTransactions = (
-      await apiKit.getPendingTransactions(ADMIN, {
-        limit: 1,
-      })
-    ).results;
+        const pendingTransactions = (
+            await apiKit.getPendingTransactions(ADMIN, {
+                limit: 1
+            })
+        ).results
 
-    if (pendingTransactions.length > 0) {
-      console.log(
-        `[Manual][System] Remove Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
-      );
+        if (pendingTransactions.length > 0) {
+            console.log(
+                `[Manual][System] Remove Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
+            )
+        }
+    } catch (error) {
+        console.log('[Manual] Error: ', error.message)
     }
-  } catch (error) {
-    console.log("[Manual] Error: ", error.message);
-  }
 }
 
-(async () => {
-  console.log("[Manual] Running manual tx proposal...");
-  await manualRemoveToken();
-})();
+;(async () => {
+    console.log('[Manual] Running manual tx proposal...')
+    await manualRemoveToken()
+})()

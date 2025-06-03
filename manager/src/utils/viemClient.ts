@@ -1,23 +1,23 @@
 import {
-  type PrivateKeyAccount,
-  type PublicClient,
-  type WalletClient,
-  createPublicClient,
-  createWalletClient,
-  http,
-} from "viem";
-import { type Chain, holesky, mainnet } from "viem/chains";
+    type PrivateKeyAccount,
+    type PublicClient,
+    type WalletClient,
+    createPublicClient,
+    createWalletClient,
+    http
+} from 'viem'
+import { type Chain, holesky, mainnet } from 'viem/chains'
 
-let publicViemClient: PublicClient;
-let walletViemClient: WalletClient;
-let network: Chain = mainnet;
+let publicViemClient: PublicClient
+let walletViemClient: WalletClient
+let network: Chain = mainnet
 
 if (process.env.NETWORK) {
-  switch (process.env.NETWORK) {
-    case "holesky":
-      network = holesky;
-      break;
-  }
+    switch (process.env.NETWORK) {
+        case 'holesky':
+            network = holesky
+            break
+    }
 }
 
 /**
@@ -26,7 +26,7 @@ if (process.env.NETWORK) {
  * @returns
  */
 export function getChain() {
-  return network;
+    return network
 }
 
 /**
@@ -35,23 +35,23 @@ export function getChain() {
  * @returns
  */
 export function getViemClient(n?: Chain) {
-  if (n) {
-    network = n;
-  }
+    if (n) {
+        network = n
+    }
 
-  if (!publicViemClient) {
-    publicViemClient = createPublicClient({
-      cacheTime: 10_000,
-      batch: {
-        multicall: true,
-      },
-      transport: process.env.RPC_URL
-        ? http(process.env.RPC_URL)
-        : http(network.rpcUrls.default.http[0]),
-    });
-  }
+    if (!publicViemClient) {
+        publicViemClient = createPublicClient({
+            cacheTime: 10_000,
+            batch: {
+                multicall: true
+            },
+            transport: process.env.RPC_URL
+                ? http(process.env.RPC_URL)
+                : http(network.rpcUrls.default.http[0])
+        })
+    }
 
-  return publicViemClient;
+    return publicViemClient
 }
 
 /**
@@ -61,39 +61,39 @@ export function getViemClient(n?: Chain) {
  * @returns
  */
 export function getWalletClient(account: PrivateKeyAccount, n?: Chain) {
-  if (n) {
-    network = n;
-  }
+    if (n) {
+        network = n
+    }
 
-  walletViemClient = createWalletClient({
-    account,
-    chain: network,
-    transport: process.env.RPC_URL
-      ? http(process.env.RPC_URL)
-      : http(network.rpcUrls.default.http[0]),
-  });
+    walletViemClient = createWalletClient({
+        account,
+        chain: network,
+        transport: process.env.RPC_URL
+            ? http(process.env.RPC_URL)
+            : http(network.rpcUrls.default.http[0])
+    })
 
-  return walletViemClient;
+    return walletViemClient
 }
 
 // Keep the existing deprecated code for backward compatibility
 // ====================== DEPRECATED ======================
 // biome-ignore lint/suspicious/noExplicitAny:
 if (!(global as any).publicViemClient) {
-  // biome-ignore lint/suspicious/noExplicitAny:
-  (global as any).publicViemClient = createPublicClient({
-    cacheTime: 10_000,
-    batch: {
-      multicall: true,
-    },
-    transport: process.env.RPC_URL
-      ? http(process.env.RPC_URL)
-      : http(network.rpcUrls.default.http[0]),
-  });
+    // biome-ignore lint/suspicious/noExplicitAny:
+    ;(global as any).publicViemClient = createPublicClient({
+        cacheTime: 10_000,
+        batch: {
+            multicall: true
+        },
+        transport: process.env.RPC_URL
+            ? http(process.env.RPC_URL)
+            : http(network.rpcUrls.default.http[0])
+    })
 }
 
 // biome-ignore lint/suspicious/noExplicitAny:
-publicViemClient = (global as any).publicViemClient;
+publicViemClient = (global as any).publicViemClient
 
-export default publicViemClient;
+export default publicViemClient
 // ====================== DEPRECATED ======================
