@@ -12,25 +12,25 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // anvil --fork-url $RPC_URL
 
 /// @dev Convert specific amount of ETH to WETH:
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(uint256)" -- "1000000000000000000" --value 1ether -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(uint256)" -- "1000000000000000000" --value 1ether -vvvv
 
 /// @dev Convert all available ETH to WETH:
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "convertAllEthToWeth()" --value 2ether -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "convertAllEthToWeth()" --value 2ether -vvvv
 
 /// @dev Convert WETH back to ETH:
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "convertWethToEth(uint256)" -- "1000000000000000000" -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "convertWethToEth(uint256)" -- "1000000000000000000" -vvvv
 
 /// @dev Transfer WETH to another address:
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "transferWeth(address,uint256)" -- "0xRecipientAddress" "1000000000000000000" -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "transferWeth(address,uint256)" -- "0xRecipientAddress" "1000000000000000000" -vvvv
 
 /// @dev Approve WETH for a spender (e.g., Curve pool):
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "approveWeth(address,uint256)" -- "0xSpenderAddress" "1000000000000000000" -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "approveWeth(address,uint256)" -- "0xSpenderAddress" "1000000000000000000" -vvvv
 
 /// @dev Check WETH balance (view function, no broadcast needed):
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --sig "getWethBalance()" -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --sig "getWethBalance()" -vvvv
 
 /// @dev Check ETH balance (view function, no broadcast needed):
-// forge script script/lp/curve/tasks/ConvertEthToWeth.s.sol:ConvertEthToWeth --rpc-url http://localhost:8545 --sig "getEthBalance()" -vvvv
+// forge script script/lp/curve/tasks/WethUtils.s.sol:WethUtils --rpc-url http://localhost:8545 --sig "getEthBalance()" -vvvv
 
 interface IWETH {
     function deposit() external payable;
@@ -40,7 +40,7 @@ interface IWETH {
     function balanceOf(address account) external view returns (uint256);
 }
 
-contract ConvertEthToWeth is Script {
+contract WethUtils is Script {
     address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     function run(
