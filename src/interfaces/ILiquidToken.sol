@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
-import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
+import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
+import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
@@ -33,6 +33,7 @@ interface ILiquidToken {
     // ============================================================================
     // EVENTS
     // ============================================================================
+
     /// @notice Emitted when prices are updated during a deposit
     event PricesUpdatedBeforeDeposit(address indexed depositor);
 
@@ -78,8 +79,9 @@ interface ILiquidToken {
     );
 
     // ============================================================================
-    // CUSTOM ERRORS
+    // ERRORS
     // ============================================================================
+
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
 
@@ -92,11 +94,8 @@ interface ILiquidToken {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
 
-    /// @notice Error for zero address parameters in initialization
-    error ZeroAddressOwner();
-    error ZeroAddressPauser();
-    error ZeroAddressLiquidTokenManager();
-    error ZeroAddressTokenRegistryOracle();
+    /// @notice Error for zero address
+    error ZeroAddress();
 
     /// @notice Error for invalid withdrawal request
     /// @dev OUT OF SCOPE FOR V1
@@ -117,31 +116,30 @@ interface ILiquidToken {
     error ArrayLengthMismatch();
 
     /// @notice Error for insufficient balance
-    error InsufficientBalance(
-        IERC20 asset,
-        uint256 required,
-        uint256 available
-    );
+    error InsufficientBalance(IERC20 asset, uint256 required, uint256 available);
 
     /// @notice Error when contract token balance is not in sync with accounting balance
-    error AssetBalanceOutOfSync(
-        IERC20 asset,
-        uint256 accountingBalance,
-        uint256 actualBalance
-    );
+    error AssetBalanceOutOfSync(IERC20 asset, uint256 accountingBalance, uint256 actualBalance);
 
-    /// @notice Custom errors for price update failures
-    error PriceUpdateFailed(); // Generic price update failure
-    error PriceUpdateRejected(); // Update returned false
-    error PricesRemainStale(); // Prices still stale after update
-    error AssetPriceInvalid(address token); // Specific token has invalid price
+    /// @notice Generic price update failure
+    error PriceUpdateFailed();
+
+    /// @notice Price update returned false
+    error PriceUpdateRejected();
+
+    /// @notice Prices still stale after update
+    error PricesRemainStale();
+
+    /// @notice Specific token has invalid price
+    error AssetPriceInvalid(address token);
 
     // ============================================================================
     //  FUNCTIONS
     // ============================================================================
-    /// @notice Deposits multiple assets and mints shares
-    /// @param assets The array of assets to deposit
-    /// @param amounts The array of amounts to deposit for each asset
+
+    /// @notice Allows users to deposit multiple assets and receive shares
+    /// @param assets The ERC20 assets to deposit
+    /// @param amounts The amounts of the respective assets to deposit
     /// @param receiver The address to receive the minted shares
     /// @return sharesArray The array of shares minted for each asset
     function deposit(
@@ -168,15 +166,7 @@ interface ILiquidToken {
     function fulfillWithdrawal(bytes32 requestId) external;
     */
 
-    /// @notice Transfers assets to the LiquidTokenManager
-    /// @param assetsToRetrieve The assets to transfer
-    /// @param amounts The amounts to transfer
-    function transferAssets(
-        IERC20[] calldata assetsToRetrieve,
-        uint256[] calldata amounts
-    ) external;
-
-    /// @notice Credits queued balances for a given set of asset
+    /// @notice Credits queued balances for a given set of assets
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
     function creditQueuedAssetBalances(
@@ -184,26 +174,28 @@ interface ILiquidToken {
         uint256[] calldata amounts
     ) external;
 
-    /// @notice Calculates the number of shares for a given asset amount
-    /// @param asset The asset to calculate shares for
+    /// @notice Allows the LiquidTokenManager to transfer assets from this contract
+    /// @param assetsToRetrieve The ERC20 assets to transfer
+    /// @param amounts The amounts of each asset to transfer
+    function transferAssets(
+        IERC20[] calldata assetsToRetrieve,
+        uint256[] calldata amounts
+    ) external;
+
+    /// @notice Calculates the number of shares that correspond to a given amount of an asset
+    /// @param asset The ERC20 asset
     /// @param amount The amount of the asset
     /// @return The number of shares
-    function calculateShares(
-        IERC20 asset,
-        uint256 amount
-    ) external view returns (uint256);
+    function calculateShares(IERC20 asset, uint256 amount) external view returns (uint256);
 
-    /// @notice Calculates the amount of an asset for a given number of shares
-    /// @param asset The asset to calculate the amount for
+    /// @notice Calculates the amount of an asset that corresponds to a given number of shares
+    /// @param asset The ERC20 asset
     /// @param shares The number of shares
     /// @return The amount of the asset
-    function calculateAmount(
-        IERC20 asset,
-        uint256 shares
-    ) external view returns (uint256);
+    function calculateAmount(IERC20 asset, uint256 shares) external view returns (uint256);
 
-    /// @notice Returns the total value of assets held by the contract
-    /// @return The total value of assets
+    /// @notice Returns the total value of assets (staked, queued and unstaked) managed by the contract
+    /// @return The total value of assets in the unit of account
     function totalAssets() external view returns (uint256);
 
     /// @notice Returns the withdrawal requests for a user
@@ -225,14 +217,12 @@ interface ILiquidToken {
     function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);
     */
 
-    /// @notice Returns the balances of multiple assets
+    /// @notice Returns the unstaked balances for a set of assets
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
-    function balanceAssets(
-        IERC20[] calldata assetList
-    ) external view returns (uint256[] memory);
+    function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
 
-    /// @notice Returns the queued balances of multiple assets
+    /// @notice Returns the queued balances for a set of assets
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
     function balanceQueuedAssets(
