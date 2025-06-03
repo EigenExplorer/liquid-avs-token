@@ -19,7 +19,9 @@ interface ITokenRegistryOracle {
         address liquidToken; // <-- Add this for proper role mngmnt now
         ILiquidTokenManager liquidTokenManager;
     }
-
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
     /// @notice Emitted when a token's rate is updated
     event TokenRateUpdated(
         IERC20 indexed token,
@@ -43,18 +45,44 @@ interface ITokenRegistryOracle {
      */
     event TokenRemoved(address token);
 
+    /**
+     * @notice Emitted when multiple pool safety settings are updated
+     * @param pools The pool addresses affected
+     * @param settings Whether each pool requires the reentrancy lock
+     */
+    event BatchPoolsConfigured(address[] pools, bool[] settings);
+
+    // ============================================================================
+    // CUSTOM ERRORS
+    // ============================================================================
+
     /// @notice Error thrown when no valid prices fetched by primary&fallbacks sources
     error NoFreshPrice(address token);
     /// @notice Error thrown when an unauthorized address attempts to update prices
     error InvalidUpdater(address sender);
-
+    /// @notice Error for mismatched array lengths
+    error ArrayLengthMismatch();
+    /// @notice Error for initialization with zero addresses
+    error InvalidZeroAddress();
+    /// @notice Error when token address is zero
+    error TokenCannotBeZeroAddress();
+    /// @notice Error when trying to configure native tokens in oracle
+    error NativeTokensNotConfigurable();
+    /// @notice Error when primary source is zero address
+    error PrimarySourceCannotBeZero();
+    /// @notice Error when fallback source required but not provided
+    error FallbackSourceRequired();
+    /// @notice Error when interval is zero
+    error IntervalCannotBeZero();
     /// @notice Initializes the TokenRegistryOracle contract
     /// @param init Struct containing initialization parameters
     function initialize(Init memory init, uint256 stalenessSalt) external;
-
+    // ============================================================================
+    // FUNCTIONS
+    // ============================================================================
     /// @notice Configure a token with its primary and fallback sources
     /// @param token Token address
-    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol)
     /// @param primarySource Primary source address
     /// @param needsArg Whether fallback fn needs args
     /// @param fallbackSource Address of the fallback source contract
@@ -68,6 +96,16 @@ interface ITokenRegistryOracle {
         bytes4 fallbackFn
     ) external;
 
+    /// @notice Disables emergency interval mode and returns to dynamic intervals
+    function disableEmergencyInterval() external;
+
+    /// @notice Set reentrancy lock requirements for multiple pools in one transaction
+    /// @param pools Array of Curve pool addresses
+    /// @param settings Array of boolean values indicating if each pool requires the lock
+    function batchSetRequiresLock(
+        address[] calldata pools,
+        bool[] calldata settings
+    ) external;
     /// @notice Updates the rate for a single token
     /// @param token The address of the token to update
     /// @param newRate The new rate for the token
@@ -105,7 +143,7 @@ interface ITokenRegistryOracle {
     /// @notice Get the current price of a token in ETH terms
     /// @param token Token address to get price for
     /// @return The current price with 18 decimals precision
-    function getTokenPrice(address token) external view returns (uint256);
+    function getTokenPrice(address token) external returns (uint256);
 
     /// @notice Get last price update timestamp
     /// @return Timestamp of last price update
@@ -114,5 +152,5 @@ interface ITokenRegistryOracle {
     /// @return price of a token and success/failure of this
     function _getTokenPrice_getter(
         address token
-    ) external view returns (uint256 price, bool success);
+    ) external returns (uint256 price, bool success);
 }

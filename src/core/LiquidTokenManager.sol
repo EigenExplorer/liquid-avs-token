@@ -8,7 +8,6 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -58,6 +57,9 @@ contract LiquidTokenManager is
     /// @notice Mapping of tokens to their corresponding strategies
     mapping(IERC20 => IStrategy) public tokenStrategies;
 
+    /// @notice Reverse mapping of strategies to their corresponding tokens
+    mapping(IStrategy => IERC20) public strategyTokens;
+
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
 
@@ -104,7 +106,7 @@ contract LiquidTokenManager is
     /// @param decimals Number of decimals for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
-    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol , primarysource0 related to native tokens that get handle differently)
     /// @param primarySource Primary source address
     /// @param needsArg Whether fallback fn needs args
     /// @param fallbackSource Address of the fallback source contract
@@ -129,10 +131,17 @@ contract LiquidTokenManager is
             (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
         ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
+        // Check if the strategy already exists in the system
+        if (address(strategyTokens[strategy]) != address(0)) {
+            revert StrategyAlreadyAssigned(
+                address(strategy),
+                address(strategyTokens[strategy])
+            );
+        }
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
-        if (!isNative && (primaryType < 1 || primaryType > 4))
+        if (!isNative && (primaryType < 1 || primaryType > 3))
             revert InvalidPriceSource();
         if (!isNative && primarySource == address(0))
             revert InvalidPriceSource();
@@ -154,13 +163,14 @@ contract LiquidTokenManager is
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
 
-        uint256 fetchedPrice = isNative ? 1e18 : 0;
+        uint256 fetchedPrice;
         if (!isNative) {
-            // Call Oracle for the price immediately after configuration
             (uint256 price, bool ok) = tokenRegistryOracle
                 ._getTokenPrice_getter(address(token));
-            require(ok && price > 0, "Token price fetch failed");
+            if (!ok || price == 0) revert TokenPriceFetchFailed();
             fetchedPrice = price;
+        } else {
+            fetchedPrice = 1e18;
         }
 
         tokens[token] = TokenInfo({
@@ -169,6 +179,7 @@ contract LiquidTokenManager is
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
+        strategyTokens[strategy] = token;
         supportedTokens.push(token);
 
         emit TokenAdded(
@@ -190,18 +201,11 @@ contract LiquidTokenManager is
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            1
-        );
-        upgradeableAssets[0] = IERC20Upgradeable(address(token));
-
         // Check for unstaked balances
-        if (liquidToken.balanceAssets(upgradeableAssets)[0] > 0)
-            revert TokenInUse(token);
+        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(upgradeableAssets)[0] > 0)
+        if (liquidToken.balanceQueuedAssets(assets)[0] > 0)
             revert TokenInUse(token);
 
         // Cache nodes array and length
@@ -235,8 +239,14 @@ contract LiquidTokenManager is
         // Call tokenRegistryOracle's removeToken function
         tokenRegistryOracle.removeToken(address(token));
 
-        delete tokens[token];
+        // Delete token strategy mapping and its reverse mapping
+        IStrategy strategy = tokenStrategies[token];
+        if (address(strategy) != address(0)) {
+            delete strategyTokens[strategy];
+        }
         delete tokenStrategies[token];
+
+        delete tokens[token];
 
         emit TokenRemoved(token, msg.sender);
     }
@@ -406,15 +416,7 @@ contract LiquidTokenManager is
             strategiesForNode[i] = strategy;
         }
 
-        // Convert to IERC20Upgradeable array for interface calls
-        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
-            assetsLength
-        );
-        for (uint256 i = 0; i < assetsLength; i++) {
-            upgradeableAssets[i] = IERC20Upgradeable(address(assets[i]));
-        }
-
-        liquidToken.transferAssets(upgradeableAssets, amounts);
+        liquidToken.transferAssets(assets, amounts);
 
         IERC20[] memory depositAssets = new IERC20[](assetsLength);
         uint256[] memory depositAmounts = new uint256[](amountsLength);
@@ -443,8 +445,8 @@ contract LiquidTokenManager is
     /// @param approverSignatureAndExpiries The signatures authorizing the delegations
     /// @param approverSalts The salts used in the signatures
     function delegateNodes(
-        uint256[] memory nodeIds,
-        address[] memory operators,
+        uint256[] calldata nodeIds,
+        address[] calldata operators,
         ISignatureUtilsMixinTypes.SignatureWithExpiry[]
             calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
@@ -594,5 +596,32 @@ contract LiquidTokenManager is
         );
 
         tokens[asset].volatilityThreshold = newThreshold;
+    }
+
+    /// @notice Returns the token for a given strategy
+    /// @param strategy Strategy to get the token for
+    /// @return IERC20 Interface for the corresponding token
+    function getStrategyToken(
+        IStrategy strategy
+    ) external view returns (IERC20) {
+        if (address(strategy) == address(0)) revert ZeroAddress();
+
+        IERC20 token = strategyTokens[strategy];
+
+        if (address(token) == address(0)) {
+            revert TokenForStrategyNotFound(address(strategy));
+        }
+
+        return token;
+    }
+
+    /// @notice Check if a strategy is supported
+    /// @param strategy The strategy address
+    /// @return True if the strategy is supported
+    function isStrategySupported(
+        IStrategy strategy
+    ) external view returns (bool) {
+        if (address(strategy) == address(0)) return false;
+        return address(strategyTokens[strategy]) != address(0);
     }
 }

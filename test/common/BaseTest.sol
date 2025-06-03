@@ -34,6 +34,7 @@ contract BaseTest is Test {
     uint8 constant SOURCE_TYPE_CHAINLINK = 1;
     uint8 constant SOURCE_TYPE_CURVE = 2;
     uint8 constant SOURCE_TYPE_PROTOCOL = 3;
+    uint8 constant SOURCE_TYPE_NATIVE = 0;
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;
@@ -724,7 +725,7 @@ contract BaseTest is Test {
     /**
      * @dev Gets the price of a token directly from TokenRegistryOracle
      */
-    function _getTokenPrice(address token) internal view returns (uint256) {
+    function _getTokenPrice(address token) internal returns (uint256) {
         return tokenRegistryOracle.getTokenPrice(token);
     }
 

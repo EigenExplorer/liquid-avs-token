@@ -42,6 +42,9 @@ interface ILiquidTokenManager {
         IERC20[] assets;
         uint256[] amounts;
     }
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
 
     /// @notice Emitted when a new token is set
     event TokenAdded(
@@ -52,49 +55,6 @@ interface ILiquidTokenManager {
         address indexed strategy,
         address indexed setter
     );
-
-    /// @notice Emitted when assets are staked to a node
-    event AssetsStakedToNode(
-        uint256 indexed nodeId,
-        IERC20[] assets,
-        uint256[] amounts,
-        address indexed staker
-    );
-
-    /// @notice Emitted when assets are deposited to Eigenlayer
-    event AssetsDepositedToEigenlayer(
-        IERC20[] assets,
-        uint256[] amounts,
-        IStrategy[] strategies,
-        address indexed depositor
-    );
-
-    /// @notice Emitted when a staker node is delegated to an operator
-    event NodeDelegated(uint256 nodeId, address indexed operator);
-
-    /// @notice Emitted when a staker node is undelegated from its current operator
-    event NodeUndelegated(uint256 nodeId, address indexed operator);
-
-    /// @notice Error for zero address
-    error ZeroAddress();
-
-    /// @notice Error for invalid staking amount
-    error InvalidStakingAmount(uint256 amount);
-
-    /// @notice Error when asset already exists
-    error TokenExists(address asset);
-
-    /// @notice Error thrown when an operation is attempted on an unsupported token
-    error TokenNotSupported(IERC20 token);
-
-    /// @notice Error thrown when attempting to remove a token that is currently in use
-    error TokenInUse(IERC20 token);
-
-    /// @notice Error thrown when price source configuration is invalid
-    error InvalidPriceSource();
-
-    /// @notice Emitted when a token is removed from the registry
-    event TokenRemoved(IERC20 indexed token, address indexed remover);
 
     /// @notice Emitted when a token's price is updated
     event TokenPriceUpdated(
@@ -120,8 +80,59 @@ interface ILiquidTokenManager {
         uint256 changeRatio
     );
 
+    /// @notice Emitted when assets are staked to a node
+    event AssetsStakedToNode(
+        uint256 indexed nodeId,
+        IERC20[] assets,
+        uint256[] amounts,
+        address indexed staker
+    );
+
+    /// @notice Emitted when assets are deposited to Eigenlayer
+    event AssetsDepositedToEigenlayer(
+        IERC20[] assets,
+        uint256[] amounts,
+        IStrategy[] strategies,
+        address indexed depositor
+    );
+
+    /// @notice Emitted when a staker node is delegated to an operator
+    event NodeDelegated(uint256 nodeId, address indexed operator);
+
+    /// @notice Emitted when a staker node is undelegated from its current operator
+    event NodeUndelegated(uint256 nodeId, address indexed operator);
+    // ============================================================================
+    // CUSTOM ERRORS
+    // ============================================================================
+    /// @notice Error for zero address
+    error ZeroAddress();
+
+    /// @notice Error for invalid staking amount
+    error InvalidStakingAmount(uint256 amount);
+
+    /// @notice Error when asset already exists
+    error TokenExists(address asset);
+
+    /// @notice Error thrown when an operation is attempted on an unsupported token
+    error TokenNotSupported(IERC20 token);
+
+    /// @notice Error thrown when attempting to remove a token that is currently in use
+    error TokenInUse(IERC20 token);
+
+    /// @notice Error thrown when price source configuration is invalid
+    error InvalidPriceSource();
+
+    /// @notice Emitted when a token is removed from the registry
+    event TokenRemoved(IERC20 indexed token, address indexed remover);
+
+    /// @notice Error when token price fetch fails during token addition
+    error TokenPriceFetchFailed();
+
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
+
+    /// @notice Error when token is not found for a strategy
+    error TokenForStrategyNotFound(address strategy);
 
     /// @notice Error for mismatched array lengths
     error LengthMismatch(uint256 length1, uint256 length2);
@@ -132,6 +143,12 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when an invalid decimals value is provided
     error InvalidDecimals();
 
+    /// @notice Error thrown when an address is not a valid contract
+    error NotAContract();
+
+    /// @notice Error thrown when a strategy is already assigned to another token
+    error StrategyAlreadyAssigned(address strategy, address existingToken);
+
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
 
@@ -140,6 +157,10 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when a price update fails due to change exceeding the volatility threshold
     error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
+
+    // ============================================================================
+    // FUNCTIONS
+    // ============================================================================
 
     /// @notice Initializes the LiquidTokenManager contract
     /// @param init Initialization parameters
@@ -150,7 +171,7 @@ interface ILiquidTokenManager {
     /// @param decimals Number of decimals for the token
     /// @param volatilityThreshold Volatility threshold for price updates
     /// @param strategy Strategy corresponding to the token
-    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=BTC-chained, 4=Protocol)
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol, 0=native tokens handled differently)
     /// @param primarySource Primary source address
     /// @param needsArg Whether fallback fn needs args
     /// @param fallbackSource Address of the fallback source contract
@@ -297,4 +318,18 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
+
+    /// @notice Returns the token for a given strategy
+    /// @param strategy Strategy to get the token for
+    /// @return IERC20 Interface for the corresponding token
+    function getStrategyToken(
+        IStrategy strategy
+    ) external view returns (IERC20);
+
+    /// @notice Check if a strategy is supported
+    /// @param strategy The strategy address
+    /// @return True if the strategy is supported
+    function isStrategySupported(
+        IStrategy strategy
+    ) external view returns (bool);
 }

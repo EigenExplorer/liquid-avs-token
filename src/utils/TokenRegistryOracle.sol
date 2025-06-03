@@ -5,9 +5,12 @@ import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Ini
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
-import {AggregatorV3Interface} from "@chainlink/contracts/src/interfaces/feeds/AggregatorV3Interface.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../libraries/StalenessThreshold.sol";
+
+interface ICurvePool {
+    function remove_liquidity(uint256, uint256[] calldata) external;
+}
 /**
  * @title TokenRegistryOracle
  * @notice Gas-optimized price oracle with primary/fallback lookup
@@ -24,7 +27,6 @@ contract TokenRegistryOracle is
     bytes32 public constant TOKEN_CONFIGURATOR_ROLE =
         keccak256("TOKEN_CONFIGURATOR_ROLE");
     uint256 private constant PRECISION = 1e18;
-    //uint256 private constant STALENESS_PERIOD = 24 hours;
 
     // Source types
     uint8 public constant SOURCE_TYPE_CHAINLINK = 1;
@@ -52,10 +54,15 @@ contract TokenRegistryOracle is
 
     // Token configuration mapping
     mapping(address => TokenConfig) public tokenConfigs;
-
+    mapping(address => bool) public isConfigured;
+    mapping(address => bool) public requiresReentrancyLock;
     // List of all configured tokens - for batch updates
     address[] public configuredTokens;
-    mapping(address => bool) public isConfigured;
+
+    /// @dev Prevents the implementation contract from being initialized
+    constructor() {
+        _disableInitializers();
+    }
 
     /**
      * @notice Initialize the contract
@@ -66,14 +73,14 @@ contract TokenRegistryOracle is
     ) public initializer {
         __AccessControl_init();
 
-        require(
-            init.initialOwner != address(0) &&
-                init.priceUpdater != address(0) &&
-                address(init.liquidTokenManager) != address(0) &&
-                init.liquidToken != address(0), // <-- add this check to double check new role managnemnt
-            "Invalid zero address"
-        );
-
+        if (
+            init.initialOwner == address(0) ||
+            init.priceUpdater == address(0) ||
+            address(init.liquidTokenManager) == address(0) ||
+            init.liquidToken == address(0)
+        ) {
+            revert InvalidZeroAddress();
+        }
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(ORACLE_ADMIN_ROLE, init.initialOwner);
 
@@ -86,7 +93,6 @@ contract TokenRegistryOracle is
         liquidTokenManager = init.liquidTokenManager;
         lastGlobalPriceUpdate = uint64(block.timestamp);
         _stalenessSalt = stalenessSalt;
-        _emergencyInterval = 12 hours;
         _emergencyMode = false;
     }
 
@@ -107,22 +113,14 @@ contract TokenRegistryOracle is
         address fallbackSource,
         bytes4 fallbackFn
     ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
-        require(token != address(0), "Token cannot be zero address");
-        require(
-            !(primaryType == 0 && primarySource == address(0)),
-            "Native tokens must not be configured in Oracle"
-        );
+        if (token == address(0)) revert TokenCannotBeZeroAddress();
+        if (primaryType == 0 && primarySource == address(0))
+            revert NativeTokensNotConfigurable();
 
-        require(
-            primarySource != address(0),
-            "Primary source cannot be zero address"
-        );
+        if (primarySource == address(0)) revert PrimarySourceCannotBeZero();
 
         if (fallbackFn != bytes4(0)) {
-            require(
-                fallbackSource != address(0),
-                "Fallback source required when fallback function provided"
-            );
+            if (fallbackSource == address(0)) revert FallbackSourceRequired();
         }
 
         // Store token configuration
@@ -193,7 +191,7 @@ contract TokenRegistryOracle is
         IERC20[] calldata tokens,
         uint256[] calldata newRates
     ) external onlyRole(RATE_UPDATER_ROLE) {
-        require(tokens.length == newRates.length, "Array length mismatch");
+        if (tokens.length != newRates.length) revert ArrayLengthMismatch();
 
         uint256 len = tokens.length;
         unchecked {
@@ -213,7 +211,7 @@ contract TokenRegistryOracle is
     function setPriceUpdateInterval(
         uint256 interval
     ) external onlyRole(ORACLE_ADMIN_ROLE) {
-        require(interval > 0, "Interval cannot be zero");
+        if (interval == 0) revert IntervalCannotBeZero();
         _emergencyInterval = uint64(interval);
         _emergencyMode = true;
         emit UpdateIntervalChanged(_emergencyInterval, interval);
@@ -329,7 +327,7 @@ contract TokenRegistryOracle is
      */
     function _getTokenPrice(
         address token
-    ) internal view returns (uint256 price, bool success) {
+    ) internal returns (uint256 price, bool success) {
         TokenConfig memory config = tokenConfigs[token];
 
         // Skip if not configured
@@ -389,27 +387,20 @@ contract TokenRegistryOracle is
     ) internal view returns (uint256 price, bool success) {
         if (feed == address(0)) return (0, false);
 
-        // Use assembly for Chainlink calls
+        // Compute staleness threshold (as in your model)
+        uint256 staleness = _emergencyMode
+            ? _emergencyInterval
+            : StalenessThreshold.getHiddenThreshold(_stalenessSalt);
+
         assembly {
-            // Free memory pointer
             let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xfeaf968c)) // left-align selector // latestRoundData()
 
-            // Call latestRoundData() - 0xfeaf968c
-            mstore(ptr, 0xfeaf968c)
-            let callSuccess := staticcall(
-                gas(), // Gas
-                feed, // Target
-                ptr, // Input
-                4, // Input size
-                ptr, // Output
-                160 // 5 return values: uint80,int256,uint256,uint256,uint80
-            )
+            let callSuccess := staticcall(gas(), feed, ptr, 4, ptr, 160)
 
-            // Process result
             if callSuccess {
                 let roundId := mload(ptr)
                 let answer := mload(add(ptr, 32))
-                // Skip startedAt at ptr+64
                 let updatedAt := mload(add(ptr, 96))
                 let answeredInRound := mload(add(ptr, 128))
 
@@ -418,48 +409,41 @@ contract TokenRegistryOracle is
                     and(gt(answer, 0), gt(updatedAt, 0)),
                     iszero(lt(answeredInRound, roundId))
                 ) {
-                    // Check staleness - invert the condition to handle fresh prices first
-                    if iszero(lt(add(updatedAt, 86400), timestamp())) {
-                        // Call decimals() - 0x313ce567
-                        mstore(ptr, 0x313ce567)
+                    // Check staleness: block.timestamp > updatedAt + staleness
+                    // If NOT stale, proceed
+                    if iszero(gt(timestamp(), add(updatedAt, staleness))) {
+                        // Call decimals()
+                        mstore(ptr, shl(224, 0x313ce567)) // selector for decimals()
                         let decSuccess := staticcall(
                             gas(),
                             feed,
                             ptr,
-                            4, // Input size
+                            4,
                             ptr,
-                            32 // Output size
+                            32
                         )
-
-                        let decimals := 8 // Default
+                        let decimals := 8
                         if decSuccess {
-                            decimals := and(mload(ptr), 0xff) // uint8
+                            decimals := and(mload(ptr), 0xff)
                         }
 
-                        // Convert to 18 decimals
                         switch lt(decimals, 18)
                         case 1 {
-                            // dec < 18: multiply
                             price := mul(answer, exp(10, sub(18, decimals)))
                         }
                         case 0 {
                             switch gt(decimals, 18)
                             case 1 {
-                                // dec > 18: divide
                                 price := div(answer, exp(10, sub(decimals, 18)))
                             }
                             default {
-                                // dec == 18: no adjustment
                                 price := answer
                             }
                         }
 
                         success := 1
                     }
-                    // Handle stale prices in a separate condition
-                    if lt(add(updatedAt, 86400), timestamp()) {
-                        success := 0
-                    }
+                    // If stale, success remains 0
                 }
             }
         }
@@ -467,60 +451,63 @@ contract TokenRegistryOracle is
 
     /**
      * @notice Get price from Curve with maximum gas efficiency
+     * @dev If requiresReentrancyLock[pool] is true, first trigger remove_liquidity(0, [0,0])
+     *      to engage Curve’s nonReentrant lock, then fall back to three staticcalls:
+     *      1) get_virtual_price()
+     *      2) price_oracle()
+     *      3) get_dy(0,1,1e18)
      */
     function _getCurvePrice(
         address pool
-    ) internal view returns (uint256 price, bool success) {
+    ) internal returns (uint256 price, bool success) {
         if (pool == address(0)) return (0, false);
 
+        // Engage nonReentrant lock if required
+        if (requiresReentrancyLock[pool]) {
+            // Zero-liquidity call to check reentrancy context
+            try ICurvePool(pool).remove_liquidity(0, new uint256[](2)) {
+                // If this succeeds, we're not in a reentrancy context -> safe to proceed
+            } catch {
+                // Revert means we're in a reentrancy context -> unsafe
+                revert("CurveOracle: pool re-entrancy");
+            }
+        }
+
         assembly {
-            // Free memory pointer
             let ptr := mload(0x40)
 
-            // Try get_virtual_price() - 0xbb7b8b80
-            mstore(ptr, 0xbb7b8b80)
-            let callSuccess := staticcall(gas(), pool, ptr, 4, ptr, 32)
-
-            if and(callSuccess, gt(mload(ptr), 0)) {
+            // Try get_virtual_price
+            mstore(ptr, shl(224, 0xbb7b8b80))
+            let ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
+            if and(ok, gt(mload(ptr), 0)) {
                 price := mload(ptr)
                 success := 1
             }
-            // If we didn't get a price yet, try the next method
-            if iszero(success) {
-                // Try price_oracle() - 0x2df9529b
-                mstore(ptr, 0x2df9529b)
-                callSuccess := staticcall(gas(), pool, ptr, 4, ptr, 32)
 
-                if and(callSuccess, gt(mload(ptr), 0)) {
+            // Try price_oracle
+            if iszero(success) {
+                mstore(ptr, shl(224, 0x86fc88d3))
+                ok := staticcall(gas(), pool, ptr, 4, ptr, 32)
+                if and(ok, gt(mload(ptr), 0)) {
                     price := mload(ptr)
                     success := 1
                 }
             }
 
-            // If we still don't have a price, try the final method
+            // Try get_dy(0,1,1e18)
             if iszero(success) {
-                // Try get_dy(0,1,1e18) - 0x5e0d443f
-                mstore(ptr, 0x5e0d443f) // Function selector
-                mstore(add(ptr, 4), 0) // i = 0 (int128)
-                mstore(add(ptr, 36), 1) // j = 1 (int128)
-                // Correct hex for 1e18 (use full 32 bytes)
-                mstore(add(ptr, 68), 0xDE0B6B3A7640000)
-
-                callSuccess := staticcall(
-                    gas(),
-                    pool,
-                    ptr,
-                    100, // Input size
-                    ptr,
-                    32 // Output size
-                )
-
-                if and(callSuccess, gt(mload(ptr), 0)) {
+                mstore(ptr, shl(224, 0x5e0d443f))
+                mstore(add(ptr, 4), 0)
+                mstore(add(ptr, 36), 1)
+                mstore(add(ptr, 68), 0x0DE0B6B3A7640000)
+                ok := staticcall(gas(), pool, ptr, 100, ptr, 32)
+                if and(ok, gt(mload(ptr), 0)) {
                     price := mload(ptr)
                     success := 1
                 }
             }
         }
+        return (price, success);
     }
 
     /**
@@ -573,13 +560,12 @@ contract TokenRegistryOracle is
             }
         }
     }
-
     /**
      * @notice Get token price directly (for external calls)
      */
     function getTokenPrice(
         address token
-    ) external view override(ITokenRegistryOracle) returns (uint256) {
+    ) external override(ITokenRegistryOracle) returns (uint256) {
         (uint256 price, bool success) = _getTokenPrice(token);
 
         if (success && price > 0) {
@@ -607,69 +593,40 @@ contract TokenRegistryOracle is
      */
     function _getTokenPrice_getter(
         address token
-    ) external view returns (uint256 price, bool success) {
+    ) external returns (uint256 price, bool success) {
         return _getTokenPrice(token);
     }
 
-    // =========================================================================
-    // TESTING FUNCTIONS - COMMENT OUT FOR PRODUCTION
-    // =========================================================================
-
+    //EXPOSED xposed one only for testing it should be removed for prouction
     /**
-     * @notice TEST ONLY: Get token price from fallback source
-     * @dev This function exposes the internal _getFallbackPrice for testing purposes
-     * @param token The token address to get the fallback price for
-     * @return price The fallback price in ETH terms (18 decimals)
-     * @return success Whether the fallback price fetch was successful
-     */
-    function _getFallbackPrice_exposed(
-        address token
-    ) external view returns (uint256 price, bool success) {
-        return _getFallbackPrice(token);
-    }
-
-    /**
-     * @notice TEST ONLY: Get Chainlink price
-     * @dev This function exposes the internal _getChainlinkPrice for testing purposes
-     * @param feed The Chainlink price feed address
-     * @return price The price from Chainlink (18 decimals)
-     * @return success Whether the price fetch was successful
-     */
-    function _getChainlinkPrice_exposed(
-        address feed
-    ) external view returns (uint256 price, bool success) {
-        return _getChainlinkPrice(feed);
-    }
-
-    /**
-     * @notice TEST ONLY: Get Curve price
+     * @notice Get price from Curve pool directly (for testing/external calls)
      * @dev This function exposes the internal _getCurvePrice for testing purposes
-     * @param pool The Curve pool address
-     * @return price The price from Curve (18 decimals)
+     * @param pool The Curve pool address to get the price from
+     * @return price The price in ETH terms (18 decimals)
      * @return success Whether the price fetch was successful
      */
-    function _getCurvePrice_exposed(
+    function getCurvePrice(
         address pool
-    ) external view returns (uint256 price, bool success) {
+    ) external returns (uint256 price, bool success) {
         return _getCurvePrice(pool);
     }
+    //FINISHED
 
     /**
-     * @notice TEST ONLY: Get price from contract call
-     * @dev This function exposes the internal _getContractCallPrice for testing purposes
-     * @param token The token address
-     * @param contractAddr The contract to call
-     * @param selector The function selector
-     * @param needsArg Whether the function needs an argument
-     * @return price The price from the contract call (18 decimals)
-     * @return success Whether the price fetch was successful
+     * @notice Set reentrancy lock requirements for multiple pools in one transaction
+     * @param pools Array of Curve pool addresses
+     * @param settings Array of boolean values indicating if each pool requires the lock
      */
-    function _getContractCallPrice_exposed(
-        address token,
-        address contractAddr,
-        bytes4 selector,
-        uint8 needsArg
-    ) external view returns (uint256 price, bool success) {
-        return _getContractCallPrice(token, contractAddr, selector, needsArg);
+    function batchSetRequiresLock(
+        address[] calldata pools,
+        bool[] calldata settings
+    ) external onlyRole(ORACLE_ADMIN_ROLE) {
+        if (pools.length != settings.length) revert ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < pools.length; i++) {
+            requiresReentrancyLock[pools[i]] = settings[i];
+        }
+
+        emit BatchPoolsConfigured(pools, settings);
     }
 }
