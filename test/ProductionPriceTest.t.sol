@@ -587,38 +587,23 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     // Add this function to warp time for Chainlink feeds
     function _warpToFreshChainlinkData() internal {
-        console.log("Warping time to make Chainlink feeds fresh...");
+        console.log("Warping time to make Chainlink feed fresh...");
 
         // Array of Chainlink feed addresses
-        address[] memory feeds = new address[](3);
-        feeds[0] = 0x536218f9E9Eb48863970252233c8F271f554C2d0; // rETH
-        feeds[1] = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812; // stETH
-        feeds[2] = 0xF017fcB346A1885194689bA23Eff2fE6fA5C483b; // cbETH
+        address feed = 0x536218f9E9Eb48863970252233c8F271f554C2d0; // rETH
 
-        uint256 latestTime = 0;
-
-        // Find the most recent update time across all feeds
-        for (uint i = 0; i < feeds.length; i++) {
-            try AggregatorV3Interface(feeds[i]).latestRoundData() returns (
-                uint80,
-                int256,
-                uint256,
-                uint256 updatedAt,
-                uint80
-            ) {
-                if (updatedAt > latestTime) {
-                    latestTime = updatedAt;
-                }
-                console.log("Feed %s updatedAt: %s", i, updatedAt);
-            } catch {
-                console.log("Feed %s failed to get latestRoundData", i);
-            }
-        }
-
-        if (latestTime > 0) {
+        try AggregatorV3Interface(feed).latestRoundData() returns (
+            uint80,
+            int256,
+            uint256,
+            uint256 updatedAt,
+            uint80
+        ) {
             // Warp to 60 seconds after the latest update
-            vm.warp(latestTime + 60);
-            console.log("Warped to timestamp: %s", latestTime + 60);
+            vm.warp(updatedAt + 60);
+            console.log("Warped to timestamp: %s", updatedAt + 60);
+        } catch {
+            console.log("Feed failed to get latestRoundData");
         }
     }
 
