@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Script} from 'forge-std/Script.sol';
-import {console} from 'forge-std/console.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @dev 2 token plain pool:
 // forge script script/lp/curve/tasks/AddLiquidity.s.sol:AddLiquidity --rpc-url http://localhost:8545 --broadcast --private-key $ADMIN_PRIVATE_KEY --sig "run(address,address[],uint256[],bool)" -- "0xPoolAddress" "[0xToken1,0xToken2]" "[1000000000000000000,1000000000000000000]" false -vvvv
@@ -41,18 +41,18 @@ contract AddLiquidity is Script {
         bool isMetapool
     ) external returns (uint256 lpTokens) {
         // Validation
-        require(pool != address(0), 'Pool address cannot be zero');
-        require(tokens.length == amounts.length, 'Tokens and amounts length mismatch');
-        require(tokens.length >= 2 && tokens.length <= 4, 'Pool must have 2-4 tokens');
-        require(!isMetapool || tokens.length == 2, 'Metapools only support 2 tokens');
+        require(pool != address(0), "Pool address cannot be zero");
+        require(tokens.length == amounts.length, "Tokens and amounts length mismatch");
+        require(tokens.length >= 2 && tokens.length <= 4, "Pool must have 2-4 tokens");
+        require(!isMetapool || tokens.length == 2, "Metapools only support 2 tokens");
 
-        console.log('[LP][Curve][Liquidity] Adding liquidity to pool:', pool);
-        console.log('[LP][Curve][Liquidity] Number of tokens:', tokens.length);
-        console.log('[LP][Curve][Liquidity] Is Metapool:', isMetapool);
+        console.log("[LP][Curve][Liquidity] Adding liquidity to pool:", pool);
+        console.log("[LP][Curve][Liquidity] Number of tokens:", tokens.length);
+        console.log("[LP][Curve][Liquidity] Is Metapool:", isMetapool);
 
         for (uint i = 0; i < tokens.length; i++) {
-            console.log('[LP][Curve][Liquidity] Token', i, ':', tokens[i]);
-            console.log('[LP][Curve][Liquidity] Amount', i, ':', amounts[i]);
+            console.log("[LP][Curve][Liquidity] Token", i, ":", tokens[i]);
+            console.log("[LP][Curve][Liquidity] Amount", i, ":", amounts[i]);
         }
 
         // Calculate minimum LP tokens out for 3% slippage tolerance
@@ -83,7 +83,7 @@ contract AddLiquidity is Script {
             lpTokens = _addLiquidityToPlainPool(pool, amounts, minLpTokens);
         }
 
-        console.log('[LP][Curve][Liquidity] LP Tokens received:', lpTokens);
+        console.log("[LP][Curve][Liquidity] LP Tokens received:", lpTokens);
 
         return lpTokens;
     }
@@ -92,7 +92,7 @@ contract AddLiquidity is Script {
         for (uint i = 0; i < tokens.length; i++) {
             if (amounts[i] > 0) {
                 IERC20(tokens[i]).approve(pool, amounts[i]);
-                console.log('[LP][Curve][Liquidity] Approved', amounts[i], 'of token', tokens[i]);
+                console.log("[LP][Curve][Liquidity] Approved", amounts[i], "of token", tokens[i]);
             }
         }
     }
@@ -102,7 +102,7 @@ contract AddLiquidity is Script {
         uint256[] memory amounts,
         uint256 minLpTokens
     ) internal returns (uint256 lpTokens) {
-        require(amounts.length == 2, 'Metapools require exactly 2 amounts');
+        require(amounts.length == 2, "Metapools require exactly 2 amounts");
 
         uint256[2] memory amountsFixed = [amounts[0], amounts[1]];
         return IMetaPool(pool).add_liquidity(amountsFixed, minLpTokens);
@@ -123,7 +123,7 @@ contract AddLiquidity is Script {
             uint256[4] memory amountsFixed = [amounts[0], amounts[1], amounts[2], amounts[3]];
             return ICurvePool4(pool).add_liquidity(amountsFixed, minLpTokens);
         } else {
-            revert('Unsupported number of tokens for plain pool');
+            revert("Unsupported number of tokens for plain pool");
         }
     }
 

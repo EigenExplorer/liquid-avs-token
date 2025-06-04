@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import 'forge-std/Test.sol';
-import {BaseTest} from './common/BaseTest.sol';
-import {MockStrategy} from './mocks/MockStrategy.sol';
-import {MockERC20, MockERC20NoDecimals} from './mocks/MockERC20.sol';
-import {MockChainlinkFeed} from './mocks/MockChainlinkFeed.sol';
-import {IERC20Upgradeable} from '@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol';
+import "forge-std/Test.sol";
+import {BaseTest} from "./common/BaseTest.sol";
+import {MockStrategy} from "./mocks/MockStrategy.sol";
+import {MockERC20, MockERC20NoDecimals} from "./mocks/MockERC20.sol";
+import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
-import {LiquidTokenManager} from '../src/core/LiquidTokenManager.sol';
-import {ILiquidTokenManager} from '../src/interfaces/ILiquidTokenManager.sol';
-import {ILiquidToken} from '../src/interfaces/ILiquidToken.sol';
-import {IStakerNodeCoordinator} from '../src/interfaces/IStakerNodeCoordinator.sol';
-import {IStakerNode} from '../src/interfaces/IStakerNode.sol';
-import {ITokenRegistryOracle} from '../src/interfaces/ITokenRegistryOracle.sol';
+import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
+import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
+import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
+import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
+import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {IERC20Metadata} from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
-import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
-import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
@@ -27,8 +27,8 @@ contract LiquidTokenManagerTest is BaseTest {
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
     // For token oracle admin - needed for various tests
-    bytes32 internal constant ORACLE_ADMIN_ROLE = keccak256('ORACLE_ADMIN_ROLE');
-    bytes32 internal constant RATE_UPDATER_ROLE = keccak256('RATE_UPDATER_ROLE');
+    bytes32 internal constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 internal constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
 
     function _getChainId() internal view returns (uint256) {
         uint256 chainId;
@@ -49,7 +49,7 @@ contract LiquidTokenManagerTest is BaseTest {
     function _safeRegisterOperator(address operator) internal {
         if (isLocalTestNetwork) {
             vm.prank(operator);
-            try delegationManager.registerAsOperator(address(0), 1, 'ipfs://') {} catch {}
+            try delegationManager.registerAsOperator(address(0), 1, "ipfs://") {} catch {}
         }
     }
 
@@ -60,18 +60,18 @@ contract LiquidTokenManagerTest is BaseTest {
         // Setup base test environment
         super.setUp();
         // Add debug logs for token addresses
-        console.log('testToken address:', address(testToken));
-        console.log('testToken2 address:', address(testToken2));
-        console.log('mockStrategy address:', address(mockStrategy));
-        console.log('mockStrategy2 address:', address(mockStrategy2));
+        console.log("testToken address:", address(testToken));
+        console.log("testToken2 address:", address(testToken2));
+        console.log("mockStrategy address:", address(mockStrategy));
+        console.log("mockStrategy2 address:", address(mockStrategy2));
 
         // Verify tokens are supported
-        console.log('testToken supported:', liquidTokenManager.tokenIsSupported(IERC20(address(testToken))));
-        console.log('testToken2 supported:', liquidTokenManager.tokenIsSupported(IERC20(address(testToken2))));
+        console.log("testToken supported:", liquidTokenManager.tokenIsSupported(IERC20(address(testToken))));
+        console.log("testToken2 supported:", liquidTokenManager.tokenIsSupported(IERC20(address(testToken2))));
         // DEBUG: Log deployer and admin addresses
-        console.log('Admin address:', admin);
-        console.log('Deployer address:', deployer);
-        console.log('Test contract address:', address(this));
+        console.log("Admin address:", admin);
+        console.log("Deployer address:", deployer);
+        console.log("Test contract address:", address(this));
 
         // Create a staker node for testing
         vm.startPrank(admin);
@@ -150,31 +150,31 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // DEBUG: Verify roles were granted
         console.log(
-            'Test contract has DEFAULT_ADMIN_ROLE:',
+            "Test contract has DEFAULT_ADMIN_ROLE:",
             liquidTokenManager.hasRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this))
         );
         console.log(
-            'Test contract has STRATEGY_CONTROLLER_ROLE:',
+            "Test contract has STRATEGY_CONTROLLER_ROLE:",
             liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this))
         );
         console.log(
-            'Test contract has PRICE_UPDATER_ROLE:',
+            "Test contract has PRICE_UPDATER_ROLE:",
             liquidTokenManager.hasRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(this))
         );
 
         // DEBUG: Verify Foundry internal caller has roles
         console.log(
-            'Foundry internal caller has DEFAULT_ADMIN_ROLE:',
+            "Foundry internal caller has DEFAULT_ADMIN_ROLE:",
             liquidTokenManager.hasRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), foundryInternalCaller)
         );
         console.log(
-            'Foundry internal caller has STRATEGY_CONTROLLER_ROLE:',
+            "Foundry internal caller has STRATEGY_CONTROLLER_ROLE:",
             liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), foundryInternalCaller)
         );
 
         // Register test tokens if they're not already supported
         if (!liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))) {
-            console.log('Registering testToken in setUp');
+            console.log("Registering testToken in setUp");
 
             // Mock the oracle price getter for testToken
             vm.mockCall(
@@ -197,18 +197,18 @@ contract LiquidTokenManagerTest is BaseTest {
                     bytes4(0) // fallbackFn
                 )
             {
-                console.log('Successfully added testToken in setUp');
+                console.log("Successfully added testToken in setUp");
             } catch Error(string memory reason) {
-                console.log('Failed to add testToken:', reason);
+                console.log("Failed to add testToken:", reason);
             } catch (bytes memory) {
-                console.log('Failed to add testToken (bytes error)');
+                console.log("Failed to add testToken (bytes error)");
             }
             vm.stopPrank();
         }
 
         // Do the same for testToken2
         if (!liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))) {
-            console.log('Registering testToken2 in setUp');
+            console.log("Registering testToken2 in setUp");
 
             // Mock the oracle price getter for testToken2
             vm.mockCall(
@@ -231,22 +231,22 @@ contract LiquidTokenManagerTest is BaseTest {
                     bytes4(0) // fallbackFn
                 )
             {
-                console.log('Successfully added testToken2 in setUp');
+                console.log("Successfully added testToken2 in setUp");
             } catch Error(string memory reason) {
-                console.log('Failed to add testToken2:', reason);
+                console.log("Failed to add testToken2:", reason);
             } catch (bytes memory) {
-                console.log('Failed to add testToken2 (bytes error)');
+                console.log("Failed to add testToken2 (bytes error)");
             }
             vm.stopPrank();
         }
 
         // Verify tokens are now supported
         console.log(
-            'After setup - testToken supported:',
+            "After setup - testToken supported:",
             liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))
         );
         console.log(
-            'After setup - testToken2 supported:',
+            "After setup - testToken2 supported:",
             liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))
         );
     }
@@ -305,8 +305,8 @@ contract LiquidTokenManagerTest is BaseTest {
     function testAddTokenSuccess() public {
         // Create token with price feed correctly
         (IERC20 newToken, MockStrategy newStrategy, MockChainlinkFeed feed) = _setupTokenWithMockFeed(
-            'New Token',
-            'NEW'
+            "New Token",
+            "NEW"
         );
 
         uint8 decimals = 18;
@@ -338,13 +338,13 @@ contract LiquidTokenManagerTest is BaseTest {
         // Verify that the token was successfully added
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(newToken);
         IStrategy strategy = liquidTokenManager.getTokenStrategy(newToken);
-        assertEq(tokenInfo.decimals, decimals, 'Incorrect decimals');
-        assertEq(tokenInfo.decimals, IERC20Metadata(address(newToken)).decimals(), 'Incorrect decimals');
-        assertEq(tokenInfo.pricePerUnit, expectedPrice, 'Incorrect initial price');
-        assertEq(address(strategy), address(newStrategy), 'Incorrect strategy');
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(tokenInfo.decimals, IERC20Metadata(address(newToken)).decimals(), "Incorrect decimals");
+        assertEq(tokenInfo.pricePerUnit, expectedPrice, "Incorrect initial price");
+        assertEq(address(strategy), address(newStrategy), "Incorrect strategy");
 
         // Verify that the token is now supported
-        assertTrue(liquidTokenManager.tokenIsSupported(newToken), 'Token should be supported');
+        assertTrue(liquidTokenManager.tokenIsSupported(newToken), "Token should be supported");
 
         // Verify that the token is included in the supportedTokens array
         IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
@@ -355,11 +355,11 @@ contract LiquidTokenManagerTest is BaseTest {
                 break;
             }
         }
-        assertTrue(isTokenInArray, 'Token should be in the supportedTokens array');
+        assertTrue(isTokenInArray, "Token should be in the supportedTokens array");
     }
 
     function testAddTokenUnauthorized() public {
-        IERC20 newToken = IERC20(address(new MockERC20('New Token', 'NEW')));
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 0;
@@ -402,7 +402,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenStrategyZeroAddress() public {
-        IERC20 newToken = IERC20(address(new MockERC20('New Token', 'NEW')));
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
         uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 0;
@@ -424,7 +424,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenFailsIfAlreadySupported() public {
         // First verify token is already supported
-        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), 'testToken should be supported');
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), "testToken should be supported");
 
         uint8 decimals = 18;
         uint256 volatilityThreshold = 0;
@@ -446,7 +446,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenFailsForZeroDecimals() public {
-        IERC20 newToken = IERC20(address(new MockERC20('New Token', 'NEW')));
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint256 initialPrice = 1e18;
         uint256 volatilityThreshold = 0;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
@@ -468,10 +468,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testAddTokenFailsForMismatchedDecimals() public {
         // DEBUG: Track test progress
-        console.log('Starting testAddTokenFailsForMismatchedDecimals');
+        console.log("Starting testAddTokenFailsForMismatchedDecimals");
 
         // Create a mock token with 18 decimals
-        MockERC20 token = new MockERC20('Test Decimal Token', 'DCM');
+        MockERC20 token = new MockERC20("Test Decimal Token", "DCM");
         MockStrategy strategy = new MockStrategy(strategyManager, IERC20(address(token)));
         MockChainlinkFeed feed = _createMockPriceFeed(int256(100000000), 8);
 
@@ -497,7 +497,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testAddTokenSuccessForNoDecimalsFunction() public {
-        console.log('Starting testAddTokenSuccessForNoDecimalsFunction');
+        console.log("Starting testAddTokenSuccessForNoDecimalsFunction");
 
         MockERC20NoDecimals noDecimalsToken = new MockERC20NoDecimals();
         uint8 decimals = 6;
@@ -513,7 +513,7 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encode(expectedPrice, true) // price = 1e18, success = true
         );
 
-        console.log('Using deployer with admin role');
+        console.log("Using deployer with admin role");
 
         // Use deployer explicitly
         vm.startPrank(deployer);
@@ -533,13 +533,13 @@ contract LiquidTokenManagerTest is BaseTest {
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(
             IERC20(address(noDecimalsToken))
         );
-        assertEq(tokenInfo.decimals, decimals, 'Incorrect decimals');
-        assertEq(tokenInfo.pricePerUnit, expectedPrice, 'Incorrect price');
+        assertEq(tokenInfo.decimals, decimals, "Incorrect decimals");
+        assertEq(tokenInfo.pricePerUnit, expectedPrice, "Incorrect price");
     }
 
     function testAddTokenFailsForZeroInitialPrice() public {
         // Create token and setup contract
-        IERC20 newToken = IERC20(address(new MockERC20('New Token', 'NEW')));
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
         uint256 volatilityThreshold = 0;
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
@@ -567,7 +567,7 @@ contract LiquidTokenManagerTest is BaseTest {
         );
     }
     function testAddTokenFailsForInvalidThreshold() public {
-        IERC20 newToken = IERC20(address(new MockERC20('New Token', 'NEW')));
+        IERC20 newToken = IERC20(address(new MockERC20("New Token", "NEW")));
         uint8 decimals = 18;
         uint256 price = 1e18;
         uint256 volatilityThreshold = 1.1e18; // More than 100%
@@ -589,10 +589,10 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testGetTokenInfoFailsForUnsupportedToken() public {
-        MockERC20 unsupportedToken = new MockERC20('Unsupported Token', 'UNSUP');
+        MockERC20 unsupportedToken = new MockERC20("Unsupported Token", "UNSUP");
         assertFalse(
             liquidTokenManager.tokenIsSupported(IERC20(address(unsupportedToken))),
-            'Token should not be reported as supported'
+            "Token should not be reported as supported"
         );
 
         // Token should not be in supported tokens array
@@ -604,7 +604,7 @@ contract LiquidTokenManagerTest is BaseTest {
                 break;
             }
         }
-        assertFalse(isInArray, 'Unsupported token should not be in supported tokens array');
+        assertFalse(isInArray, "Unsupported token should not be in supported tokens array");
 
         vm.expectRevert(
             abi.encodeWithSelector(ILiquidTokenManager.TokenNotSupported.selector, address(unsupportedToken))
@@ -614,7 +614,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testRemoveTokenSuccess() public {
         // Create mock token
-        MockERC20 tokenToRemove = new MockERC20('ToRemove', 'RMV');
+        MockERC20 tokenToRemove = new MockERC20("ToRemove", "RMV");
 
         // Create mock strategy for token
         MockStrategy mockStrategy = new MockStrategy(strategyManager, IERC20(address(tokenToRemove)));
@@ -688,7 +688,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testRemoveTokenFailsForUnsupportedToken() public {
-        IERC20 unsupportedToken = IERC20(address(new MockERC20('Unsupported', 'UNS')));
+        IERC20 unsupportedToken = IERC20(address(new MockERC20("Unsupported", "UNS")));
 
         vm.prank(deployer);
         vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.TokenNotSupported.selector, unsupportedToken));
@@ -840,7 +840,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         try stakerNodeCoordinator.getNodeById(1) {
             // Use assertFalse instead of fail() with string argument
-            assertFalse(true, 'Expected revert for non-existent node ID');
+            assertFalse(true, "Expected revert for non-existent node ID");
         } catch Error(string memory reason) {
             // Check if error contains expected message about node id
             assertEq(bytes(reason).length > 0, true);
@@ -925,10 +925,10 @@ contract LiquidTokenManagerTest is BaseTest {
             return;
         }
         // Validate with appropriate assertions
-        assertTrue(totalAssets > 0, 'Total assets should be positive');
-        assertTrue(totalSupply > 0, 'Total supply should be positive');
-        assertTrue(user1Shares > 0, 'User1 shares should be positive');
-        assertTrue(user2Shares > 0, 'User2 shares should be positive');
+        assertTrue(totalAssets > 0, "Total assets should be positive");
+        assertTrue(totalSupply > 0, "Total supply should be positive");
+        assertTrue(user1Shares > 0, "User1 shares should be positive");
+        assertTrue(user2Shares > 0, "User2 shares should be positive");
     }
 
     function testShareCalculationWithAssetValueIncrease() public {
@@ -1011,24 +1011,24 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(
             totalSupplyAfterPriceChange,
             initialTotalSupply,
-            'Total supply should not change after price increase'
+            "Total supply should not change after price increase"
         );
 
         // Check that total assets increased as expected (flexible check)
         assertTrue(
             totalAssetsAfterPriceChange > initialTotalAssets,
-            'Total assets should increase after price increase'
+            "Total assets should increase after price increase"
         );
     }
 
     function testPriceUpdateFailsIfVolatilityThresholdHit() public {
         // First verify token is supported
-        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), 'testToken should be supported');
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), "testToken should be supported");
 
         // Get current info for debugging
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(IERC20(address(testToken)));
-        console.log('Current token price:', tokenInfo.pricePerUnit);
-        console.log('Current volatility threshold:', tokenInfo.volatilityThreshold);
+        console.log("Current token price:", tokenInfo.pricePerUnit);
+        console.log("Current volatility threshold:", tokenInfo.volatilityThreshold);
 
         vm.startPrank(deployer);
         vm.expectRevert(
@@ -1043,7 +1043,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
     function testSetVolatilityThresholdSuccess() public {
         // First verify token is supported
-        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), 'testToken should be supported');
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), "testToken should be supported");
 
         vm.startPrank(deployer);
         liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0);
@@ -1053,13 +1053,13 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // Verify price was actually updated
         ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(IERC20(address(testToken)));
-        assertEq(tokenInfo.pricePerUnit, 10e18, 'Price should be updated to 10e18');
+        assertEq(tokenInfo.pricePerUnit, 10e18, "Price should be updated to 10e18");
         vm.stopPrank();
     }
 
     function testSetVolatilityThresholdFailsForInvalidValue() public {
         // First verify token is supported
-        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), 'testToken should be supported');
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), "testToken should be supported");
 
         vm.startPrank(deployer);
         vm.expectRevert(ILiquidTokenManager.InvalidThreshold.selector);
@@ -1071,12 +1071,12 @@ contract LiquidTokenManagerTest is BaseTest {
     }
     /// @notice Test bidirectional mapping between tokens and strategies
     function testBidirectionalMapping() public {
-        console.log('Starting testBidirectionalMapping');
+        console.log("Starting testBidirectionalMapping");
 
         // Create new tokens and strategies for this test
-        MockERC20 tokenA = new MockERC20('Token A', 'TKA');
+        MockERC20 tokenA = new MockERC20("Token A", "TKA");
         MockStrategy strategyA = new MockStrategy(strategyManager, IERC20(address(tokenA)));
-        MockERC20 tokenB = new MockERC20('Token B', 'TKB');
+        MockERC20 tokenB = new MockERC20("Token B", "TKB");
         MockStrategy strategyB = new MockStrategy(strategyManager, IERC20(address(tokenB)));
 
         // Setup price feeds for the new tokens
@@ -1131,47 +1131,47 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(
             address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenA)))),
             address(strategyA),
-            'getTokenStrategy for tokenA should return strategyA'
+            "getTokenStrategy for tokenA should return strategyA"
         );
 
         assertEq(
             address(liquidTokenManager.getTokenStrategy(IERC20(address(tokenB)))),
             address(strategyB),
-            'getTokenStrategy for tokenB should return strategyB'
+            "getTokenStrategy for tokenB should return strategyB"
         );
 
         // Test getStrategyToken function
         assertEq(
             address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyA)))),
             address(tokenA),
-            'getStrategyToken for strategyA should return tokenA'
+            "getStrategyToken for strategyA should return tokenA"
         );
 
         assertEq(
             address(liquidTokenManager.getStrategyToken(IStrategy(address(strategyB)))),
             address(tokenB),
-            'getStrategyToken for strategyB should return tokenB'
+            "getStrategyToken for strategyB should return tokenB"
         );
 
         // Test isStrategySupported function
         assertTrue(
             liquidTokenManager.isStrategySupported(IStrategy(address(strategyA))),
-            'strategyA should be supported'
+            "strategyA should be supported"
         );
 
         assertTrue(
             liquidTokenManager.isStrategySupported(IStrategy(address(strategyB))),
-            'strategyB should be supported'
+            "strategyB should be supported"
         );
 
         // Test with a strategy that doesn't exist
-        MockERC20 unknownToken = new MockERC20('Unknown Token', 'UNK');
+        MockERC20 unknownToken = new MockERC20("Unknown Token", "UNK");
         MockStrategy unknownStrategy = new MockStrategy(strategyManager, IERC20(address(unknownToken)));
 
         // Test isStrategySupported with unknown strategy
         assertFalse(
             liquidTokenManager.isStrategySupported(IStrategy(address(unknownStrategy))),
-            'Unknown strategy should not be supported'
+            "Unknown strategy should not be supported"
         );
 
         // Test getStrategyToken with unknown strategy - should revert with TokenForStrategyNotFound
@@ -1188,7 +1188,7 @@ contract LiquidTokenManagerTest is BaseTest {
         // Check reverse mapping was properly cleared
         assertFalse(
             liquidTokenManager.isStrategySupported(IStrategy(address(strategyA))),
-            'strategyA should no longer be supported after removing tokenA'
+            "strategyA should no longer be supported after removing tokenA"
         );
 
         // The direct mapping should be cleared too - this should revert with StrategyNotFound
@@ -1198,11 +1198,11 @@ contract LiquidTokenManagerTest is BaseTest {
 
     /// @notice Test that attempting to add a strategy that's already assigned to another token fails
     function testStrategyAlreadyAssigned() public {
-        console.log('Starting testStrategyAlreadyAssigned');
+        console.log("Starting testStrategyAlreadyAssigned");
 
         // Create new tokens and a shared strategy
-        MockERC20 tokenC = new MockERC20('Token C', 'TKC');
-        MockERC20 tokenD = new MockERC20('Token D', 'TKD');
+        MockERC20 tokenC = new MockERC20("Token C", "TKC");
+        MockERC20 tokenD = new MockERC20("Token D", "TKD");
         MockStrategy sharedStrategy = new MockStrategy(strategyManager, IERC20(address(tokenC)));
 
         // Setup price feed
@@ -1262,14 +1262,14 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testMultipleTokenStrategyManagement() public {
-        console.log('Starting testMultipleTokenStrategyManagement');
+        console.log("Starting testMultipleTokenStrategyManagement");
 
         // Create first test token and strategy
-        MockERC20 token1 = new MockERC20('Test Token 1', 'TT1');
+        MockERC20 token1 = new MockERC20("Test Token 1", "TT1");
         MockStrategy strategy1 = new MockStrategy(strategyManager, IERC20(address(token1)));
 
         // Create second test token and strategy
-        MockERC20 token2 = new MockERC20('Test Token 2', 'TT2');
+        MockERC20 token2 = new MockERC20("Test Token 2", "TT2");
         MockStrategy strategy2 = new MockStrategy(strategyManager, IERC20(address(token2)));
 
         // Mock the oracle price getter for first token
@@ -1300,7 +1300,7 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0), // No fallback
             bytes4(0)
         );
-        console.log('First token added successfully');
+        console.log("First token added successfully");
 
         // Add second token
         liquidTokenManager.addToken(
@@ -1314,7 +1314,7 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0), // No fallback
             bytes4(0)
         );
-        console.log('Second token added successfully');
+        console.log("Second token added successfully");
 
         // Verify both tokens are supported
         assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(token1))));
@@ -1343,11 +1343,11 @@ contract LiquidTokenManagerTest is BaseTest {
     }
 
     function testTokenStrategyShareValueConsistency() public {
-        console.log('Starting testTokenStrategyShareValueConsistency');
-        console.log('Using deployer with admin role for token management');
+        console.log("Starting testTokenStrategyShareValueConsistency");
+        console.log("Using deployer with admin role for token management");
 
         // Create mock token and setup price feeds
-        MockERC20 mockToken = new MockERC20('Price Test Token', 'PTT');
+        MockERC20 mockToken = new MockERC20("Price Test Token", "PTT");
         MockStrategy mockTokenStrategy = new MockStrategy(strategyManager, IERC20(address(mockToken)));
 
         // Create a price feed with initial value
@@ -1374,7 +1374,7 @@ contract LiquidTokenManagerTest is BaseTest {
             address(0), // No fallback
             bytes4(0)
         );
-        console.log('Token added successfully');
+        console.log("Token added successfully");
 
         // Get initial price
         ILiquidTokenManager.TokenInfo memory info = liquidTokenManager.getTokenInfo(IERC20(address(mockToken)));
@@ -1411,7 +1411,7 @@ contract LiquidTokenManagerTest is BaseTest {
     }
     function testRemoveTokenWithOracleIntegration() public {
         // Create mock token
-        MockERC20 token = new MockERC20('TestToken', 'TT');
+        MockERC20 token = new MockERC20("TestToken", "TT");
 
         // Create mock strategy for token
         MockStrategy mockStrategy = new MockStrategy(strategyManager, token);
@@ -1486,10 +1486,10 @@ contract LiquidTokenManagerTest is BaseTest {
     }
     // Helper to convert bytes32 to hex string
     function bytes32ToHexString(bytes32 data) internal pure returns (string memory) {
-        bytes memory hexChars = '0123456789abcdef';
+        bytes memory hexChars = "0123456789abcdef";
         bytes memory result = new bytes(66);
-        result[0] = '0';
-        result[1] = 'x';
+        result[0] = "0";
+        result[1] = "x";
 
         for (uint256 i = 0; i < 32; i++) {
             result[2 + i * 2] = hexChars[uint8(data[i] >> 4)];
@@ -1501,10 +1501,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
     // Helper function to convert bytes to hex string (same as above)
     function bytes2hex(bytes memory data) internal pure returns (string memory) {
-        bytes memory alphabet = '0123456789abcdef';
+        bytes memory alphabet = "0123456789abcdef";
         bytes memory str = new bytes(2 + data.length * 2);
-        str[0] = '0';
-        str[1] = 'x';
+        str[0] = "0";
+        str[1] = "x";
         for (uint i = 0; i < data.length; i++) {
             str[2 + i * 2] = alphabet[uint8(data[i] >> 4)];
             str[2 + i * 2 + 1] = alphabet[uint8(data[i] & 0x0f)];
@@ -1514,7 +1514,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testRemoveTokenFailsIfNonZeroAssetBalance() public {
         // Create mock token
-        MockERC20 tokenWithBalance = new MockERC20('WithBalance', 'BAL');
+        MockERC20 tokenWithBalance = new MockERC20("WithBalance", "BAL");
 
         // Create mock strategy for token
         MockStrategy mockStrategy = new MockStrategy(strategyManager, tokenWithBalance);
@@ -1564,10 +1564,10 @@ contract LiquidTokenManagerTest is BaseTest {
 
     function testBasicTokenFunctionality() public {
         // Just validate basic token objects exist
-        assertTrue(address(testToken) != address(0), 'Test token should exist');
-        assertTrue(address(testToken2) != address(0), 'Test token 2 should exist');
-        assertTrue(address(testTokenFeed) != address(0), 'Test token feed should exist');
-        assertTrue(address(testToken2Feed) != address(0), 'Test token 2 feed should exist');
+        assertTrue(address(testToken) != address(0), "Test token should exist");
+        assertTrue(address(testToken2) != address(0), "Test token 2 should exist");
+        assertTrue(address(testTokenFeed) != address(0), "Test token feed should exist");
+        assertTrue(address(testToken2Feed) != address(0), "Test token 2 feed should exist");
     }
 
     /// Tests for withdrawal functionality that will be implemented in future versions

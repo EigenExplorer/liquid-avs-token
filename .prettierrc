@@ -5,5 +5,13 @@
     "trailingComma": "none",
     "semi": false,
     "printWidth": 120,
-    "plugins": ["prettier-plugin-solidity"]
+    "plugins": ["prettier-plugin-solidity"],
+    "overrides": [
+        {
+            "files": "*.sol",
+            "options": {
+                "singleQuote": false
+            }
+        }
+    ]
 }

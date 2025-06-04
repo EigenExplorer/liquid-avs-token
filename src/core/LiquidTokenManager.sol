@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Initializable} from '@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol';
-import {AccessControlUpgradeable} from '@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol';
-import {ReentrancyGuardUpgradeable} from '@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol';
-import {IStrategyManager} from '@eigenlayer/contracts/interfaces/IStrategyManager.sol';
-import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
-import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {IERC20Metadata} from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
-import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
-import {Math} from '@openzeppelin/contracts/utils/math/Math.sol';
+import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {ILiquidToken} from '../interfaces/ILiquidToken.sol';
-import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
-import {IStakerNode} from '../interfaces/IStakerNode.sol';
-import {IStakerNodeCoordinator} from '../interfaces/IStakerNodeCoordinator.sol';
-import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
+import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
@@ -35,10 +35,10 @@ contract LiquidTokenManager is
     // ------------------------------------------------------------------------------
 
     /// @notice Role identifier for staking operations
-    bytes32 public constant STRATEGY_CONTROLLER_ROLE = keccak256('STRATEGY_CONTROLLER_ROLE');
+    bytes32 public constant STRATEGY_CONTROLLER_ROLE = keccak256("STRATEGY_CONTROLLER_ROLE");
 
     /// @notice Role identifier for asset price update operations
-    bytes32 public constant PRICE_UPDATER_ROLE = keccak256('PRICE_UPDATER_ROLE');
+    bytes32 public constant PRICE_UPDATER_ROLE = keccak256("PRICE_UPDATER_ROLE");
 
     /// @notice Number of decimal places used for price representation
     uint256 public constant PRICE_DECIMALS = 18;

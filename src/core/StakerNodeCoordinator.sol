@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {AccessControlUpgradeable} from '@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol';
-import {BeaconProxy} from '@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol';
-import {UpgradeableBeacon} from '@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol';
-import {IStrategyManager} from '@eigenlayer/contracts/interfaces/IStrategyManager.sol';
-import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
+import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
-import {IStakerNodeCoordinator} from '../interfaces/IStakerNodeCoordinator.sol';
-import {IStakerNode} from '../interfaces/IStakerNode.sol';
-import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
+import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
 /**
  * @title StakerNodeCoordinator
@@ -21,10 +21,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     // ------------------------------------------------------------------------------
 
     /// @notice Role identifier for node creation operations
-    bytes32 public constant STAKER_NODE_CREATOR_ROLE = keccak256('STAKER_NODE_CREATOR_ROLE');
+    bytes32 public constant STAKER_NODE_CREATOR_ROLE = keccak256("STAKER_NODE_CREATOR_ROLE");
 
     /// @notice Role identifier for node delegation operations
-    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256('STAKER_NODES_DELEGATOR_ROLE');
+    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
     /// @notice EigenLayer contracts
     ILiquidTokenManager public override liquidTokenManager;
@@ -113,7 +113,7 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         }
 
         address beaconAddr = address(upgradeableBeacon);
-        BeaconProxy proxy = new BeaconProxy(beaconAddr, '');
+        BeaconProxy proxy = new BeaconProxy(beaconAddr, "");
         IStakerNode node = IStakerNode(payable(proxy));
 
         _initializeStakerNode(node, nodeId);

@@ -23,7 +23,7 @@ library NetworkAddresses {
                     delegationManager: 0xA44151489861Fe9e3055d95adC98FbD462B948e7
                 });
         } else {
-            revert('Unsupported network');
+            revert("Unsupported network");
         }
     }
 }

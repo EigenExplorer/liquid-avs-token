@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Initializable} from '@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol';
-import {IBeacon} from '@openzeppelin/contracts/proxy/beacon/IBeacon.sol';
-import {ReentrancyGuardUpgradeable} from '@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
-import {IStrategyManager} from '@eigenlayer/contracts/interfaces/IStrategyManager.sol';
-import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
-import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
+import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
-import {IStakerNode} from '../interfaces/IStakerNode.sol';
-import {IStakerNodeCoordinator} from '../interfaces/IStakerNodeCoordinator.sol';
+import {IStakerNode} from "../interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 /**
  * @title StakerNode
@@ -27,10 +27,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     // ------------------------------------------------------------------------------
 
     /// @notice Role identifier for `LiquidTokenManager` operations
-    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE = keccak256('LIQUID_TOKEN_MANAGER_ROLE');
+    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE = keccak256("LIQUID_TOKEN_MANAGER_ROLE");
 
     /// @notice Role identifier for delegation operations
-    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256('STAKER_NODES_DELEGATOR_ROLE');
+    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
     /// @notice LAT contracts
     IStakerNodeCoordinator public coordinator;
@@ -128,7 +128,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     /// @inheritdoc IStakerNode
     function implementation() public view override returns (address) {
-        bytes32 slot = bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1);
+        bytes32 slot = bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1);
         address implementationVariable;
         assembly {
             implementationVariable := sload(slot)
@@ -169,7 +169,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else {
-            revert('Unknown role');
+            revert("Unknown role");
         }
         _;
     }

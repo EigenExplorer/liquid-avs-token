@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import {ERC20Upgradeable} from '@openzeppelin-upgradeable/contracts/token/ERC20/ERC20Upgradeable.sol';
-import {Initializable} from '@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol';
-import {AccessControlUpgradeable} from '@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol';
-import {PausableUpgradeable} from '@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol';
-import {ReentrancyGuardUpgradeable} from '@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/ERC20Upgradeable.sol";
+import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ILiquidToken} from '../interfaces/ILiquidToken.sol';
-import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
-import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
+import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /**
  * @title LiquidToken
@@ -31,7 +31,7 @@ contract LiquidToken is
     // ------------------------------------------------------------------------------
 
     /// @notice Role identifier for pausing the contract
-    bytes32 public constant PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice LAT contracts
     ILiquidTokenManager public liquidTokenManager;

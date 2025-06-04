@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
-import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract

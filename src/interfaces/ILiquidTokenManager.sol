@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IStrategyManager} from '@eigenlayer/contracts/interfaces/IStrategyManager.sol';
-import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
-import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
-import {ILiquidToken} from './ILiquidToken.sol';
-import {IStakerNodeCoordinator} from './IStakerNodeCoordinator.sol';
-import {ITokenRegistryOracle} from './ITokenRegistryOracle.sol';
+import {ILiquidToken} from "./ILiquidToken.sol";
+import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
+import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
 
 /// @title ILiquidTokenManager Interface
 /// @notice Interface for the LiquidTokenManager contract

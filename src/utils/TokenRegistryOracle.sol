@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Initializable} from '@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol';
-import {AccessControlUpgradeable} from '@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
-import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
-import '../libraries/StalenessThreshold.sol';
+import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
+import "../libraries/StalenessThreshold.sol";
 
 interface ICurvePool {
     function remove_liquidity(uint256, uint256[] calldata) external;
@@ -23,9 +23,9 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     // ------------------------------------------------------------------------------
 
     /// @notice Constants
-    bytes32 public constant RATE_UPDATER_ROLE = keccak256('RATE_UPDATER_ROLE');
-    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256('ORACLE_ADMIN_ROLE');
-    bytes32 public constant TOKEN_CONFIGURATOR_ROLE = keccak256('TOKEN_CONFIGURATOR_ROLE');
+    bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
+    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 public constant TOKEN_CONFIGURATOR_ROLE = keccak256("TOKEN_CONFIGURATOR_ROLE");
     uint256 private constant PRECISION = 1e18;
 
     /// @notice Source types
@@ -408,7 +408,7 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
                 // If this succeeds, we're not in a reentrancy context -> safe to proceed
             } catch {
                 // Revert means we're in a reentrancy context -> unsafe
-                revert('CurveOracle: pool re-entrancy');
+                revert("CurveOracle: pool re-entrancy");
             }
         }
 

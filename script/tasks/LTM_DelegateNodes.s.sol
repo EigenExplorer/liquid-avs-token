@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import 'forge-std/Script.sol';
-import 'forge-std/Test.sol';
+import "forge-std/Script.sol";
+import "forge-std/Test.sol";
 
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
-import {LiquidTokenManager} from '../../src/core/LiquidTokenManager.sol';
+import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 
 /// @dev To load env file:
 // source .env
@@ -26,12 +26,12 @@ contract DelegateNodes is Script, Test {
         ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) public {
-        string memory configPath = string(bytes(string.concat('script/outputs', configFileName)));
+        string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
         address liquidTokenManageraddress = stdJson.readAddress(
             config,
-            '.contractDeployments.proxy.liquidTokenManager.address'
+            ".contractDeployments.proxy.liquidTokenManager.address"
         );
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 

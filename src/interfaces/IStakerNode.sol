@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
-import {ISignatureUtilsMixinTypes} from '@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol';
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 
-import {IStakerNodeCoordinator} from '../interfaces/IStakerNodeCoordinator.sol';
+import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
 /// @title IStakerNode Interface
 /// @notice Interface for the StakerNode contract

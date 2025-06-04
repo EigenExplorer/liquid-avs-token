@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {BaseTest} from './common/BaseTest.sol';
-import {StakerNodeCoordinator} from '../src/core/StakerNodeCoordinator.sol';
-import {StakerNode} from '../src/core/StakerNode.sol';
-import {IStakerNode} from '../src/interfaces/IStakerNode.sol';
-import {IStakerNodeCoordinator} from '../src/interfaces/IStakerNodeCoordinator.sol';
-import {UpgradeableBeacon} from '@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol';
-import {TransparentUpgradeableProxy} from '@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol';
+import {BaseTest} from "./common/BaseTest.sol";
+import {StakerNodeCoordinator} from "../src/core/StakerNodeCoordinator.sol";
+import {StakerNode} from "../src/core/StakerNode.sol";
+import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract StakerNodeCoordinatorTest is BaseTest {
     function setUp() public override {
@@ -48,7 +48,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
     function testUpgradeStakerNodeImplementationRevertsWhenNotContract() public {
         // Use an EOA address as implementation
-        address nonContractAddress = makeAddr('nonContract');
+        address nonContractAddress = makeAddr("nonContract");
 
         // Expect revert when trying to upgrade to non-contract address
         vm.prank(admin);
@@ -121,7 +121,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(newCoordinator),
             proxyAdminAddress, // Use proxyAdminAddress instead of admin
-            ''
+            ""
         );
         StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
 
@@ -181,14 +181,14 @@ contract StakerNodeCoordinatorTest is BaseTest {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(newCoordinator),
             proxyAdminAddress, // Use proxyAdminAddress instead of admin
-            ''
+            ""
         );
         StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
 
         // 4. Store the beacon in the coordinator
         vm.store(
             address(proxiedCoordinator),
-            bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1),
+            bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1),
             bytes32(uint256(uint160(address(upgradeableBeacon))))
         );
 
