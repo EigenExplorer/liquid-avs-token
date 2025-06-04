@@ -8,6 +8,10 @@ import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
 interface ILiquidToken {
+    // ============================================================================
+    // STRUCTS
+    // ============================================================================
+
     /// @notice Initialization parameters for LiquidToken
     struct Init {
         string name;
@@ -18,7 +22,6 @@ interface ILiquidToken {
         address pauser;
     }
 
-    /// @notice Represents a withdrawal request
     /// @dev OUT OF SCOPE FOR V1
     /**
     struct WithdrawalRequest {
@@ -46,7 +49,6 @@ interface ILiquidToken {
         uint256 shares
     );
 
-    /// @notice Emitted when a withdrawal is requested
     /// @dev OUT OF SCOPE FOR V1
     /**
     event WithdrawalRequested(
@@ -58,7 +60,6 @@ interface ILiquidToken {
     );
     */
 
-    /// @notice Emitted when a withdrawal is fulfilled
     /// @dev OUT OF SCOPE FOR V1
     /**
     event WithdrawalFulfilled(
@@ -79,11 +80,14 @@ interface ILiquidToken {
     );
 
     // ============================================================================
-    // ERRORS
+    // CUSTOM ERRORS
     // ============================================================================
 
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
+
+    /// @notice Error for zero address
+    error ZeroAddress();
 
     /// @notice Error for zero amount
     error ZeroAmount();
@@ -94,21 +98,11 @@ interface ILiquidToken {
     /// @notice Error for unauthorized access by non-LiquidTokenManager
     error NotLiquidTokenManager(address sender);
 
-    /// @notice Error for zero address
-    error ZeroAddress();
-
-    /// @notice Error for invalid withdrawal request
     /// @dev OUT OF SCOPE FOR V1
     /**
     error InvalidWithdrawalRequest();
-
-    /// @notice Error when withdrawal delay is not met
     error WithdrawalDelayNotMet();
-
-    /// @notice Error when withdrawal is already fulfilled
     error WithdrawalAlreadyFulfilled();
-
-    /// @notice Error when a new withdrawal is attempted with an existing request ID
     error DuplicateRequestId(bytes32 requestId);
     */
 
@@ -137,6 +131,10 @@ interface ILiquidToken {
     //  FUNCTIONS
     // ============================================================================
 
+    /// @notice Initializes the LiquidTokenManager contract
+    /// @param init Initialization parameters
+    function initialize(Init memory init) external;
+
     /// @notice Allows users to deposit multiple assets and receive shares
     /// @param assets The ERC20 assets to deposit
     /// @param amounts The amounts of the respective assets to deposit
@@ -148,9 +146,6 @@ interface ILiquidToken {
         address receiver
     ) external returns (uint256[] memory);
 
-    /// @notice Allows users to request a withdrawal of their shares
-    /// @param withdrawAssets The ERC20 assets to withdraw
-    /// @param shareAmounts The number of shares to withdraw for each asset
     /// @dev Out OF SCOPE FOR V1
     /** 
     function requestWithdrawal(
@@ -159,8 +154,6 @@ interface ILiquidToken {
     ) external;
     */
 
-    /// @notice Allows users to fulfill a withdrawal request after the delay period
-    /// @param requestId The unique identifier of the withdrawal request
     /// @dev Out OF SCOPE FOR V1
     /** 
     function fulfillWithdrawal(bytes32 requestId) external;
@@ -198,9 +191,6 @@ interface ILiquidToken {
     /// @return The total value of assets in the unit of account
     function totalAssets() external view returns (uint256);
 
-    /// @notice Returns the withdrawal requests for a user
-    /// @param user The address of the user
-    /// @return An array of withdrawal request IDs
     /// @dev Out OF SCOPE FOR V1
     /**
     function getUserWithdrawalRequests(address user)
@@ -209,9 +199,6 @@ interface ILiquidToken {
         returns (bytes32[] memory);
     */
 
-    /// @notice Returns the details of a withdrawal request
-    /// @param requestId The ID of the withdrawal request
-    /// @return The withdrawal request details
     /// @dev Out OF SCOPE FOR V1
     /**
     function getWithdrawalRequest(bytes32 requestId) external view returns (WithdrawalRequest memory);

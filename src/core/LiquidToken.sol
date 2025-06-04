@@ -16,7 +16,6 @@ import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
 /**
  * @title LiquidToken
  * @notice Implements a liquid staking token with deposit, withdrawal, and asset management functionalities
- * @dev Interacts with LiquidTokenManager to manage assets and handle user requests
  */
 contract LiquidToken is
     ILiquidToken,
@@ -52,15 +51,13 @@ contract LiquidToken is
         _disableInitializers();
     }
 
-    /// @notice Initializes the LiquidToken contract
-    /// @param init The initialization parameters
+    /// @inheritdoc ILiquidToken
     function initialize(Init calldata init) external initializer {
         __ERC20_init(init.name, init.symbol);
         __ReentrancyGuard_init();
         __AccessControl_init();
         __Pausable_init();
 
-        // Zero address checks
         if (
             init.initialOwner == address(0) ||
             init.pauser == address(0) ||
