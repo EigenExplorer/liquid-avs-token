@@ -597,21 +597,6 @@ contract TokenRegistryOracle is
         return _getTokenPrice(token);
     }
 
-    //EXPOSED xposed one only for testing it should be removed for prouction
-    /**
-     * @notice Get price from Curve pool directly (for testing/external calls)
-     * @dev This function exposes the internal _getCurvePrice for testing purposes
-     * @param pool The Curve pool address to get the price from
-     * @return price The price in ETH terms (18 decimals)
-     * @return success Whether the price fetch was successful
-     */
-    function getCurvePrice(
-        address pool
-    ) external returns (uint256 price, bool success) {
-        return _getCurvePrice(pool);
-    }
-    //FINISHED
-
     /**
      * @notice Set reentrancy lock requirements for multiple pools in one transaction
      * @param pools Array of Curve pool addresses
