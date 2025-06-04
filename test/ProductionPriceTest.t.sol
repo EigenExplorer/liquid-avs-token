@@ -1229,7 +1229,7 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-        try tokenRegistryOracle.getCurvePrice(UNSAFE_ANKR_ETH_POOL) returns (uint256 price, bool success) {
+        try tokenRegistryOracle._getTokenPrice_getter(UNSAFE_ANKR_ETH_POOL) returns (uint256 price, bool success) {
             if (success) {
                 console.log("  Unsafe pool protected with reentrancy lock: %s ETH", price / 1e18);
                 assertTrue(price > 0, "Protected unsafe pool should return valid price");
@@ -1254,7 +1254,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                 settings[0] = false; // Don't require lock for safe pools
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-                try tokenRegistryOracle.getCurvePrice(cfg.primarySource) returns (uint256 price, bool success) {
+                try tokenRegistryOracle._getTokenPrice_getter(cfg.primarySource) returns (uint256 price, bool success) {
                     if (success) {
                         console.log("  Safe pool works without reentrancy lock: %s ETH", price / 1e18);
                     }

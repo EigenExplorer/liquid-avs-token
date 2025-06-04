@@ -496,7 +496,4 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
         }
     }
 
-    function getCurvePrice(address pool) external returns (uint256 price, bool success) {
-        return _getCurvePrice(pool);
-    }
 }
