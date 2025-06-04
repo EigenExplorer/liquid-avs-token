@@ -30,9 +30,7 @@ async function manualUndelegateNodes() {
             })
         ).results
 
-        console.log(
-            `[Manual] Undelegate ${nodeIds.length} Staker Node(s): nonce: ${pendingTx[0].nonce}`
-        )
+        console.log(`[Manual] Undelegate ${nodeIds.length} Staker Node(s): nonce: ${pendingTx[0].nonce}`)
     } catch (error) {
         console.log('[Manual] Error: ', error.message)
     }

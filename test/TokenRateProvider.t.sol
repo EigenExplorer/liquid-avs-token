@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "forge-std/Test.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import 'forge-std/Test.sol';
+import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 
-import {BaseTest} from "./common/BaseTest.sol";
-import {TokenRegistryOracle} from "../src/utils/TokenRegistryOracle.sol";
-import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
-import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
-import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockStrategy} from "./mocks/MockStrategy.sol";
-import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
-import {MockCurvePool} from "./mocks/MockCurvePool.sol";
-import {MockProtocolToken} from "./mocks/MockProtocolToken.sol";
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {BaseTest} from './common/BaseTest.sol';
+import {TokenRegistryOracle} from '../src/utils/TokenRegistryOracle.sol';
+import {ITokenRegistryOracle} from '../src/interfaces/ITokenRegistryOracle.sol';
+import {LiquidTokenManager} from '../src/core/LiquidTokenManager.sol';
+import {ILiquidTokenManager} from '../src/interfaces/ILiquidTokenManager.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {MockERC20} from './mocks/MockERC20.sol';
+import {MockStrategy} from './mocks/MockStrategy.sol';
+import {MockChainlinkFeed} from './mocks/MockChainlinkFeed.sol';
+import {MockCurvePool} from './mocks/MockCurvePool.sol';
+import {MockProtocolToken} from './mocks/MockProtocolToken.sol';
+import {IStrategy} from '@eigenlayer/contracts/interfaces/IStrategy.sol';
 
 contract TokenRateProviderTest is BaseTest {
     // For role assignments
-    bytes32 internal constant ORACLE_ADMIN_ROLE =
-        keccak256("ORACLE_ADMIN_ROLE");
-    bytes32 internal constant RATE_UPDATER_ROLE =
-        keccak256("RATE_UPDATER_ROLE");
+    bytes32 internal constant ORACLE_ADMIN_ROLE = keccak256('ORACLE_ADMIN_ROLE');
+    bytes32 internal constant RATE_UPDATER_ROLE = keccak256('RATE_UPDATER_ROLE');
     event LogString(string message);
     event LogAddress(string name, address value);
     event LogUint(string name, uint value);
@@ -68,18 +66,9 @@ contract TokenRateProviderTest is BaseTest {
 
         // Grant necessary roles to Foundry's internal test execution address
         vm.startPrank(admin);
-        liquidTokenManager.grantRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.PRICE_UPDATER_ROLE(),
-            foundryInternalCaller
-        );
+        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), foundryInternalCaller);
+        liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), foundryInternalCaller);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), foundryInternalCaller);
         tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
         tokenRegistryOracle.grantRole(RATE_UPDATER_ROLE, foundryInternalCaller);
         tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, address(this));
@@ -87,38 +76,26 @@ contract TokenRateProviderTest is BaseTest {
         vm.stopPrank();
 
         // Create mock tokens with realistic names
-        console.log("=== CREATING MOCK TOKENS ===");
-        rethToken = new MockERC20("Rocket Pool ETH", "rETH");
-        stethToken = new MockERC20("Lido Staked ETH", "stETH");
-        osethToken = new MockERC20("Origin Dollar Staked ETH", "osETH");
-        unibtcToken = new MockERC20("UniBTC", "uniBTC");
-        console.log("rethToken:", address(rethToken));
-        console.log("stethToken:", address(stethToken));
-        console.log("osethToken:", address(osethToken));
-        console.log("unibtcToken:", address(unibtcToken));
+        console.log('=== CREATING MOCK TOKENS ===');
+        rethToken = new MockERC20('Rocket Pool ETH', 'rETH');
+        stethToken = new MockERC20('Lido Staked ETH', 'stETH');
+        osethToken = new MockERC20('Origin Dollar Staked ETH', 'osETH');
+        unibtcToken = new MockERC20('UniBTC', 'uniBTC');
+        console.log('rethToken:', address(rethToken));
+        console.log('stethToken:', address(stethToken));
+        console.log('osethToken:', address(osethToken));
+        console.log('unibtcToken:', address(unibtcToken));
 
         // Create dedicated strategies for each token
-        console.log("=== CREATING STRATEGIES ===");
-        rethStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(rethToken))
-        );
-        stethStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(stethToken))
-        );
-        osethStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(osethToken))
-        );
-        unibtcStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(unibtcToken))
-        );
+        console.log('=== CREATING STRATEGIES ===');
+        rethStrategy = new MockStrategy(strategyManager, IERC20(address(rethToken)));
+        stethStrategy = new MockStrategy(strategyManager, IERC20(address(stethToken)));
+        osethStrategy = new MockStrategy(strategyManager, IERC20(address(osethToken)));
+        unibtcStrategy = new MockStrategy(strategyManager, IERC20(address(unibtcToken)));
 
         // Create price sources with realistic prices
         // Create price sources with realistic prices
-        console.log("=== CREATING PRICE SOURCES ===");
+        console.log('=== CREATING PRICE SOURCES ===');
         rethFeed = new MockChainlinkFeed(int256(1.04e18), 18);
         // stETH: Create BOTH Chainlink feed (primary) AND protocol token (fallback)
         stethFeed = new MockChainlinkFeed(int256(1.03e18), 18); // PRIMARY: Chainlink - REMOVE "MockChainlinkFeed" type declaration
@@ -126,56 +103,41 @@ contract TokenRateProviderTest is BaseTest {
         stethProtocol.setUpdatedAt(block.timestamp);
         osethCurvePool = _createMockCurvePool(1.02e18);
         uniBtcFeed = new MockChainlinkFeed(int256(99000000000000000000), 18);
-        console.log("rethFeed:", address(rethFeed));
-        console.log("stethFeed (primary):", address(stethFeed));
-        console.log("stethProtocol (fallback):", address(stethProtocol));
-        console.log("osethCurvePool:", address(osethCurvePool));
-        console.log("uniBtcFeed:", address(uniBtcFeed));
+        console.log('rethFeed:', address(rethFeed));
+        console.log('stethFeed (primary):', address(stethFeed));
+        console.log('stethProtocol (fallback):', address(stethProtocol));
+        console.log('osethCurvePool:', address(osethCurvePool));
+        console.log('uniBtcFeed:', address(uniBtcFeed));
 
         // Test price source functionality before configuring
-        console.log("=== TESTING PRICE SOURCES ===");
+        console.log('=== TESTING PRICE SOURCES ===');
 
         // Test Chainlink feed
-        try rethFeed.latestRoundData() returns (
-            uint80,
-            int256 price,
-            uint256,
-            uint256,
-            uint80
-        ) {
-            console.log(
-                "rethFeed latestRoundData SUCCESS, price:",
-                uint256(price)
-            );
+        try rethFeed.latestRoundData() returns (uint80, int256 price, uint256, uint256, uint80) {
+            console.log('rethFeed latestRoundData SUCCESS, price:', uint256(price));
         } catch {
-            console.log("rethFeed latestRoundData FAILED");
+            console.log('rethFeed latestRoundData FAILED');
         }
-
         // Test Protocol token
         try stethProtocol.mETHToETH(1e18) returns (uint256 rate) {
-            console.log("stethProtocol mETHToETH SUCCESS, rate:", rate);
+            console.log('stethProtocol mETHToETH SUCCESS, rate:', rate);
         } catch {
-            console.log("stethProtocol mETHToETH FAILED");
+            console.log('stethProtocol mETHToETH FAILED');
         }
-
         // Test Curve pool
         try osethCurvePool.get_virtual_price() returns (uint256 vPrice) {
-            console.log(
-                "osethCurvePool get_virtual_price SUCCESS, price:",
-                vPrice
-            );
+            console.log('osethCurvePool get_virtual_price SUCCESS, price:', vPrice);
         } catch {
-            console.log("osethCurvePool get_virtual_price FAILED");
+            console.log('osethCurvePool get_virtual_price FAILED');
         }
-
         // Configure tokens in TokenRegistryOracle
-        console.log("=== CONFIGURING TOKENS IN ORACLE ===");
-        bytes4 selectorProtocol = bytes4(keccak256("mETHToETH(uint256)"));
+        console.log('=== CONFIGURING TOKENS IN ORACLE ===');
+        bytes4 selectorProtocol = bytes4(keccak256('mETHToETH(uint256)'));
 
         vm.startPrank(admin);
 
         // Configure rETH with Chainlink source
-        console.log("Configuring rETH...");
+        console.log('Configuring rETH...');
         tokenRegistryOracle.configureToken(
             address(rethToken),
             SOURCE_TYPE_CHAINLINK,
@@ -184,12 +146,10 @@ contract TokenRateProviderTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        console.log("rETH configured");
+        console.log('rETH configured');
 
         // Configure stETH with Protocol source
-        bytes4 fallbackSelector = bytes4(
-            keccak256("getPooledEthByShares(uint256)")
-        ); // 0x7a28fb88
+        bytes4 fallbackSelector = bytes4(keccak256('getPooledEthByShares(uint256)')); // 0x7a28fb88
         tokenRegistryOracle.configureToken(
             address(stethToken),
             SOURCE_TYPE_CHAINLINK, // CORRECT: Chainlink (type 1)
@@ -198,10 +158,10 @@ contract TokenRateProviderTest is BaseTest {
             address(stethProtocol), // FALLBACK: Protocol token
             fallbackSelector // FALLBACK: getPooledEthByShares(uint256)
         );
-        console.log("stETH configured");
+        console.log('stETH configured');
 
         // Configure osETH with Curve source
-        console.log("Configuring osETH...");
+        console.log('Configuring osETH...');
         tokenRegistryOracle.configureToken(
             address(osethToken),
             SOURCE_TYPE_CURVE,
@@ -210,10 +170,10 @@ contract TokenRateProviderTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        console.log("osETH configured");
+        console.log('osETH configured');
 
         // Configure uniBTC with Chainlink
-        console.log("Configuring uniBTC...");
+        console.log('Configuring uniBTC...');
         tokenRegistryOracle.configureToken(
             address(unibtcToken),
             SOURCE_TYPE_CHAINLINK,
@@ -222,12 +182,12 @@ contract TokenRateProviderTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        console.log("uniBTC configured");
+        console.log('uniBTC configured');
 
         vm.stopPrank();
 
         // Test price fetching BEFORE adding tokens
-        console.log("=== TESTING PRICE FETCHING ===");
+        console.log('=== TESTING PRICE FETCHING ===');
 
         address[] memory testTokens = new address[](4);
         testTokens[0] = address(rethToken);
@@ -236,25 +196,23 @@ contract TokenRateProviderTest is BaseTest {
         testTokens[3] = address(unibtcToken);
 
         for (uint i = 0; i < testTokens.length; i++) {
-            console.log("Testing price for token:", testTokens[i]);
-            try
-                tokenRegistryOracle._getTokenPrice_getter(testTokens[i])
-            returns (uint256 price, bool ok) {
-                console.log("  Price fetch SUCCESS - price:", price, "ok:", ok);
+            console.log('Testing price for token:', testTokens[i]);
+            try tokenRegistryOracle._getTokenPrice_getter(testTokens[i]) returns (uint256 price, bool ok) {
+                console.log('  Price fetch SUCCESS - price:', price, 'ok:', ok);
             } catch Error(string memory reason) {
-                console.log("  Price fetch FAILED with reason:", reason);
+                console.log('  Price fetch FAILED with reason:', reason);
             } catch {
-                console.log("  Price fetch FAILED with unknown error");
+                console.log('  Price fetch FAILED with unknown error');
             }
         }
 
         // Add tokens to LiquidTokenManager with extensive logging
-        console.log("=== ADDING TOKENS TO LIQUID TOKEN MANAGER ===");
+        console.log('=== ADDING TOKENS TO LIQUID TOKEN MANAGER ===');
 
         vm.startPrank(admin);
 
         // Add rETH token with Chainlink source
-        console.log("Adding rETH token...");
+        console.log('Adding rETH token...');
         try
             liquidTokenManager.addToken(
                 IERC20(address(rethToken)),
@@ -268,17 +226,16 @@ contract TokenRateProviderTest is BaseTest {
                 bytes4(0)
             )
         {
-            console.log("rETH token added successfully");
+            console.log('rETH token added successfully');
         } catch Error(string memory reason) {
-            console.log("rETH token add failed:", reason);
-            revert(string(abi.encodePacked("rETH add failed: ", reason)));
+            console.log('rETH token add failed:', reason);
+            revert(string(abi.encodePacked('rETH add failed: ', reason)));
         } catch {
-            console.log("rETH token add failed with unknown error");
-            revert("rETH add failed with unknown error");
+            console.log('rETH token add failed with unknown error');
+            revert('rETH add failed with unknown error');
         }
-
         // Add stETH token with Protocol source
-        console.log("Adding stETH token...");
+        console.log('Adding stETH token...');
         try
             liquidTokenManager.addToken(
                 IERC20(address(stethToken)),
@@ -292,17 +249,16 @@ contract TokenRateProviderTest is BaseTest {
                 fallbackSelector // FALLBACK: getPooledEthByShares(uint256)
             )
         {
-            console.log("stETH token added successfully");
+            console.log('stETH token added successfully');
         } catch Error(string memory reason) {
-            console.log("stETH token add failed:", reason);
-            revert(string(abi.encodePacked("stETH add failed: ", reason)));
+            console.log('stETH token add failed:', reason);
+            revert(string(abi.encodePacked('stETH add failed: ', reason)));
         } catch {
-            console.log("stETH token add failed with unknown error");
-            revert("stETH add failed with unknown error");
+            console.log('stETH token add failed with unknown error');
+            revert('stETH add failed with unknown error');
         }
-
         // Add osETH token with Curve source
-        console.log("Adding osETH token...");
+        console.log('Adding osETH token...');
         try
             liquidTokenManager.addToken(
                 IERC20(address(osethToken)),
@@ -316,17 +272,16 @@ contract TokenRateProviderTest is BaseTest {
                 bytes4(0)
             )
         {
-            console.log("osETH token added successfully");
+            console.log('osETH token added successfully');
         } catch Error(string memory reason) {
-            console.log("osETH token add failed:", reason);
-            revert(string(abi.encodePacked("osETH add failed: ", reason)));
+            console.log('osETH token add failed:', reason);
+            revert(string(abi.encodePacked('osETH add failed: ', reason)));
         } catch {
-            console.log("osETH token add failed with unknown error");
-            revert("osETH add failed with unknown error");
+            console.log('osETH token add failed with unknown error');
+            revert('osETH add failed with unknown error');
         }
-
         // Add uniBTC token with Chainlink source
-        console.log("Adding uniBTC token...");
+        console.log('Adding uniBTC token...');
         try
             liquidTokenManager.addToken(
                 IERC20(address(unibtcToken)),
@@ -340,23 +295,19 @@ contract TokenRateProviderTest is BaseTest {
                 bytes4(0)
             )
         {
-            console.log("uniBTC token added successfully");
+            console.log('uniBTC token added successfully');
         } catch Error(string memory reason) {
-            console.log("uniBTC token add failed:", reason);
-            revert(string(abi.encodePacked("uniBTC add failed: ", reason)));
+            console.log('uniBTC token add failed:', reason);
+            revert(string(abi.encodePacked('uniBTC add failed: ', reason)));
         } catch {
-            console.log("uniBTC token add failed with unknown error");
-            revert("uniBTC add failed with unknown error");
+            console.log('uniBTC token add failed with unknown error');
+            revert('uniBTC add failed with unknown error');
         }
-
         // Add native token
-        eigenInuToken = new MockERC20("EigenInu", "EINU");
-        eigenInuStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(eigenInuToken))
-        );
+        eigenInuToken = new MockERC20('EigenInu', 'EINU');
+        eigenInuStrategy = new MockStrategy(strategyManager, IERC20(address(eigenInuToken)));
 
-        console.log("Adding native token...");
+        console.log('Adding native token...');
         liquidTokenManager.addToken(
             IERC20(address(eigenInuToken)),
             18,
@@ -368,11 +319,11 @@ contract TokenRateProviderTest is BaseTest {
             address(0),
             bytes4(0)
         );
-        console.log("Native token added successfully");
+        console.log('Native token added successfully');
 
         vm.stopPrank();
 
-        console.log("=== SETUP COMPLETE ===");
+        console.log('=== SETUP COMPLETE ===');
     }
 
     // Overriding and fixing the BaseTest's _updateAllPrices to use try/catch for updating prices
@@ -385,18 +336,9 @@ contract TokenRateProviderTest is BaseTest {
             // If updating all prices fails, manually update individual tokens
             // Use a higher-level approach that won't fail
             tokenRegistryOracle.updateRate(IERC20(address(rethToken)), 1.04e18);
-            tokenRegistryOracle.updateRate(
-                IERC20(address(stethToken)),
-                1.03e18
-            );
-            tokenRegistryOracle.updateRate(
-                IERC20(address(osethToken)),
-                1.02e18
-            );
-            tokenRegistryOracle.updateRate(
-                IERC20(address(unibtcToken)),
-                29.7e18
-            );
+            tokenRegistryOracle.updateRate(IERC20(address(stethToken)), 1.03e18);
+            tokenRegistryOracle.updateRate(IERC20(address(osethToken)), 1.02e18);
+            tokenRegistryOracle.updateRate(IERC20(address(unibtcToken)), 29.7e18);
         }
         vm.stopPrank();
     }
@@ -404,22 +346,9 @@ contract TokenRateProviderTest is BaseTest {
     // ========== BASIC CONTRACT FUNCTIONALITY ==========
 
     function testInitialize() public {
-        assertTrue(
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-                admin
-            )
-        );
-        assertTrue(
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.RATE_UPDATER_ROLE(),
-                user2
-            )
-        );
-        assertEq(
-            address(tokenRegistryOracle.liquidTokenManager()),
-            address(liquidTokenManager)
-        );
+        assertTrue(tokenRegistryOracle.hasRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), admin));
+        assertTrue(tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), user2));
+        assertEq(address(tokenRegistryOracle.liquidTokenManager()), address(liquidTokenManager));
     }
 
     // ========== TOKEN CONFIGURATION TESTS ==========
@@ -455,10 +384,7 @@ contract TokenRateProviderTest is BaseTest {
         assertEq(needsArg, 1);
         assertEq(primarySource, address(stethFeed)); // FIXED: Primary is Chainlink feed, not protocol
         assertEq(fallbackSource, address(stethProtocol)); // FIXED: Protocol token is fallback
-        assertEq(
-            functionSelector,
-            bytes4(keccak256("getPooledEthByShares(uint256)"))
-        ); // FIXED: Correct fallback selector
+        assertEq(functionSelector, bytes4(keccak256('getPooledEthByShares(uint256)'))); // FIXED: Correct fallback selector
         assertTrue(tokenRegistryOracle.isConfigured(address(stethToken)));
     }
 
@@ -499,53 +425,42 @@ contract TokenRateProviderTest is BaseTest {
     // ========== PRICE QUERY TESTS ==========
 
     function testGetRethPrice() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(rethToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(rethToken))));
         assertTrue(tokenRegistryOracle.isConfigured(address(rethToken)));
         uint256 price = tokenRegistryOracle.getTokenPrice(address(rethToken));
         assertApproxEqRel(price, 1.04e18, 0.01e18);
-        emit log_named_uint("rETH price from Chainlink (ETH)", price);
+        emit log_named_uint('rETH price from Chainlink (ETH)', price);
     }
 
     function testGetStethPrice() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(stethToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(stethToken))));
         assertTrue(tokenRegistryOracle.isConfigured(address(stethToken)));
         uint256 price = tokenRegistryOracle.getTokenPrice(address(stethToken));
         assertApproxEqRel(price, 1.03e18, 0.01e18);
-        emit log_named_uint("stETH price from Protocol (ETH)", price);
+        emit log_named_uint('stETH price from Protocol (ETH)', price);
     }
 
     function testGetOsethPrice() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(osethToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(osethToken))));
         assertTrue(tokenRegistryOracle.isConfigured(address(osethToken)));
         uint256 price = tokenRegistryOracle.getTokenPrice(address(osethToken));
         assertApproxEqRel(price, 1.02e18, 0.01e18);
-        emit log_named_uint("osETH price from Curve (ETH)", price);
+        emit log_named_uint('osETH price from Curve (ETH)', price);
     }
 
     function testGetUniBtcPrice() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(unibtcToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(unibtcToken))));
         assertTrue(tokenRegistryOracle.isConfigured(address(unibtcToken)));
 
         // Override the mock for this specific test to match expected value in _updateAllPrices
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(
-                ITokenRegistryOracle.getTokenPrice.selector,
-                address(unibtcToken)
-            ),
+            abi.encodeWithSelector(ITokenRegistryOracle.getTokenPrice.selector, address(unibtcToken)),
             abi.encode(29.7e18)
         );
 
         uint256 price = tokenRegistryOracle.getTokenPrice(address(unibtcToken));
-        emit log_named_uint("uniBTC price (ETH)", price);
+        emit log_named_uint('uniBTC price (ETH)', price);
         assertApproxEqRel(price, 29.7e18, 0.5e18);
     }
 
@@ -563,40 +478,16 @@ contract TokenRateProviderTest is BaseTest {
 
         assertEq(tokenRegistryOracle.lastPriceUpdate(), block.timestamp);
 
-        assertApproxEqRel(
-            liquidTokenManager
-                .getTokenInfo(IERC20(address(rethToken)))
-                .pricePerUnit,
-            1.04e18,
-            0.01e18
-        );
-        assertApproxEqRel(
-            liquidTokenManager
-                .getTokenInfo(IERC20(address(stethToken)))
-                .pricePerUnit,
-            1.03e18,
-            0.01e18
-        );
-        assertApproxEqRel(
-            liquidTokenManager
-                .getTokenInfo(IERC20(address(osethToken)))
-                .pricePerUnit,
-            1.02e18,
-            0.01e18
-        );
-        assertApproxEqRel(
-            liquidTokenManager
-                .getTokenInfo(IERC20(address(unibtcToken)))
-                .pricePerUnit,
-            29.7e18,
-            0.5e18
-        );
+        assertApproxEqRel(liquidTokenManager.getTokenInfo(IERC20(address(rethToken))).pricePerUnit, 1.04e18, 0.01e18);
+        assertApproxEqRel(liquidTokenManager.getTokenInfo(IERC20(address(stethToken))).pricePerUnit, 1.03e18, 0.01e18);
+        assertApproxEqRel(liquidTokenManager.getTokenInfo(IERC20(address(osethToken))).pricePerUnit, 1.02e18, 0.01e18);
+        assertApproxEqRel(liquidTokenManager.getTokenInfo(IERC20(address(unibtcToken))).pricePerUnit, 29.7e18, 0.5e18);
     }
 
     // ========== PRICE STALENESS TESTS ==========
 
     function testPriceStaleness() public {
-        emit LogString("=== TEST START: testPriceStaleness ===");
+        emit LogString('=== TEST START: testPriceStaleness ===');
 
         // Set up initial fresh prices in the mock feeds
         rethFeed.setAnswer(int256(1.04e18));
@@ -640,30 +531,25 @@ contract TokenRateProviderTest is BaseTest {
         uniBtcFeed.setUpdatedAt(warpTo);
 
         // Update prices again
-        emit LogString("Updating prices after time warp...");
+        emit LogString('Updating prices after time warp...');
         vm.prank(user2);
         tokenRegistryOracle.updateAllPricesIfNeeded();
 
         // Verify prices are fresh again
         assertFalse(tokenRegistryOracle.arePricesStale());
 
-        emit LogString("=== TEST END ===");
+        emit LogString('=== TEST END ===');
     }
     // ========== MANUAL RATE UPDATES ==========
 
     function testManualRateUpdate() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(rethToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(rethToken))));
         assertTrue(tokenRegistryOracle.isConfigured(address(rethToken)));
 
         uint256 newRate = 1.1e18;
         vm.prank(user2);
         tokenRegistryOracle.updateRate(IERC20(address(rethToken)), newRate);
-        assertEq(
-            tokenRegistryOracle.getRate(IERC20(address(rethToken))),
-            newRate
-        );
+        assertEq(tokenRegistryOracle.getRate(IERC20(address(rethToken))), newRate);
     }
 
     function testBatchRateUpdate() public {
@@ -704,23 +590,17 @@ contract TokenRateProviderTest is BaseTest {
         );
         vm.stopPrank();
 
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(rethToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(rethToken))));
         uint256 price = tokenRegistryOracle.getTokenPrice(address(rethToken));
         assertEq(price, 1.04e18);
     }
 
     function testGetEigenInuPrice() public {
-        assertTrue(
-            liquidTokenManager.tokenIsSupported(IERC20(address(eigenInuToken)))
-        );
+        assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(eigenInuToken))));
         assertFalse(tokenRegistryOracle.isConfigured(address(eigenInuToken)));
-        uint256 price = tokenRegistryOracle.getTokenPrice(
-            address(eigenInuToken)
-        );
-        emit log_named_uint("EigenInu getTokenPrice", price);
-        assertEq(price, 1e18, "EigenInu price should always be 1");
-        emit log_named_uint("EigenInu price (native, always 1:1)", price);
+        uint256 price = tokenRegistryOracle.getTokenPrice(address(eigenInuToken));
+        emit log_named_uint('EigenInu getTokenPrice', price);
+        assertEq(price, 1e18, 'EigenInu price should always be 1');
+        emit log_named_uint('EigenInu price (native, always 1:1)', price);
     }
 }

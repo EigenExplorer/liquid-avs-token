@@ -41,9 +41,7 @@ async function manualStakeAssetsToNodes() {
             })
         ).results
 
-        console.log(
-            `[Manual] Stake Assets To ${allocations.length} Node(s): nonce: ${pendingTx[0].nonce}`
-        )
+        console.log(`[Manual] Stake Assets To ${allocations.length} Node(s): nonce: ${pendingTx[0].nonce}`)
     } catch (error) {
         console.log('[Manual] Error: ', error.message)
     }

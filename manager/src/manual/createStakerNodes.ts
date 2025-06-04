@@ -31,9 +31,7 @@ async function manualCreateStakerNodes() {
         ).results
 
         for (const [index, pendingTx] of pendingTransactions.entries()) {
-            console.log(
-                `[Manual] Create ${count} Staker Nodes: ${index + 1}: nonce: ${pendingTx.nonce}`
-            )
+            console.log(`[Manual] Create ${count} Staker Nodes: ${index + 1}: nonce: ${pendingTx.nonce}`)
         }
     } catch (error) {
         console.log('[Manual] Error: ', error.message)

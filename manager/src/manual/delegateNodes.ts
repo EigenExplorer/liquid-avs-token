@@ -45,9 +45,7 @@ async function manualDelegateNodes() {
             })
         ).results
 
-        console.log(
-            `[Manual] Delegate ${nodeIds.length} Staker Nodes: nonce: ${pendingTx[0].nonce}`
-        )
+        console.log(`[Manual] Delegate ${nodeIds.length} Staker Nodes: nonce: ${pendingTx[0].nonce}`)
     } catch (error) {
         console.log('[Manual] Error: ', error.message)
     }

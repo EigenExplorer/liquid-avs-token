@@ -30,9 +30,7 @@ async function manualUpdateAllPricesIfNeeded() {
         ).results
 
         if (pendingTransactions.length > 0) {
-            console.log(
-                `[Manual][System] Update rates of all tokens: nonce: ${pendingTransactions[0].nonce}`
-            )
+            console.log(`[Manual][System] Update rates of all tokens: nonce: ${pendingTransactions[0].nonce}`)
         }
     } catch (error) {
         console.log('[Manual] Error: ', error.message)

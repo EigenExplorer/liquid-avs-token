@@ -63,10 +63,7 @@ export async function testCreateStakerNodes() {
             })
             passing = compareTxData(txData, expectedTxData, abi)
 
-            console.log(
-                `[Test] ${functionName}: ${index + 1}: `,
-                passing ? 'passing ✅' : 'failing ❌'
-            )
+            console.log(`[Test] ${functionName}: ${index + 1}: `, passing ? 'passing ✅' : 'failing ❌')
         }
     } catch (error) {
         console.log(error)
@@ -298,21 +295,9 @@ export async function testAddToken() {
 
         let passing = true
         const functionName = 'addToken'
-        const abi = parseAbi([
-            'function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)'
-        ])
+        const abi = parseAbi(['function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)'])
 
-        const args: [
-            string,
-            number,
-            string,
-            string,
-            number,
-            string,
-            number,
-            string,
-            `0x${string}`
-        ] = [
+        const args: [string, number, string, string, number, string, number, string, `0x${string}`] = [
             NETWORK === 'holesky'
                 ? '0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3' // sfrxETH
                 : '0xac3e018457b222d93114458476f3e3416abbe38f', // sfrxETH
@@ -662,14 +647,8 @@ export async function testBatchUpdateRates() {
 
         const args: [string[], bigint[]] = [
             NETWORK === 'holesky'
-                ? [
-                      '0x3f1c547b21f65e10480de3ad8e19faac46c95034',
-                      '0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3'
-                  ] // stETH, sfrxETH
-                : [
-                      '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84',
-                      '0xac3e018457b222d93114458476f3e3416abbe38f'
-                  ], // stETH, sfrxETH
+                ? ['0x3f1c547b21f65e10480de3ad8e19faac46c95034', '0xa63f56985f9c7f3bc9ffc5685535649e0c1a55f3'] // stETH, sfrxETH
+                : ['0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', '0xac3e018457b222d93114458476f3e3416abbe38f'], // stETH, sfrxETH
             [110100000000000000n, 102500000000000000n]
         ]
 
@@ -789,11 +768,7 @@ export async function testRevokeRole() {
  * @param abiRegistry
  * @returns
  */
-function compareTxData(
-    actualTxData: `0x${string}`,
-    expectedTxData: `0x${string}`,
-    abi: Abi
-): boolean {
+function compareTxData(actualTxData: `0x${string}`, expectedTxData: `0x${string}`, abi: Abi): boolean {
     if (actualTxData === expectedTxData) {
         return true
     }

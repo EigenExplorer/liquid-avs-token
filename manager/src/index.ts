@@ -29,9 +29,7 @@ async function dailyResponsibilities(retryCount = 0) {
         console.log(error)
 
         if (retryCount < MAX_RETRIES) {
-            console.log(
-                `[Manager] Retrying in 15 minutes... (Attempt ${retryCount + 1} of ${MAX_RETRIES})`
-            )
+            console.log(`[Manager] Retrying in 15 minutes... (Attempt ${retryCount + 1} of ${MAX_RETRIES})`)
             setTimeout(() => dailyResponsibilities(retryCount + 1), RETRY_DELAY * 1000)
         } else {
             console.log('[Manager] Max retries reached. Performing daily repsonsibilities failed.')

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ILiquidTokenManager} from "./ILiquidTokenManager.sol";
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {ILiquidTokenManager} from './ILiquidTokenManager.sol';
 
 /// @title ITokenRegistryOracle Interface
 /// @notice Interface for the TokenRegistryOracle contract
@@ -23,12 +23,7 @@ interface ITokenRegistryOracle {
     // EVENTS
     // ============================================================================
     /// @notice Emitted when a token's rate is updated
-    event TokenRateUpdated(
-        IERC20 indexed token,
-        uint256 oldRate,
-        uint256 newRate,
-        address indexed updater
-    );
+    event TokenRateUpdated(IERC20 indexed token, uint256 oldRate, uint256 newRate, address indexed updater);
     event EmergencyIntervalDisabled();
     /// @notice Emitted when a token's source is set
     event TokenSourceSet(address indexed token, address indexed source);
@@ -102,10 +97,7 @@ interface ITokenRegistryOracle {
     /// @notice Set reentrancy lock requirements for multiple pools in one transaction
     /// @param pools Array of Curve pool addresses
     /// @param settings Array of boolean values indicating if each pool requires the lock
-    function batchSetRequiresLock(
-        address[] calldata pools,
-        bool[] calldata settings
-    ) external;
+    function batchSetRequiresLock(address[] calldata pools, bool[] calldata settings) external;
     /// @notice Updates the rate for a single token
     /// @param token The address of the token to update
     /// @param newRate The new rate for the token
@@ -118,10 +110,7 @@ interface ITokenRegistryOracle {
     /// @notice Updates rates for multiple tokens in a single transaction
     /// @param tokens An array of token addresses to update
     /// @param newRates An array of new rates corresponding to the tokens
-    function batchUpdateRates(
-        IERC20[] calldata tokens,
-        uint256[] calldata newRates
-    ) external;
+    function batchUpdateRates(IERC20[] calldata tokens, uint256[] calldata newRates) external;
 
     /// @notice Retrieves the current rate for a given token
     /// @param token The address of the token to query
@@ -150,7 +139,5 @@ interface ITokenRegistryOracle {
     function lastPriceUpdate() external view returns (uint256);
     /// @notice Get price for a token
     /// @return price of a token and success/failure of this
-    function _getTokenPrice_getter(
-        address token
-    ) external returns (uint256 price, bool success);
+    function _getTokenPrice_getter(address token) external returns (uint256 price, bool success);
 }

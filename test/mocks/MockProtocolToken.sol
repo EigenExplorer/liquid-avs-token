@@ -16,9 +16,7 @@ contract MockProtocolToken {
     function mETHToETH(uint256 amount) external view returns (uint256) {
         return (amount * _exchangeRate) / 1e18;
     }
-    function getPooledEthByShares(
-        uint256 shares
-    ) external view returns (uint256) {
+    function getPooledEthByShares(uint256 shares) external view returns (uint256) {
         return (shares * _exchangeRate) / 1e18;
     }
 

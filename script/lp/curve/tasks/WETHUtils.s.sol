@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Script} from "forge-std/Script.sol";
-import {console} from "forge-std/console.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Script} from 'forge-std/Script.sol';
+import {console} from 'forge-std/console.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 /// @dev To load env file:
 // source .env
@@ -43,60 +43,44 @@ interface IWETH {
 contract WethUtils is Script {
     address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    function run(
-        uint256 amount
-    ) external payable returns (uint256 wethBalance) {
+    function run(uint256 amount) external payable returns (uint256 wethBalance) {
         return convertEthToWeth(amount);
     }
 
-    function convertEthToWeth(
-        uint256 amount
-    ) public payable returns (uint256 wethBalance) {
-        require(amount > 0, "Amount must be greater than 0");
-        require(address(this).balance >= amount, "Insufficient ETH balance");
+    function convertEthToWeth(uint256 amount) public payable returns (uint256 wethBalance) {
+        require(amount > 0, 'Amount must be greater than 0');
+        require(address(this).balance >= amount, 'Insufficient ETH balance');
 
-        console.log("[LP][WETH][Convert] Converting", amount, "ETH to WETH");
-        console.log(
-            "[LP][WETH][Convert] ETH balance before:",
-            address(this).balance
-        );
+        console.log('[LP][WETH][Convert] Converting', amount, 'ETH to WETH');
+        console.log('[LP][WETH][Convert] ETH balance before:', address(this).balance);
 
         vm.startBroadcast();
         IWETH(WETH).deposit{value: amount}();
         wethBalance = IWETH(WETH).balanceOf(address(this));
         vm.stopBroadcast();
 
-        console.log(
-            "[LP][WETH][Convert] ETH balance after:",
-            address(this).balance
-        );
-        console.log("[LP][WETH][Convert] WETH balance:", wethBalance);
-        console.log("[LP][WETH][Convert] Conversion completed");
+        console.log('[LP][WETH][Convert] ETH balance after:', address(this).balance);
+        console.log('[LP][WETH][Convert] WETH balance:', wethBalance);
+        console.log('[LP][WETH][Convert] Conversion completed');
 
         return wethBalance;
     }
 
-    function convertAllEthToWeth()
-        external
-        payable
-        returns (uint256 wethBalance)
-    {
+    function convertAllEthToWeth() external payable returns (uint256 wethBalance) {
         uint256 ethBalance = address(this).balance;
-        require(ethBalance > 0, "No ETH to convert");
+        require(ethBalance > 0, 'No ETH to convert');
 
         return convertEthToWeth(ethBalance);
     }
 
-    function convertWethToEth(
-        uint256 amount
-    ) external returns (uint256 ethBalance) {
-        require(amount > 0, "Amount must be greater than 0");
+    function convertWethToEth(uint256 amount) external returns (uint256 ethBalance) {
+        require(amount > 0, 'Amount must be greater than 0');
 
         uint256 wethBalance = IWETH(WETH).balanceOf(address(this));
-        require(wethBalance >= amount, "Insufficient WETH balance");
+        require(wethBalance >= amount, 'Insufficient WETH balance');
 
-        console.log("[LP][WETH][Convert] Converting", amount, "WETH to ETH");
-        console.log("[LP][WETH][Convert] WETH balance before:", wethBalance);
+        console.log('[LP][WETH][Convert] Converting', amount, 'WETH to ETH');
+        console.log('[LP][WETH][Convert] WETH balance before:', wethBalance);
 
         vm.startBroadcast();
 
@@ -108,58 +92,41 @@ contract WethUtils is Script {
 
         vm.stopBroadcast();
 
-        console.log("[LP][WETH][Convert] ETH balance after:", ethBalance);
-        console.log("[LP][WETH][Convert] WETH to ETH conversion completed");
+        console.log('[LP][WETH][Convert] ETH balance after:', ethBalance);
+        console.log('[LP][WETH][Convert] WETH to ETH conversion completed');
 
         return ethBalance;
     }
 
-    function transferWeth(
-        address to,
-        uint256 amount
-    ) external returns (bool success) {
-        require(to != address(0), "Cannot transfer to zero address");
-        require(amount > 0, "Amount must be greater than 0");
+    function transferWeth(address to, uint256 amount) external returns (bool success) {
+        require(to != address(0), 'Cannot transfer to zero address');
+        require(amount > 0, 'Amount must be greater than 0');
 
         uint256 wethBalance = IWETH(WETH).balanceOf(address(this));
-        require(wethBalance >= amount, "Insufficient WETH balance");
+        require(wethBalance >= amount, 'Insufficient WETH balance');
 
-        console.log("[LP][WETH][Convert] Transferring", amount, "WETH to:", to);
+        console.log('[LP][WETH][Convert] Transferring', amount, 'WETH to:', to);
 
         vm.startBroadcast();
         success = IWETH(WETH).transfer(to, amount);
         vm.stopBroadcast();
 
-        console.log(
-            "[LP][WETH][Convert] Transfer",
-            success ? "successful" : "failed"
-        );
+        console.log('[LP][WETH][Convert] Transfer', success ? 'successful' : 'failed');
 
         return success;
     }
 
-    function approveWeth(
-        address spender,
-        uint256 amount
-    ) external returns (bool success) {
-        require(spender != address(0), "Cannot approve zero address");
-        require(amount > 0, "Amount must be greater than 0");
+    function approveWeth(address spender, uint256 amount) external returns (bool success) {
+        require(spender != address(0), 'Cannot approve zero address');
+        require(amount > 0, 'Amount must be greater than 0');
 
-        console.log(
-            "[LP][WETH][Convert] Approving",
-            amount,
-            "WETH for spender:",
-            spender
-        );
+        console.log('[LP][WETH][Convert] Approving', amount, 'WETH for spender:', spender);
 
         vm.startBroadcast();
         success = IWETH(WETH).approve(spender, amount);
         vm.stopBroadcast();
 
-        console.log(
-            "[LP][WETH][Convert] Approval",
-            success ? "successful" : "failed"
-        );
+        console.log('[LP][WETH][Convert] Approval', success ? 'successful' : 'failed');
 
         return success;
     }
@@ -173,14 +140,10 @@ contract WethUtils is Script {
     }
 
     receive() external payable {
-        console.log("[LP][WETH][Convert] Received", msg.value, "ETH");
+        console.log('[LP][WETH][Convert] Received', msg.value, 'ETH');
     }
 
     fallback() external payable {
-        console.log(
-            "[LP][WETH][Convert] Fallback called with",
-            msg.value,
-            "ETH"
-        );
+        console.log('[LP][WETH][Convert] Fallback called with', msg.value, 'ETH');
     }
 }

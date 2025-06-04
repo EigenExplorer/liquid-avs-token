@@ -1,10 +1,6 @@
 import 'dotenv/config'
 
-import {
-    type MetaTransactionData,
-    type SafeTransaction,
-    OperationType
-} from '@safe-global/types-kit'
+import { type MetaTransactionData, type SafeTransaction, OperationType } from '@safe-global/types-kit'
 import { apiKit, protocolKitOwnerAdmin, protocolKitOwnerPauser } from './safe'
 import { fileURLToPath } from 'node:url'
 import { getAddress } from 'viem/utils'
@@ -61,9 +57,7 @@ export async function createSafeTransactions(
 
     if (!broadcastMatch) throw new Error('Could not find broadcast file path in output')
 
-    const broadcastData = JSON.parse(
-        await fs.readFile(broadcastMatch[1].replace(/\\\\/g, '\\'), 'utf8')
-    )
+    const broadcastData = JSON.parse(await fs.readFile(broadcastMatch[1].replace(/\\\\/g, '\\'), 'utf8'))
 
     const transactions = broadcastData.transactions
 
@@ -127,9 +121,7 @@ export async function proposeSafeTransaction(
 
     const pendingTransactions = (await apiKit.getPendingTransactions(multisigAddress)).results
 
-    console.log(
-        `[Proposal] ${origin.title}: pending proposals: ${pendingTransactions?.length || 0}`
-    )
+    console.log(`[Proposal] ${origin.title}: pending proposals: ${pendingTransactions?.length || 0}`)
 }
 
 // --- Helper functions ---
@@ -190,22 +182,13 @@ export function getOutputFile(): string {
  */
 export async function refreshDeploymentAddresses() {
     const output = await JSON.parse(
-        await fs.readFile(
-            path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`),
-            'utf8'
-        )
+        await fs.readFile(path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`), 'utf8')
     )
 
     LIQUID_TOKEN_ADDRESS = String(output.proxyAddress)
-    LIQUID_TOKEN_MANAGER_ADDRESS = String(
-        output.contractDeployments.proxy.liquidTokenManager.address
-    )
-    STAKER_NODE_COORDINATOR_ADDRESS = String(
-        output.contractDeployments.proxy.stakerNodeCoordinator.address
-    )
-    TOKEN_REGISTRY_ORACLE_ADDRESS = String(
-        output.contractDeployments.proxy.tokenRegistryOracle.address
-    )
+    LIQUID_TOKEN_MANAGER_ADDRESS = String(output.contractDeployments.proxy.liquidTokenManager.address)
+    STAKER_NODE_COORDINATOR_ADDRESS = String(output.contractDeployments.proxy.stakerNodeCoordinator.address)
+    TOKEN_REGISTRY_ORACLE_ADDRESS = String(output.contractDeployments.proxy.tokenRegistryOracle.address)
     ADMIN = String(output.roles.admin)
     PAUSER = String(output.roles.pauser)
     PRICE_UPDATER = String(output.roles.priceUpdater)

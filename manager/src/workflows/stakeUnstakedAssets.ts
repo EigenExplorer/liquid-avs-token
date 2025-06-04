@@ -52,9 +52,7 @@ export async function stakeUnstakedAssets() {
         const latResponse = await fetch(`${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}`)
 
         if (!latResponse.ok) {
-            throw new Error(
-                `Failed to fetch LAT data: ${latResponse.status} ${latResponse.statusText}`
-            )
+            throw new Error(`Failed to fetch LAT data: ${latResponse.status} ${latResponse.statusText}`)
         }
 
         const latData = (await latResponse.json()) as LATResponse
@@ -64,9 +62,7 @@ export async function stakeUnstakedAssets() {
         const nodesResponse = await fetch(`${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/staker-nodes`)
 
         if (!nodesResponse.ok) {
-            throw new Error(
-                `Failed to fetch staker nodes: ${nodesResponse.status} ${nodesResponse.statusText}`
-            )
+            throw new Error(`Failed to fetch staker nodes: ${nodesResponse.status} ${nodesResponse.statusText}`)
         }
 
         const nodesData = (await nodesResponse.json()) as StakerNodesResponse
@@ -86,20 +82,14 @@ export async function stakeUnstakedAssets() {
         const tokensResponse = await fetch(`${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/tokens`)
 
         if (!tokensResponse.ok) {
-            throw new Error(
-                `Failed to fetch token data: ${tokensResponse.status} ${tokensResponse.statusText}`
-            )
+            throw new Error(`Failed to fetch token data: ${tokensResponse.status} ${tokensResponse.statusText}`)
         }
 
         const tokensData = (await tokensResponse.json()) as TokensResponse
-        const tokenInfoMap = new Map(
-            tokensData.data.map((token) => [token.address.toLowerCase(), token])
-        )
+        const tokenInfoMap = new Map(tokensData.data.map((token) => [token.address.toLowerCase(), token]))
 
         // EE API: Fetch strategies restaked by each Operator
-        const operatorAddresses = delegatedNodes.map((node) =>
-            node.operatorDelegation.toLowerCase()
-        )
+        const operatorAddresses = delegatedNodes.map((node) => node.operatorDelegation.toLowerCase())
         const operatorStrategiesData = await Promise.all(
             operatorAddresses.map(async (operatorAddress) => {
                 const operatorResponse = await fetch(`${EE_API_URL}/operators/${operatorAddress}`, {
@@ -115,18 +105,14 @@ export async function stakeUnstakedAssets() {
                 }
 
                 const data = await operatorResponse.json()
-                const strategyAddresses = data.shares.map((share) =>
-                    share.strategyAddress.toLowerCase()
-                )
+                const strategyAddresses = data.shares.map((share) => share.strategyAddress.toLowerCase())
                 return {
                     operator: operatorAddress as string,
                     strategies: strategyAddresses as string[]
                 }
             })
         )
-        const operatorStrategies = new Map(
-            operatorStrategiesData.map((item) => [item.operator, item.strategies])
-        )
+        const operatorStrategies = new Map(operatorStrategiesData.map((item) => [item.operator, item.strategies]))
 
         const allocations: NodeAllocation[] = []
 
@@ -154,16 +140,12 @@ export async function stakeUnstakedAssets() {
             // Filter for nodes whose Operators restake the asset
             const assetStrategyAddress = tokenInfo.strategyAddress.toLowerCase()
             const eligibleNodes = delegatedNodes.filter((node) =>
-                operatorStrategies
-                    .get(node.operatorDelegation.toLowerCase())
-                    ?.includes(assetStrategyAddress)
+                operatorStrategies.get(node.operatorDelegation.toLowerCase())?.includes(assetStrategyAddress)
             )
 
             // Skip if no operators restake this strategy
             if (eligibleNodes.length === 0) {
-                console.log(
-                    `[Manager][Warning] No operators restake asset ${asset.asset}. Skipping its allocation...`
-                )
+                console.log(`[Manager][Warning] No operators restake asset ${asset.asset}. Skipping its allocation...`)
                 continue
             }
 
@@ -172,9 +154,7 @@ export async function stakeUnstakedAssets() {
 
             // Create allocations for all nodes
             for (const node of eligibleNodes) {
-                const existingAllocation = allocations.find(
-                    (alloc) => alloc.nodeId === node.nodeId.toString()
-                )
+                const existingAllocation = allocations.find((alloc) => alloc.nodeId === node.nodeId.toString())
 
                 if (existingAllocation) {
                     existingAllocation.assets.push(asset.asset)

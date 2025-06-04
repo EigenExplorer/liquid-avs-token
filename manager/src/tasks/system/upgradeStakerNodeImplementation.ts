@@ -20,8 +20,7 @@ export async function upgradeStakerNodeImplementation(implementationContractAddr
         const abi = parseAbi(['function upgradeStakerNodeImplementation(address)'])
         const metadata = {
             title: `Upgrade Staker Node Implementation to ${implementationContractAddress}`,
-            description:
-                'Proposal to upgrade the staker node implementation contract via manual proposal'
+            description: 'Proposal to upgrade the staker node implementation contract via manual proposal'
         }
 
         // Setup transaction data

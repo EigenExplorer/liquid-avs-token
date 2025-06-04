@@ -130,11 +130,9 @@ Upgrades the staker node implementation
 _Can only be called by an account with DEFAULT_ADMIN_ROLE_
 
 ```solidity
-function upgradeStakerNodeImplementation(address _implementationContract)
-    public
-    override
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    notZeroAddress(_implementationContract);
+function upgradeStakerNodeImplementation(
+    address _implementationContract
+) public override onlyRole(DEFAULT_ADMIN_ROLE) notZeroAddress(_implementationContract);
 ```
 
 **Parameters**

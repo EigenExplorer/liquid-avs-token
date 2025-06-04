@@ -8,10 +8,7 @@ const __dirname = path.dirname(__filename)
 
 const LAT_DEPLOYMENTS_REPO = process.env.LAT_DEPLOYMENTS_REPO
 const GITHUB_ACCESS_TOKEN = process.env.GITHUB_ACCESS_TOKEN
-const DEPLOYMENT_DATA_PATH = path.resolve(
-    __dirname,
-    '../../../script/outputs/holesky/deployment_data.json'
-)
+const DEPLOYMENT_DATA_PATH = path.resolve(__dirname, '../../../script/outputs/holesky/deployment_data.json')
 
 interface VersionWithTimestamp {
     timestamp: number
@@ -30,9 +27,7 @@ export async function refreshDeployment() {
     try {
         // Skip for local deployments
         if (!process.env.DEPLOYMENT || process.env.DEPLOYMENT === 'local') {
-            console.log(
-                '[Info] Skipping deployment data fetch from GH. Make sure local output file is updated.'
-            )
+            console.log('[Info] Skipping deployment data fetch from GH. Make sure local output file is updated.')
             await refreshDeploymentAddresses()
             return
         }
@@ -50,9 +45,7 @@ export async function refreshDeployment() {
         const headers = new Headers()
         headers.append('Authorization', `token ${process.env.GITHUB_ACCESS_TOKEN}`)
         headers.append('Accept', 'application/vnd.github.v3+json')
-        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${pathParts.join(
-            '/'
-        )}`
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${pathParts.join('/')}`
 
         const response = await fetch(apiUrl, { headers })
         if (!response.ok) {
@@ -95,9 +88,7 @@ export async function refreshDeployment() {
         }
 
         if (versionsWithTimestamps.length === 0) {
-            throw new Error(
-                `No valid deployment data found in any version directory in ${LAT_DEPLOYMENTS_REPO}`
-            )
+            throw new Error(`No valid deployment data found in any version directory in ${LAT_DEPLOYMENTS_REPO}`)
         }
 
         // Get the latest deployment based on timestamp

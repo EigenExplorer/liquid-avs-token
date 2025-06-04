@@ -62,12 +62,7 @@ interface ILiquidTokenManager {
     );
 
     /// @notice Emitted when a token's price is updated
-    event TokenPriceUpdated(
-        IERC20 indexed token,
-        uint256 oldPrice,
-        uint256 newPrice,
-        address indexed updater
-    );
+    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
 
     /// @notice Emitted when the volatility threshold for an asset is updated
     event VolatilityThresholdUpdated(
@@ -78,20 +73,10 @@ interface ILiquidTokenManager {
     );
 
     /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
-    event VolatilityCheckFailed(
-        IERC20 indexed token,
-        uint256 oldPrice,
-        uint256 newPrice,
-        uint256 changeRatio
-    );
+    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
 
     /// @notice Emitted when assets are staked to a node
-    event AssetsStakedToNode(
-        uint256 indexed nodeId,
-        IERC20[] assets,
-        uint256[] amounts,
-        address indexed staker
-    );
+    event AssetsStakedToNode(uint256 indexed nodeId, IERC20[] assets, uint256[] amounts, address indexed staker);
 
     /// @notice Emitted when assets are deposited to Eigenlayer
     event AssetsDepositedToEigenlayer(
@@ -225,11 +210,7 @@ interface ILiquidTokenManager {
     /// @param nodeId The ID of the node to stake to
     /// @param assets Array of asset addresses to stake
     /// @param amounts Array of amounts to stake for each asset
-    function stakeAssetsToNode(
-        uint256 nodeId,
-        IERC20[] memory assets,
-        uint256[] memory amounts
-    ) external;
+    function stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) external;
 
     /// @notice Stakes assets to multiple nodes
     /// @param allocations Array of NodeAllocation structs containing staking information
@@ -270,10 +251,7 @@ interface ILiquidTokenManager {
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the specific node
-    function getStakedAssetBalanceNode(
-        IERC20 asset,
-        uint256 nodeId
-    ) external view returns (uint256);
+    function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
 
     /// @notice Checks if a token is supported
     /// @param token Address of the token to check

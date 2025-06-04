@@ -45,9 +45,7 @@ export function getViemClient(n?: Chain) {
             batch: {
                 multicall: true
             },
-            transport: process.env.RPC_URL
-                ? http(process.env.RPC_URL)
-                : http(network.rpcUrls.default.http[0])
+            transport: process.env.RPC_URL ? http(process.env.RPC_URL) : http(network.rpcUrls.default.http[0])
         })
     }
 
@@ -68,9 +66,7 @@ export function getWalletClient(account: PrivateKeyAccount, n?: Chain) {
     walletViemClient = createWalletClient({
         account,
         chain: network,
-        transport: process.env.RPC_URL
-            ? http(process.env.RPC_URL)
-            : http(network.rpcUrls.default.http[0])
+        transport: process.env.RPC_URL ? http(process.env.RPC_URL) : http(network.rpcUrls.default.http[0])
     })
 
     return walletViemClient
@@ -86,9 +82,7 @@ if (!(global as any).publicViemClient) {
         batch: {
             multicall: true
         },
-        transport: process.env.RPC_URL
-            ? http(process.env.RPC_URL)
-            : http(network.rpcUrls.default.http[0])
+        transport: process.env.RPC_URL ? http(process.env.RPC_URL) : http(network.rpcUrls.default.http[0])
     })
 }
 

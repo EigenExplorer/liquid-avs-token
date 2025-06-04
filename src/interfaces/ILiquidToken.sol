@@ -162,18 +162,12 @@ interface ILiquidToken {
     /// @notice Credits queued balances for a given set of assets
     /// @param assets The assets to credit
     /// @param amounts The credit amounts expressed in native token
-    function creditQueuedAssetBalances(
-        IERC20[] calldata assets,
-        uint256[] calldata amounts
-    ) external;
+    function creditQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external;
 
     /// @notice Allows the LiquidTokenManager to transfer assets from this contract
     /// @param assetsToRetrieve The ERC20 assets to transfer
     /// @param amounts The amounts of each asset to transfer
-    function transferAssets(
-        IERC20[] calldata assetsToRetrieve,
-        uint256[] calldata amounts
-    ) external;
+    function transferAssets(IERC20[] calldata assetsToRetrieve, uint256[] calldata amounts) external;
 
     /// @notice Calculates the number of shares that correspond to a given amount of an asset
     /// @param asset The ERC20 asset
@@ -212,9 +206,7 @@ interface ILiquidToken {
     /// @notice Returns the queued balances for a set of assets
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
-    function balanceQueuedAssets(
-        IERC20[] calldata assetList
-    ) external view returns (uint256[] memory);
+    function balanceQueuedAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
 
     /// @notice Pauses the contract
     function pause() external;

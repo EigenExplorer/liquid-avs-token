@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 // Mock oracle that throws
 contract MockFailingOracle {
@@ -93,8 +93,8 @@ contract ZeroTokenPriceOracle {
     }
 
     // For compatibility with contract roles check
-    bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
-    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 public constant RATE_UPDATER_ROLE = keccak256('RATE_UPDATER_ROLE');
+    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256('ORACLE_ADMIN_ROLE');
     function hasRole(bytes32, address) external pure returns (bool) {
         return true; // All roles granted
     }

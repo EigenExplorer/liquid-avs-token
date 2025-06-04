@@ -2,13 +2,7 @@ import 'dotenv/config'
 
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import {
-    ADMIN,
-    DEPLOYMENT,
-    forgeCommand,
-    createSafeTransactions,
-    proposeSafeTransaction
-} from '../utils/forge'
+import { ADMIN, DEPLOYMENT, forgeCommand, createSafeTransactions, proposeSafeTransaction } from '../utils/forge'
 
 const execAsync = promisify(exec)
 
@@ -32,10 +26,7 @@ export async function stakeAssetsToNodes(allocations: NodeAllocation[]) {
     const sender = DEPLOYMENT === 'local' ? '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' : ADMIN
     const sig = 'run(string,(uint256,address[],uint256[])[])'
     const params = `'[${allocations
-        .map(
-            ({ nodeId, assets, amounts }) =>
-                `(${nodeId},[${assets.join(',')}],[${amounts.join(',')}])`
-        )
+        .map(({ nodeId, assets, amounts }) => `(${nodeId},[${assets.join(',')}],[${amounts.join(',')}])`)
         .join(',')}]'`
 
     // Simulate task and create transaction

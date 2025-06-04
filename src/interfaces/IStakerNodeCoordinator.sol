@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
-import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {IStrategyManager} from '@eigenlayer/contracts/interfaces/IStrategyManager.sol';
+import {IDelegationManager} from '@eigenlayer/contracts/interfaces/IDelegationManager.sol';
 
-import {IStakerNode} from "./IStakerNode.sol";
-import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IStakerNode} from './IStakerNode.sol';
+import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
 
 /// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract
 interface IStakerNodeCoordinator {
+    // ============================================================================
+    // STRUCTS
+    // ============================================================================
+
     /// @notice Initialization parameters for StakerNodeCoordinator
     struct Init {
         ILiquidTokenManager liquidTokenManager;
@@ -24,11 +28,19 @@ interface IStakerNodeCoordinator {
         address stakerNodeImplementation;
     }
 
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
+
     /// @notice Emitted when a new staker node is created
     event NodeCreated(uint256 indexed nodeId, IStakerNode indexed node, address indexed creator);
 
     /// @notice Emitted when the staker node implementation is changed
-    event NodeImplementationChanged(address indexed upgradeableBeaconAddress, address indexed implementationContract, bool isInitialRegistration);
+    event NodeImplementationChanged(
+        address indexed upgradeableBeaconAddress,
+        address indexed implementationContract,
+        bool isInitialRegistration
+    );
 
     /// @notice Emitted when the maximum number of nodes is updated
     event MaxNodesUpdated(uint256 oldMaxNodes, uint256 newMaxNodes, address indexed updater);
@@ -38,6 +50,16 @@ interface IStakerNodeCoordinator {
 
     /// @notice Emitted when a node is initialized
     event NodeInitialized(address indexed nodeAddress, uint64 initializedVersion, uint256 indexed nodeId);
+
+    // ============================================================================
+    // CUSTOM ERRORS
+    // ============================================================================
+
+    /// @notice Error for zero address
+    error ZeroAddress();
+
+    /// @notice Error for zero amount
+    error ZeroAmount();
 
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
@@ -53,12 +75,6 @@ interface IStakerNodeCoordinator {
 
     /// @notice Error when attempting to use a non-contract address as implementation
     error NotAContract();
-
-    /// @notice Error for zero amount
-    error ZeroAmount();
-
-    /// @notice Error for zero address
-    error ZeroAddress();
 
     /// @notice Error when beacon implementation already exists
     error BeaconImplementationAlreadyExists();
@@ -78,6 +94,10 @@ interface IStakerNodeCoordinator {
     /// @notice Error when caller is not the owner
     error NotOwner();
 
+    // ============================================================================
+    // FUNCTIONS
+    // ============================================================================
+
     /// @notice Initializes the StakerNodeCoordinator contract
     /// @param init Initialization parameters
     function initialize(Init calldata init) external;
@@ -94,16 +114,6 @@ interface IStakerNodeCoordinator {
     /// @param _maxNodes New maximum number of nodes
     function setMaxNodes(uint256 _maxNodes) external;
 
-    /// @notice Checks if an address has the STAKER_NODES_DELEGATOR_ROLE
-    /// @param _address Address to check
-    /// @return True if the address has the role, false otherwise
-    function hasStakerNodeDelegatorRole(address _address) external view returns (bool);
-
-    /// @notice Checks if a caller is the liquid token manager
-    /// @param caller Address to check
-    /// @return True if the caller is the liquid token manager, false otherwise
-    function hasLiquidTokenManagerRole(address caller) external view returns (bool);
-
     /// @notice Retrieves all staker nodes
     /// @return An array of all IStakerNode interfaces
     function getAllNodes() external view returns (IStakerNode[] memory);
@@ -116,6 +126,16 @@ interface IStakerNodeCoordinator {
     /// @param nodeId The ID of the staker node
     /// @return The IStakerNode interface of the staker node
     function getNodeById(uint256 nodeId) external view returns (IStakerNode);
+
+    /// @notice Checks if an address has the STAKER_NODES_DELEGATOR_ROLE
+    /// @param _address Address to check
+    /// @return True if the address has the role, false otherwise
+    function hasStakerNodeDelegatorRole(address _address) external view returns (bool);
+
+    /// @notice Checks if a caller is the liquid token manager
+    /// @param caller Address to check
+    /// @return True if the caller is the liquid token manager, false otherwise
+    function hasLiquidTokenManagerRole(address caller) external view returns (bool);
 
     /// @notice Gets the delegation manager contract
     /// @return The IDelegationManager interface

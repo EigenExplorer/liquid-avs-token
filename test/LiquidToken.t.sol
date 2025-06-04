@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Test} from "forge-std/Test.sol";
-import {Vm} from "forge-std/Vm.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import "forge-std/console.sol";
+import {Test} from 'forge-std/Test.sol';
+import {Vm} from 'forge-std/Vm.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {ERC20} from '@openzeppelin/contracts/token/ERC20/ERC20.sol';
+import {Pausable} from '@openzeppelin/contracts/security/Pausable.sol';
+import 'forge-std/console.sol';
 
-import {BaseTest} from "./common/BaseTest.sol";
-import {LiquidToken} from "../src/core/LiquidToken.sol";
-import {LiquidTokenManager} from "../src/core/LiquidTokenManager.sol";
-import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {BaseTest} from './common/BaseTest.sol';
+import {LiquidToken} from '../src/core/LiquidToken.sol';
+import {LiquidTokenManager} from '../src/core/LiquidTokenManager.sol';
+import {ILiquidToken} from '../src/interfaces/ILiquidToken.sol';
+import {MockERC20} from './mocks/MockERC20.sol';
+import {ILiquidTokenManager} from '../src/interfaces/ILiquidTokenManager.sol';
 
 contract LiquidTokenTest is BaseTest {
     function setUp() public override {
@@ -21,34 +21,22 @@ contract LiquidTokenTest is BaseTest {
 
         // --- Register testToken ---
         if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))) {
-            try
-                liquidTokenManager.setVolatilityThreshold(
-                    IERC20(address(testToken)),
-                    0
-                )
-            {
-                console.log("Volatility threshold disabled for testToken");
+            try liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0) {
+                console.log('Volatility threshold disabled for testToken');
             } catch Error(string memory reason) {
-                console.log("Failed to set volatility threshold:", reason);
+                console.log('Failed to set volatility threshold:', reason);
             } catch (bytes memory) {
-                console.log(
-                    "Failed to set volatility threshold (unknown error)"
-                );
+                console.log('Failed to set volatility threshold (unknown error)');
             }
         } else {
-            console.log("testToken not supported, adding it first");
+            console.log('testToken not supported, adding it first');
             vm.startPrank(admin);
 
             // Mock the oracle price getter for testToken
-            bytes4 getTokenPriceSelector = bytes4(
-                keccak256("_getTokenPrice_getter(address)")
-            );
+            bytes4 getTokenPriceSelector = bytes4(keccak256('_getTokenPrice_getter(address)'));
             vm.mockCall(
                 address(tokenRegistryOracle),
-                abi.encodeWithSelector(
-                    getTokenPriceSelector,
-                    address(testToken)
-                ),
+                abi.encodeWithSelector(getTokenPriceSelector, address(testToken)),
                 abi.encode(1e18, true) // price = 1e18, success = true
             );
 
@@ -65,48 +53,33 @@ contract LiquidTokenTest is BaseTest {
                     bytes4(0) // fallbackFn
                 )
             {
-                console.log("Successfully added testToken in LiquidTokenTest");
+                console.log('Successfully added testToken in LiquidTokenTest');
             } catch Error(string memory reason) {
-                console.log("Failed to add testToken:", reason);
+                console.log('Failed to add testToken:', reason);
             } catch (bytes memory) {
-                console.log("Failed to add testToken (bytes error)");
+                console.log('Failed to add testToken (bytes error)');
             }
             vm.stopPrank();
         }
 
         // --- Register testToken2 ---
         if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))) {
-            try
-                liquidTokenManager.setVolatilityThreshold(
-                    IERC20(address(testToken2)),
-                    0
-                )
-            {
-                console.log("Volatility threshold disabled for testToken2");
+            try liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken2)), 0) {
+                console.log('Volatility threshold disabled for testToken2');
             } catch Error(string memory reason) {
-                console.log(
-                    "Failed to set volatility threshold for testToken2:",
-                    reason
-                );
+                console.log('Failed to set volatility threshold for testToken2:', reason);
             } catch (bytes memory) {
-                console.log(
-                    "Failed to set volatility threshold for testToken2 (unknown error)"
-                );
+                console.log('Failed to set volatility threshold for testToken2 (unknown error)');
             }
         } else {
-            console.log("testToken2 not supported, adding it");
+            console.log('testToken2 not supported, adding it');
             vm.startPrank(admin);
 
             // Mock the oracle price getter for testToken2
-            bytes4 getTokenPriceSelector = bytes4(
-                keccak256("_getTokenPrice_getter(address)")
-            );
+            bytes4 getTokenPriceSelector = bytes4(keccak256('_getTokenPrice_getter(address)'));
             vm.mockCall(
                 address(tokenRegistryOracle),
-                abi.encodeWithSelector(
-                    getTokenPriceSelector,
-                    address(testToken2)
-                ),
+                abi.encodeWithSelector(getTokenPriceSelector, address(testToken2)),
                 abi.encode(5e17, true) // price = 0.5e18, success = true
             );
 
@@ -123,11 +96,11 @@ contract LiquidTokenTest is BaseTest {
                     bytes4(0) // fallbackFn
                 )
             {
-                console.log("Successfully added testToken2 in LiquidTokenTest");
+                console.log('Successfully added testToken2 in LiquidTokenTest');
             } catch Error(string memory reason) {
-                console.log("Failed to add testToken2:", reason);
+                console.log('Failed to add testToken2:', reason);
             } catch (bytes memory) {
-                console.log("Failed to add testToken2 (bytes error)");
+                console.log('Failed to add testToken2 (bytes error)');
             }
             vm.stopPrank();
         }
@@ -140,24 +113,12 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 10 ether;
 
-        uint256[] memory mintedShares = liquidToken.deposit(
-            assets,
-            amounts,
-            user1
-        );
+        uint256[] memory mintedShares = liquidToken.deposit(assets, amounts, user1);
         uint256 shares = mintedShares[0];
 
-        assertEq(shares, 10 ether, "Incorrect number of shares minted");
-        assertEq(
-            liquidToken.balanceOf(user1),
-            10 ether,
-            "Incorrect balance after deposit"
-        );
-        assertEq(
-            testToken.balanceOf(address(liquidToken)),
-            10 ether,
-            "Incorrect token balance in LiquidToken"
-        );
+        assertEq(shares, 10 ether, 'Incorrect number of shares minted');
+        assertEq(liquidToken.balanceOf(user1), 10 ether, 'Incorrect balance after deposit');
+        assertEq(testToken.balanceOf(address(liquidToken)), 10 ether, 'Incorrect token balance in LiquidToken');
     }
 
     function testTransferAssets() public {
@@ -179,7 +140,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
             5 ether,
-            "Incorrect token balance in liquid token manager"
+            'Incorrect token balance in liquid token manager'
         );
     }
 
@@ -196,28 +157,20 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), 10 ether);
         testToken2.approve(address(liquidToken), 5 ether);
 
-        uint256[] memory mintedShares = liquidToken.deposit(
-            assets,
-            amountsToDeposit,
-            user1
-        );
+        uint256[] memory mintedShares = liquidToken.deposit(assets, amountsToDeposit, user1);
         uint256 shares1 = mintedShares[0];
         uint256 shares2 = mintedShares[1];
 
-        assertEq(
-            shares1,
-            10 ether,
-            "Incorrect number of shares minted for token1"
-        );
+        assertEq(shares1, 10 ether, 'Incorrect number of shares minted for token1');
         assertEq(
             shares2,
             2.5 ether, // Changed from 5 ether to 2.5 ether
-            "Incorrect number of shares minted for token2"
+            'Incorrect number of shares minted for token2'
         );
         assertEq(
             liquidToken.balanceOf(user1),
             12.5 ether, // Changed from 15 ether to 12.5 ether
-            "Incorrect total balance after deposits"
+            'Incorrect total balance after deposits'
         );
         vm.stopPrank();
     }
@@ -248,12 +201,12 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
             5 ether,
-            "Incorrect token1 balance in liquidTokenManager"
+            'Incorrect token1 balance in liquidTokenManager'
         );
         assertEq(
             testToken2.balanceOf(address(liquidTokenManager)),
             2 ether,
-            "Incorrect token2 balance in liquidTokenManager"
+            'Incorrect token2 balance in liquidTokenManager'
         );
     }
 
@@ -281,7 +234,7 @@ contract LiquidTokenTest is BaseTest {
     }
 
     function testDepositUnsupportedAsset() public {
-        ERC20 unsupportedToken = new MockERC20("Unsupported Token", "UT");
+        ERC20 unsupportedToken = new MockERC20('Unsupported Token', 'UT');
         vm.prank(user1);
 
         IERC20[] memory assets = new IERC20[](1);
@@ -289,12 +242,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.UnsupportedAsset.selector,
-                address(unsupportedToken)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILiquidToken.UnsupportedAsset.selector, address(unsupportedToken)));
         liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
@@ -307,11 +255,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.mockCall(
             address(liquidTokenManager),
-            abi.encodeWithSelector(
-                ILiquidTokenManager.convertToUnitOfAccount.selector,
-                IERC20(address(testToken)),
-                10
-            ),
+            abi.encodeWithSelector(ILiquidTokenManager.convertToUnitOfAccount.selector, IERC20(address(testToken)), 10),
             abi.encode(0) // Conversion returns zero, leading to ZeroShares
         );
 
@@ -327,12 +271,7 @@ contract LiquidTokenTest is BaseTest {
         amounts[0] = 5 ether;
 
         vm.prank(user1);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.NotLiquidTokenManager.selector,
-                user1
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILiquidToken.NotLiquidTokenManager.selector, user1));
         liquidToken.transferAssets(assets, amounts);
     }
 
@@ -350,12 +289,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(address(liquidTokenManager));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.InsufficientBalance.selector,
-                address(testToken),
-                10 ether,
-                20 ether
-            )
+            abi.encodeWithSelector(ILiquidToken.InsufficientBalance.selector, address(testToken), 10 ether, 20 ether)
         );
         liquidToken.transferAssets(assets, amountsToTransfer);
     }
@@ -364,10 +298,10 @@ contract LiquidTokenTest is BaseTest {
         vm.prank(pauser);
         liquidToken.pause();
 
-        assertTrue(liquidToken.paused(), "Contract should be paused");
+        assertTrue(liquidToken.paused(), 'Contract should be paused');
 
         // OpenZeppelin v4 uses string revert reasons instead of error selectors
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert('Pausable: paused');
         vm.prank(user1);
 
         IERC20[] memory assets = new IERC20[](1);
@@ -385,7 +319,7 @@ contract LiquidTokenTest is BaseTest {
         vm.prank(admin);
         liquidToken.unpause();
 
-        assertFalse(liquidToken.paused(), "Contract should be unpaused");
+        assertFalse(liquidToken.paused(), 'Contract should be unpaused');
 
         vm.prank(user1);
 
@@ -421,11 +355,7 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amounts, user1);
 
         // Verify total assets matches deposit
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            maxAmount,
-            "Total assets should match max deposit"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), maxAmount, 'Total assets should match max deposit');
 
         // Test precision with small amounts
         uint256 smallAmount = 1;
@@ -441,7 +371,7 @@ contract LiquidTokenTest is BaseTest {
         assertEq(
             liquidToken.assetBalances(address(testToken)),
             maxAmount + smallAmount,
-            "Total assets should include small amount"
+            'Total assets should include small amount'
         );
     }
 
@@ -463,21 +393,13 @@ contract LiquidTokenTest is BaseTest {
         liquidToken.deposit(assets, amounts, user1);
 
         // Verify initial total assets
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            depositAmount,
-            "Initial total assets incorrect"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, 'Initial total assets incorrect');
 
         // Simulate strategy migration
         vm.startPrank(admin);
 
         // Verify total assets remained constant through migration
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            depositAmount,
-            "Total assets changed during migration"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, 'Total assets changed during migration');
     }
 
     /// Tests for withdrawal functionality that will be implemented in future versions

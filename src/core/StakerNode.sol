@@ -48,9 +48,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc IStakerNode
-    function initialize(
-        Init memory init
-    ) public notZeroAddress(address(init.coordinator)) initializer {
+    function initialize(Init memory init) public notZeroAddress(address(init.coordinator)) initializer {
         __ReentrancyGuard_init();
         coordinator = IStakerNodeCoordinator(init.coordinator);
         id = init.id;

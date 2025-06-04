@@ -7,9 +7,7 @@ library NetworkAddresses {
         address delegationManager;
     }
 
-    function getAddresses(
-        uint256 chainId
-    ) internal pure returns (Addresses memory) {
+    function getAddresses(uint256 chainId) internal pure returns (Addresses memory) {
         if (chainId == 1) {
             // Mainnet
             return
@@ -25,7 +23,7 @@ library NetworkAddresses {
                     delegationManager: 0xA44151489861Fe9e3055d95adC98FbD462B948e7
                 });
         } else {
-            revert("Unsupported network");
+            revert('Unsupported network');
         }
     }
 }

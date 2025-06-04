@@ -145,7 +145,6 @@ contract LiquidTokenManager is
             if (decimalsFromContract == 0) revert InvalidDecimals();
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
-
         uint256 fetchedPrice;
         if (!isNative) {
             (uint256 price, bool ok) = tokenRegistryOracle._getTokenPrice_getter(address(token));
@@ -164,14 +163,7 @@ contract LiquidTokenManager is
         strategyTokens[strategy] = token;
         supportedTokens.push(token);
 
-        emit TokenAdded(
-            token,
-            decimals,
-            fetchedPrice,
-            volatilityThreshold,
-            address(strategy),
-            msg.sender
-        );
+        emit TokenAdded(token, decimals, fetchedPrice, volatilityThreshold, address(strategy), msg.sender);
     }
 
     /// @inheritdoc ILiquidTokenManager
@@ -234,9 +226,7 @@ contract LiquidTokenManager is
 
         // Find the ratio of price change and compare it against the asset's volatility threshold
         if (tokens[token].volatilityThreshold != 0) {
-            uint256 absPriceDiff = (newPrice > oldPrice)
-                ? newPrice - oldPrice
-                : oldPrice - newPrice;
+            uint256 absPriceDiff = (newPrice > oldPrice) ? newPrice - oldPrice : oldPrice - newPrice;
             uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
 
             if (changeRatio > tokens[token].volatilityThreshold) {
@@ -250,21 +240,12 @@ contract LiquidTokenManager is
     }
 
     /// @inheritdoc ILiquidTokenManager
-    function setVolatilityThreshold(
-        IERC20 asset,
-        uint256 newThreshold
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(asset) == address(0)) revert ZeroAddress();
         if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
-        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18))
-            revert InvalidThreshold();
+        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();
 
-        emit VolatilityThresholdUpdated(
-            asset,
-            tokens[asset].volatilityThreshold,
-            newThreshold,
-            msg.sender
-        );
+        emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
 
         tokens[asset].volatilityThreshold = newThreshold;
     }
@@ -281,8 +262,7 @@ contract LiquidTokenManager is
         if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
         if (approverSignatureAndExpiries.length != arrayLength)
             revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
-        if (approverSalts.length != arrayLength)
-            revert LengthMismatch(approverSalts.length, arrayLength);
+        if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
 
         // Call for nodes to delegate themselves (on EigenLayer) to corresponding operators
         for (uint256 i = 0; i < arrayLength; i++) {
@@ -311,12 +291,8 @@ contract LiquidTokenManager is
         }
     }
 
-    /// @notice Called by `stakeAssetsToNode` and `stakeAssetsToNodes`
-    function _stakeAssetsToNode(
-        uint256 nodeId,
-        IERC20[] memory assets,
-        uint256[] memory amounts
-    ) internal {
+    /// @dev Called by `stakeAssetsToNode` and `stakeAssetsToNodes`
+    function _stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) internal {
         uint256 assetsLength = assets.length;
         uint256 amountsLength = amounts.length;
 
@@ -358,12 +334,7 @@ contract LiquidTokenManager is
         // Call for node to deposit assets into EigenLayer
         node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
 
-        emit AssetsDepositedToEigenlayer(
-            depositAssets,
-            depositAmounts,
-            strategiesForNode,
-            address(node)
-        );
+        emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
     }
 
     /// @dev OUT OF SCOPE FOR V1
@@ -486,11 +457,8 @@ contract LiquidTokenManager is
         return _getStakedAssetBalanceNode(asset, node);
     }
 
-    /// @notice Called by `getStakedAssetBalance` and `getStakedAssetBalanceNode`
-    function _getStakedAssetBalanceNode(
-        IERC20 asset,
-        IStakerNode node
-    ) internal view returns (uint256) {
+    /// @dev Called by `getStakedAssetBalance` and `getStakedAssetBalanceNode`
+    function _getStakedAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -512,10 +480,7 @@ contract LiquidTokenManager is
     }
 
     /// @inheritdoc ILiquidTokenManager
-    function convertFromUnitOfAccount(
-        IERC20 token,
-        uint256 amount
-    ) external view returns (uint256) {
+    function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256) {
         TokenInfo memory info = tokens[token];
         if (info.decimals == 0) revert TokenNotSupported(token);
 

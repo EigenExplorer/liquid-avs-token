@@ -36,9 +36,7 @@ export async function addToken(
 
         // Setup task params
         const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS
-        const abi = parseAbi([
-            'function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)'
-        ])
+        const abi = parseAbi(['function addToken(address,uint8,uint256,address,uint8,address,uint8,address,bytes4)'])
         const metadata = {
             title: `Add Token ${tokenAddress}`,
             description: 'Proposal to add token via manual proposal'

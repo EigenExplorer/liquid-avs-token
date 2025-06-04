@@ -31,12 +31,7 @@ interface IStakerNode {
     event UndelegatedFromOperator(address operator);
 
     /// @notice Emitted when assets are deposited into an EigenLayer strategy
-    event AssetDepositedToStrategy(
-        IERC20 indexed asset,
-        IStrategy indexed strategy,
-        uint256 amount,
-        uint256 shares
-    );
+    event AssetDepositedToStrategy(IERC20 indexed asset, IStrategy indexed strategy, uint256 amount, uint256 shares);
 
     // ============================================================================
     // CUSTOM ERRORS

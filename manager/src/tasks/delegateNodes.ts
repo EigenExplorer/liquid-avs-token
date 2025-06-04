@@ -2,13 +2,7 @@ import 'dotenv/config'
 
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import {
-    ADMIN,
-    DEPLOYMENT,
-    forgeCommand,
-    createSafeTransactions,
-    proposeSafeTransaction
-} from '../utils/forge'
+import { ADMIN, DEPLOYMENT, forgeCommand, createSafeTransactions, proposeSafeTransaction } from '../utils/forge'
 
 const execAsync = promisify(exec)
 
@@ -36,9 +30,7 @@ export async function delegateNodes(
     const nodeIdsParam = `[${nodeIds.join(',')}]`
     const operatorsParam = `[${operators.map((op) => `"${op}"`).join(',')}]`
     const signaturesParam =
-        signatures.length > 0
-            ? `[${signatures.map((sig) => `("${sig.signature}",${sig.expiry})`).join(',')}]`
-            : '[]'
+        signatures.length > 0 ? `[${signatures.map((sig) => `("${sig.signature}",${sig.expiry})`).join(',')}]` : '[]'
     const saltsParam = salts.length > 0 ? `[${salts.map((salt) => `"${salt}"`).join(',')}]` : '[]'
     const params = `${nodeIdsParam} ${operatorsParam} "${signaturesParam}" ${saltsParam}`
 

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
-import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
-import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../libraries/StalenessThreshold.sol";
+import {Initializable} from '@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol';
+import {AccessControlUpgradeable} from '@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol';
+import {ILiquidTokenManager} from '../interfaces/ILiquidTokenManager.sol';
+import {ITokenRegistryOracle} from '../interfaces/ITokenRegistryOracle.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import '../libraries/StalenessThreshold.sol';
 
 interface ICurvePool {
     function remove_liquidity(uint256, uint256[] calldata) external;
@@ -16,16 +16,11 @@ interface ICurvePool {
  * @notice Gas-optimized price oracle with primary/fallback lookup
  * @dev Uses static lookup tables for maximum gas efficiency
  */
-contract TokenRegistryOracle is
-    ITokenRegistryOracle,
-    Initializable,
-    AccessControlUpgradeable
-{
+contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessControlUpgradeable {
     // Constants
-    bytes32 public constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
-    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
-    bytes32 public constant TOKEN_CONFIGURATOR_ROLE =
-        keccak256("TOKEN_CONFIGURATOR_ROLE");
+    bytes32 public constant RATE_UPDATER_ROLE = keccak256('RATE_UPDATER_ROLE');
+    bytes32 public constant ORACLE_ADMIN_ROLE = keccak256('ORACLE_ADMIN_ROLE');
+    bytes32 public constant TOKEN_CONFIGURATOR_ROLE = keccak256('TOKEN_CONFIGURATOR_ROLE');
     uint256 private constant PRECISION = 1e18;
 
     // Source types
@@ -67,10 +62,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Initialize the contract
      */
-    function initialize(
-        Init memory init,
-        uint256 stalenessSalt
-    ) public initializer {
+    function initialize(Init memory init, uint256 stalenessSalt) public initializer {
         __AccessControl_init();
 
         if (
@@ -114,8 +106,7 @@ contract TokenRegistryOracle is
         bytes4 fallbackFn
     ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         if (token == address(0)) revert TokenCannotBeZeroAddress();
-        if (primaryType == 0 && primarySource == address(0))
-            revert NativeTokensNotConfigurable();
+        if (primaryType == 0 && primarySource == address(0)) revert NativeTokensNotConfigurable();
 
         if (primarySource == address(0)) revert PrimarySourceCannotBeZero();
 
@@ -146,9 +137,7 @@ contract TokenRegistryOracle is
      * @notice Remove a token configuration from the registry
      * @param token Address of the token to remove
      */
-    function removeToken(
-        address token
-    ) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
+    function removeToken(address token) external onlyRole(TOKEN_CONFIGURATOR_ROLE) {
         // Check if token is configured
         if (!isConfigured[token]) {
             return; // Not configured, nothing to remove
@@ -177,10 +166,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Updates a token's rate manually
      */
-    function updateRate(
-        IERC20 token,
-        uint256 newRate
-    ) external onlyRole(RATE_UPDATER_ROLE) {
+    function updateRate(IERC20 token, uint256 newRate) external onlyRole(RATE_UPDATER_ROLE) {
         _updateTokenRate(token, newRate);
     }
 
@@ -208,9 +194,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Sets price update interval
      */
-    function setPriceUpdateInterval(
-        uint256 interval
-    ) external onlyRole(ORACLE_ADMIN_ROLE) {
+    function setPriceUpdateInterval(uint256 interval) external onlyRole(ORACLE_ADMIN_ROLE) {
         if (interval == 0) revert IntervalCannotBeZero();
         _emergencyInterval = uint64(interval);
         _emergencyMode = true;
@@ -226,22 +210,15 @@ contract TokenRegistryOracle is
      * @notice Get current token rate
      */
     function getRate(IERC20 token) external view returns (uint256) {
-        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager
-            .getTokenInfo(token);
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(token);
         return tokenInfo.pricePerUnit;
     }
 
     /**
      * @notice Check if prices are stale
      */
-    function arePricesStale()
-        public
-        view
-        override(ITokenRegistryOracle)
-        returns (bool)
-    {
-        return (block.timestamp >
-            uint256(lastGlobalPriceUpdate) + _getDynamicInterval());
+    function arePricesStale() public view override(ITokenRegistryOracle) returns (bool) {
+        return (block.timestamp > uint256(lastGlobalPriceUpdate) + _getDynamicInterval());
     }
 
     /**
@@ -254,11 +231,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Update all token prices if stale
      */
-    function updateAllPricesIfNeeded()
-        external
-        override(ITokenRegistryOracle)
-        returns (bool)
-    {
+    function updateAllPricesIfNeeded() external override(ITokenRegistryOracle) returns (bool) {
         // Skip if prices are fresh
         if (!arePricesStale()) {
             return false;
@@ -298,10 +271,7 @@ contract TokenRegistryOracle is
                 _updateTokenRate(IERC20(token), price);
             } else {
                 // Try fallback if available
-                (
-                    uint256 fallbackPrice,
-                    bool fallbackSuccess
-                ) = _getFallbackPrice(token);
+                (uint256 fallbackPrice, bool fallbackSuccess) = _getFallbackPrice(token);
                 if (fallbackSuccess && fallbackPrice > 0) {
                     _updateTokenRate(IERC20(token), fallbackPrice);
                 } else {
@@ -325,9 +295,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Get token price from primary source
      */
-    function _getTokenPrice(
-        address token
-    ) internal returns (uint256 price, bool success) {
+    function _getTokenPrice(address token) internal returns (uint256 price, bool success) {
         TokenConfig memory config = tokenConfigs[token];
 
         // Skip if not configured
@@ -342,13 +310,7 @@ contract TokenRegistryOracle is
             return _getCurvePrice(config.primarySource);
         } else if (config.primaryType == SOURCE_TYPE_PROTOCOL) {
             // Use protocol rate directly
-            return
-                _getContractCallPrice(
-                    token,
-                    config.primarySource,
-                    config.fallbackFn,
-                    config.needsArg
-                );
+            return _getContractCallPrice(token, config.primarySource, config.fallbackFn, config.needsArg);
         }
 
         return (0, false);
@@ -357,40 +319,25 @@ contract TokenRegistryOracle is
     /**
      * @notice Get token price from fallback source (protocol call)
      */
-    function _getFallbackPrice(
-        address token
-    ) internal view returns (uint256 price, bool success) {
+    function _getFallbackPrice(address token) internal view returns (uint256 price, bool success) {
         TokenConfig memory config = tokenConfigs[token];
 
         // Skip if no fallback
-        if (
-            config.fallbackFn == bytes4(0) ||
-            config.fallbackSource == address(0)
-        ) {
+        if (config.fallbackFn == bytes4(0) || config.fallbackSource == address(0)) {
             return (0, false);
         }
 
-        return
-            _getContractCallPrice(
-                token,
-                config.fallbackSource,
-                config.fallbackFn,
-                config.needsArg
-            );
+        return _getContractCallPrice(token, config.fallbackSource, config.fallbackFn, config.needsArg);
     }
 
     /**
      * @notice Get price from Chainlink with maximum gas efficiency
      */
-    function _getChainlinkPrice(
-        address feed
-    ) internal view returns (uint256 price, bool success) {
+    function _getChainlinkPrice(address feed) internal view returns (uint256 price, bool success) {
         if (feed == address(0)) return (0, false);
 
         // Compute staleness threshold (as in your model)
-        uint256 staleness = _emergencyMode
-            ? _emergencyInterval
-            : StalenessThreshold.getHiddenThreshold(_stalenessSalt);
+        uint256 staleness = _emergencyMode ? _emergencyInterval : StalenessThreshold.getHiddenThreshold(_stalenessSalt);
 
         assembly {
             let ptr := mload(0x40)
@@ -405,23 +352,13 @@ contract TokenRegistryOracle is
                 let answeredInRound := mload(add(ptr, 128))
 
                 // Check validity
-                if and(
-                    and(gt(answer, 0), gt(updatedAt, 0)),
-                    iszero(lt(answeredInRound, roundId))
-                ) {
+                if and(and(gt(answer, 0), gt(updatedAt, 0)), iszero(lt(answeredInRound, roundId))) {
                     // Check staleness: block.timestamp > updatedAt + staleness
                     // If NOT stale, proceed
                     if iszero(gt(timestamp(), add(updatedAt, staleness))) {
                         // Call decimals()
                         mstore(ptr, shl(224, 0x313ce567)) // selector for decimals()
-                        let decSuccess := staticcall(
-                            gas(),
-                            feed,
-                            ptr,
-                            4,
-                            ptr,
-                            32
-                        )
+                        let decSuccess := staticcall(gas(), feed, ptr, 4, ptr, 32)
                         let decimals := 8
                         if decSuccess {
                             decimals := and(mload(ptr), 0xff)
@@ -440,13 +377,12 @@ contract TokenRegistryOracle is
                                 price := answer
                             }
                         }
-
                         success := 1
                     }
-                    // If stale, success remains 0
                 }
             }
         }
+        // If stale, success remains 0
     }
 
     /**
@@ -457,9 +393,7 @@ contract TokenRegistryOracle is
      *      2) price_oracle()
      *      3) get_dy(0,1,1e18)
      */
-    function _getCurvePrice(
-        address pool
-    ) internal returns (uint256 price, bool success) {
+    function _getCurvePrice(address pool) internal returns (uint256 price, bool success) {
         if (pool == address(0)) return (0, false);
 
         // Engage nonReentrant lock if required
@@ -469,7 +403,7 @@ contract TokenRegistryOracle is
                 // If this succeeds, we're not in a reentrancy context -> safe to proceed
             } catch {
                 // Revert means we're in a reentrancy context -> unsafe
-                revert("CurveOracle: pool re-entrancy");
+                revert('CurveOracle: pool re-entrancy');
             }
         }
 
@@ -563,9 +497,7 @@ contract TokenRegistryOracle is
     /**
      * @notice Get token price directly (for external calls)
      */
-    function getTokenPrice(
-        address token
-    ) external override(ITokenRegistryOracle) returns (uint256) {
+    function getTokenPrice(address token) external override(ITokenRegistryOracle) returns (uint256) {
         (uint256 price, bool success) = _getTokenPrice(token);
 
         if (success && price > 0) {
@@ -573,9 +505,7 @@ contract TokenRegistryOracle is
         }
 
         // Try fallback
-        (uint256 fallbackPrice, bool fallbackSuccess) = _getFallbackPrice(
-            token
-        );
+        (uint256 fallbackPrice, bool fallbackSuccess) = _getFallbackPrice(token);
         if (fallbackSuccess && fallbackPrice > 0) {
             return fallbackPrice;
         }
@@ -591,9 +521,7 @@ contract TokenRegistryOracle is
      * @return price The price in based terms (18 decimals)
      * @return success Whether the price fetch was successful
      */
-    function _getTokenPrice_getter(
-        address token
-    ) external returns (uint256 price, bool success) {
+    function _getTokenPrice_getter(address token) external returns (uint256 price, bool success) {
         return _getTokenPrice(token);
     }
 
@@ -605,9 +533,7 @@ contract TokenRegistryOracle is
      * @return price The price in ETH terms (18 decimals)
      * @return success Whether the price fetch was successful
      */
-    function getCurvePrice(
-        address pool
-    ) external returns (uint256 price, bool success) {
+    function getCurvePrice(address pool) external returns (uint256 price, bool success) {
         return _getCurvePrice(pool);
     }
     //FINISHED

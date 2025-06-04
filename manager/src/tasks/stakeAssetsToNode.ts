@@ -2,13 +2,7 @@ import 'dotenv/config'
 
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import {
-    ADMIN,
-    DEPLOYMENT,
-    forgeCommand,
-    createSafeTransactions,
-    proposeSafeTransaction
-} from '../utils/forge'
+import { ADMIN, DEPLOYMENT, forgeCommand, createSafeTransactions, proposeSafeTransaction } from '../utils/forge'
 
 const execAsync = promisify(exec)
 

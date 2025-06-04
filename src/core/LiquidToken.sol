@@ -67,8 +67,8 @@ contract LiquidToken is
         __Pausable_init();
 
         if (
-            init.initialOwner == address(0) ||
-            init.pauser == address(0) ||
+            address(init.initialOwner) == address(0) ||
+            address(init.pauser) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
             address(init.tokenRegistryOracle) == address(0)
         ) {
@@ -103,7 +103,6 @@ contract LiquidToken is
             } catch {
                 revert PriceUpdateFailed();
             }
-
             // Check update result
             if (!updated) revert PriceUpdateRejected();
 
@@ -300,10 +299,7 @@ contract LiquidToken is
     */
 
     /// @inheritdoc ILiquidToken
-    function creditQueuedAssetBalances(
-        IERC20[] calldata assets,
-        uint256[] calldata amounts
-    ) external whenNotPaused {
+    function creditQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
 
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
@@ -314,10 +310,7 @@ contract LiquidToken is
     }
 
     /// @inheritdoc ILiquidToken
-    function transferAssets(
-        IERC20[] calldata assetsToRetrieve,
-        uint256[] calldata amounts
-    ) external whenNotPaused {
+    function transferAssets(IERC20[] calldata assetsToRetrieve, uint256[] calldata amounts) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
 
         if (assetsToRetrieve.length != amounts.length) revert ArrayLengthMismatch();
@@ -326,8 +319,7 @@ contract LiquidToken is
             IERC20 asset = assetsToRetrieve[i];
             uint256 amount = amounts[i];
 
-            if (!liquidTokenManager.tokenIsSupported(asset))
-                revert UnsupportedAsset(assetsToRetrieve[i]);
+            if (!liquidTokenManager.tokenIsSupported(asset)) revert UnsupportedAsset(assetsToRetrieve[i]);
 
             if (amount > assetBalances[address(asset)])
                 revert InsufficientBalance(asset, assetBalances[address(asset)], amount);
@@ -342,21 +334,13 @@ contract LiquidToken is
                     asset.balanceOf(address(this))
                 );
 
-            emit AssetTransferred(
-                assetsToRetrieve[i],
-                amount,
-                address(liquidTokenManager),
-                msg.sender
-            );
+            emit AssetTransferred(assetsToRetrieve[i], amount, address(liquidTokenManager), msg.sender);
         }
     }
 
     /// @inheritdoc ILiquidToken
     function calculateShares(IERC20 asset, uint256 amount) public view returns (uint256) {
-        uint256 assetAmountInUnitOfAccount = liquidTokenManager.convertToUnitOfAccount(
-            asset,
-            amount
-        );
+        uint256 assetAmountInUnitOfAccount = liquidTokenManager.convertToUnitOfAccount(asset, amount);
         return _convertToShares(assetAmountInUnitOfAccount);
     }
 
@@ -399,10 +383,7 @@ contract LiquidToken is
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             // Unstaked Asset Balances
-            total += liquidTokenManager.convertToUnitOfAccount(
-                supportedTokens[i],
-                _balanceAsset(supportedTokens[i])
-            );
+            total += liquidTokenManager.convertToUnitOfAccount(supportedTokens[i], _balanceAsset(supportedTokens[i]));
 
             // Queued Asset Balances
             total += liquidTokenManager.convertToUnitOfAccount(
@@ -427,9 +408,7 @@ contract LiquidToken is
     }
 
     /// @inheritdoc ILiquidToken
-    function balanceQueuedAssets(
-        IERC20[] calldata assetList
-    ) public view returns (uint256[] memory) {
+    function balanceQueuedAssets(IERC20[] calldata assetList) public view returns (uint256[] memory) {
         uint256[] memory balances = new uint256[](assetList.length);
         for (uint256 i = 0; i < assetList.length; i++) {
             balances[i] = _balanceQueuedAsset(assetList[i]);
@@ -441,6 +420,7 @@ contract LiquidToken is
     // Internal functions
     // ------------------------------------------------------------------------------
 
+    /// @dev Called by `calculateShares`
     function _convertToShares(uint256 amount) internal view returns (uint256) {
         uint256 supply = totalSupply();
         uint256 totalAsset = totalAssets();
@@ -453,6 +433,7 @@ contract LiquidToken is
         return (amount * supply) / totalAsset;
     }
 
+    /// @dev Called by `calculateAmount`
     function _convertToAssets(uint256 shares) internal view returns (uint256) {
         uint256 supply = totalSupply();
         uint256 totalAsset = totalAssets();
@@ -465,10 +446,12 @@ contract LiquidToken is
         return (shares * totalAsset) / supply;
     }
 
+    /// @dev Called by `balanceAssets` and `totalAssets`
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
         return assetBalances[address(asset)];
     }
 
+    /// @dev Called by `balanceQueuedAssets` and `totalAssets`
     function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
         return queuedAssetBalances[address(asset)];
     }

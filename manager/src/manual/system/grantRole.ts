@@ -33,9 +33,7 @@ async function manualGrantRole() {
         ).results
 
         if (pendingTransactions.length > 0) {
-            console.log(
-                `[Manual][System] Grant role ${role}: nonce: ${pendingTransactions[0].nonce}`
-            )
+            console.log(`[Manual][System] Grant role ${role}: nonce: ${pendingTransactions[0].nonce}`)
         }
     } catch (error) {
         console.log('[Manual] Error: ', error.message)

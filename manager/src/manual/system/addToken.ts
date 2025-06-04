@@ -49,9 +49,7 @@ async function manualAddToken() {
         ).results
 
         if (pendingTransactions.length > 0) {
-            console.log(
-                `[Manual][System] Add Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`
-            )
+            console.log(`[Manual][System] Add Token ${tokenAddress}: nonce: ${pendingTransactions[0].nonce}`)
         }
     } catch (error) {
         console.log('[Manual] Error: ', error.message)
