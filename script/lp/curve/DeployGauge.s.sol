@@ -23,10 +23,7 @@ contract DeployGauge is Script {
 
     address constant CURVE_FACTORY = 0xB9fC157394Af804a3578134A6585C0dc9cc990d4;
 
-    function run(
-        address pool,
-        string memory configFileName
-    ) external returns (address gauge) {
+    function run(address pool, string memory configFileName) external returns (address gauge) {
         console.log("[LP][Curve][Deploy] Deploying Gauge for ", pool);
 
         // Deploy gauge
@@ -41,16 +38,8 @@ contract DeployGauge is Script {
         return gauge;
     }
 
-    function _saveDeploymentResult(
-        string memory configFileName,
-        address gauge,
-        address pool
-    ) internal {
-        string memory resultPath = string.concat(
-            "./outputs/",
-            configFileName,
-            "-gauge.json"
-        );
+    function _saveDeploymentResult(string memory configFileName, address gauge, address pool) internal {
+        string memory resultPath = string.concat("./outputs/", configFileName, "-gauge.json");
         string memory result = string.concat(
             '{"gauge":"',
             vm.toString(gauge),

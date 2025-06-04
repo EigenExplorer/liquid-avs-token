@@ -26,45 +26,34 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
     function testUpgradeStakerNodeImplementationSuccess() public {
         // Retrieve the old implementation address from the UpgradeableBeacon
-        address oldImplementation = UpgradeableBeacon(
-            address(stakerNodeCoordinator.upgradeableBeacon())
-        ).implementation();
+        address oldImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon()))
+            .implementation();
         address newImplementation = address(new StakerNode());
 
         assertTrue(newImplementation != oldImplementation);
 
         // Upgrade to the new implementation
         vm.prank(admin);
-        stakerNodeCoordinator.upgradeStakerNodeImplementation(
-            newImplementation
-        );
+        stakerNodeCoordinator.upgradeStakerNodeImplementation(newImplementation);
 
         // Retrieve the upgraded implementation address from the UpgradeableBeacon
-        address upgradedImplementation = UpgradeableBeacon(
-            address(stakerNodeCoordinator.upgradeableBeacon())
-        ).implementation();
+        address upgradedImplementation = UpgradeableBeacon(address(stakerNodeCoordinator.upgradeableBeacon()))
+            .implementation();
 
         // Check if the upgrade has succeeded
-        assertEq(
-            address(stakerNodeCoordinator.upgradeableBeacon()) != address(0),
-            true
-        );
+        assertEq(address(stakerNodeCoordinator.upgradeableBeacon()) != address(0), true);
         assertEq(upgradedImplementation, newImplementation);
         assertTrue(upgradedImplementation != oldImplementation);
     }
 
-    function testUpgradeStakerNodeImplementationRevertsWhenNotContract()
-        public
-    {
+    function testUpgradeStakerNodeImplementationRevertsWhenNotContract() public {
         // Use an EOA address as implementation
         address nonContractAddress = makeAddr("nonContract");
 
         // Expect revert when trying to upgrade to non-contract address
         vm.prank(admin);
         vm.expectRevert(IStakerNodeCoordinator.NotAContract.selector);
-        stakerNodeCoordinator.upgradeStakerNodeImplementation(
-            nonContractAddress
-        );
+        stakerNodeCoordinator.upgradeStakerNodeImplementation(nonContractAddress);
     }
 
     function testSetMaxNodesSuccess() public {
@@ -111,13 +100,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         // Try to set maxNodes lower than the current number of nodes
         vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector,
-                1,
-                0
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.MaxNodesLowerThanCurrent.selector, 1, 0));
         stakerNodeCoordinator.setMaxNodes(0);
     }
 
@@ -126,12 +109,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         stakerNodeCoordinator.createStakerNode();
 
         // Accessing node ID that is out of range
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakerNodeCoordinator.NodeIdOutOfRange.selector,
-                1
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.NodeIdOutOfRange.selector, 1));
         stakerNodeCoordinator.getNodeById(1);
     }
 
@@ -145,9 +123,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
             proxyAdminAddress, // Use proxyAdminAddress instead of admin
             ""
         );
-        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(
-            address(proxy)
-        );
+        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
 
         // Initialize with zero maxNodes
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
@@ -164,9 +140,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         // Use deployer to call the function
         vm.prank(deployer);
-        vm.expectRevert(
-            abi.encodeWithSelector(IStakerNodeCoordinator.ZeroAmount.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.ZeroAmount.selector));
         proxiedCoordinator.initialize(init);
     }
 
@@ -179,12 +153,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
 
         // Try to create another node, which exceeds the max node limit
         vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakerNodeCoordinator.TooManyStakerNodes.selector,
-                1
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
         stakerNodeCoordinator.createStakerNode();
     }
 
@@ -206,9 +175,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         StakerNodeCoordinator newCoordinator = new StakerNodeCoordinator();
 
         // 2. Set up the beacon
-        UpgradeableBeacon upgradeableBeacon = new UpgradeableBeacon(
-            address(stakerNodeImplementation)
-        );
+        UpgradeableBeacon upgradeableBeacon = new UpgradeableBeacon(address(stakerNodeImplementation));
 
         // 3. Create and set up the proxy using proxyAdminAddress
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
@@ -216,9 +183,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
             proxyAdminAddress, // Use proxyAdminAddress instead of admin
             ""
         );
-        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(
-            address(proxy)
-        );
+        StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
 
         // 4. Store the beacon in the coordinator
         vm.store(
@@ -249,12 +214,7 @@ contract StakerNodeCoordinatorTest is BaseTest {
         assertEq(address(node) != address(0), true);
 
         // 7. But we can't create more than maxNodes
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakerNodeCoordinator.TooManyStakerNodes.selector,
-                1
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IStakerNodeCoordinator.TooManyStakerNodes.selector, 1));
         proxiedCoordinator.createStakerNode();
         vm.stopPrank();
     }

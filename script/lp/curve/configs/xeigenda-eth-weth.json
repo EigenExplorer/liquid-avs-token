@@ -1,7 +1,7 @@
 {
-  "name": "xEigenDA/WETH Pool",
-  "symbol": "lateth1pool",
-  "token0": "0xLatAddress",
-  "A": 100,
-  "fee": 4000000
+    "name": "xEigenDA/WETH Pool",
+    "symbol": "lateth1pool",
+    "token0": "0xLatAddress",
+    "A": 100,
+    "fee": 4000000
 }

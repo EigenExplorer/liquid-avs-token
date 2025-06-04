@@ -20,15 +20,18 @@ contract StakeAssetsToNode is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
     function run(
-      string memory configFileName,
-      uint256 nodeId,
-      IERC20[] memory assets,
-      uint256[] memory amounts
+        string memory configFileName,
+        uint256 nodeId,
+        IERC20[] memory assets,
+        uint256[] memory amounts
     ) public {
         string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
-        address liquidTokenManageraddress = stdJson.readAddress(config, ".contractDeployments.proxy.liquidTokenManager.address");
+        address liquidTokenManageraddress = stdJson.readAddress(
+            config,
+            ".contractDeployments.proxy.liquidTokenManager.address"
+        );
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 
         vm.startBroadcast();

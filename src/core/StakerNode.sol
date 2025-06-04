@@ -22,35 +22,61 @@ import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
+    // ------------------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------------------
+
+    /// @notice Role identifier for `LiquidTokenManager` operations
+    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE = keccak256("LIQUID_TOKEN_MANAGER_ROLE");
+
+    /// @notice Role identifier for delegation operations
+    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
+
+    /// @notice LAT contracts
     IStakerNodeCoordinator public coordinator;
+
     uint256 public id;
     address public operatorDelegation;
 
-    bytes32 public constant LIQUID_TOKEN_MANAGER_ROLE =
-        keccak256("LIQUID_TOKEN_MANAGER_ROLE");
-    bytes32 public constant STAKER_NODES_DELEGATOR_ROLE =
-        keccak256("STAKER_NODES_DELEGATOR_ROLE");
+    // ------------------------------------------------------------------------------
+    // Init functions
+    // ------------------------------------------------------------------------------
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
         _disableInitializers();
     }
 
-    /// @notice Initializes the StakerNode contract
-    /// @param init Initialization parameters including coordinator address and node ID
-    function initialize(
-        Init memory init
-    ) public notZeroAddress(address(init.coordinator)) initializer {
+    /// @inheritdoc IStakerNode
+    function initialize(Init memory init) public notZeroAddress(address(init.coordinator)) initializer {
         __ReentrancyGuard_init();
         coordinator = IStakerNodeCoordinator(init.coordinator);
         id = init.id;
         operatorDelegation = address(0);
     }
 
-    /// @notice Deposits assets into Eigenlayer strategies
-    /// @param assets Array of ERC20 token addresses to deposit
-    /// @param amounts Array of amounts to deposit for each asset
-    /// @param strategies Array of Eigenlayer strategies to deposit into
+    // ------------------------------------------------------------------------------
+    // Core functions
+    // ------------------------------------------------------------------------------
+
+    /// @inheritdoc IStakerNode
+    function delegate(
+        address operator,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
+        bytes32 approverSalt
+    ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
+        if (operatorDelegation != address(0)) revert NodeIsDelegated(operatorDelegation);
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+
+        // Call EigenLayer contract to delegate stake
+        delegationManager.delegateTo(operator, signature, approverSalt);
+        operatorDelegation = operator;
+
+        emit DelegatedToOperator(operator);
+    }
+
+    /// @inheritdoc IStakerNode
     function depositAssets(
         IERC20[] calldata assets,
         uint256[] calldata amounts,
@@ -58,13 +84,9 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     ) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE) {
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
-        // Cache strategyManager to save gas
         IStrategyManager strategyManager = coordinator.strategyManager();
-
-        // Cache array length
         uint256 assetsLength = assets.length;
 
-        // Use unchecked for counter increment since i < assetsLength
         unchecked {
             for (uint256 i = 0; i < assetsLength; i++) {
                 IERC20 asset = assets[i];
@@ -73,43 +95,14 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
                 asset.forceApprove(address(strategyManager), amount);
 
-                uint256 eigenShares = strategyManager.depositIntoStrategy(
-                    strategy,
-                    asset,
-                    amount
-                );
+                // Call EigenLayer contract to deposit asset
+                uint256 eigenShares = strategyManager.depositIntoStrategy(strategy, asset, amount);
 
-                emit AssetDepositedToStrategy(
-                    asset,
-                    strategy,
-                    amount,
-                    eigenShares
-                );
+                emit AssetDepositedToStrategy(asset, strategy, amount, eigenShares);
             }
         }
     }
 
-    /// @notice Delegates the StakerNode's assets to an operator
-    /// @param operator Address of the operator to delegate to
-    /// @param signature Signature authorizing the delegation
-    /// @param approverSalt Salt used in the signature
-    function delegate(
-        address operator,
-        ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
-        bytes32 approverSalt
-    ) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE) {
-        if (operatorDelegation != address(0))
-            revert NodeIsDelegated(operatorDelegation);
-
-        // Cache delegationManager to save gas
-        IDelegationManager delegationManager = coordinator.delegationManager();
-        delegationManager.delegateTo(operator, signature, approverSalt);
-        operatorDelegation = operator;
-
-        emit DelegatedToOperator(operator);
-    }
-
-    /// @notice Undelegates the StakerNode's assets from the current operator
     /// @dev OUT OF SCOPE FOR V1
     /** 
     function undelegate()
@@ -117,11 +110,9 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         override
         onlyRole(STAKER_NODES_DELEGATOR_ROLE)
     {
-        // Cache operatorDelegation to save gas
         address currentOperator = operatorDelegation;
         if (currentOperator == address(0)) revert NodeIsNotDelegated();
 
-        // Cache delegationManager to save gas
         IDelegationManager delegationManager = coordinator.delegationManager();
         delegationManager.undelegate(address(this));
 
@@ -131,8 +122,11 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
     */
 
-    /// @notice Returns the address of the current implementation contract
-    /// @return The address of the implementation contract
+    // ------------------------------------------------------------------------------
+    // Getter functions
+    // ------------------------------------------------------------------------------
+
+    /// @inheritdoc IStakerNode
     function implementation() public view override returns (address) {
         bytes32 slot = bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1);
         address implementationVariable;
@@ -144,23 +138,24 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         return beacon.implementation();
     }
 
-    /// @notice Returns the version of the contract that was last initialized
-    /// @return The initialized version as a uint64
+    /// @inheritdoc IStakerNode
     function getInitializedVersion() external view override returns (uint64) {
         return _getInitializedVersion();
     }
 
-    /// @notice Returns the id of the StakerNode
-    /// @return id The StakerNode's id as uint256
+    /// @inheritdoc IStakerNode
     function getId() external view override returns (uint256) {
         return id;
     }
 
-    /// Returns the address of the operator the node is delegate to
-    /// @return The address of the delegated operator or zero address if not delegated
+    /// @inheritdoc IStakerNode
     function getOperatorDelegation() external view override returns (address) {
         return operatorDelegation;
     }
+
+    // ------------------------------------------------------------------------------
+    // Misc
+    // ------------------------------------------------------------------------------
 
     /// @dev Reverts if the caller doesn't have the required role
     /// @param role The role to check for

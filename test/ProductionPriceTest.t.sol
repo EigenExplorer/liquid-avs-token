@@ -63,10 +63,8 @@ contract RealWorldTokenPriceTest is BaseTest {
 
     TokenStatus[] public tokenStatuses;
 
-    bytes32 internal constant ORACLE_ADMIN_ROLE =
-        keccak256("ORACLE_ADMIN_ROLE");
-    bytes32 internal constant RATE_UPDATER_ROLE =
-        keccak256("RATE_UPDATER_ROLE");
+    bytes32 internal constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 internal constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
 
     function setUp() public override {
         // Detect network before doing anything else
@@ -82,18 +80,9 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(admin);
 
         // LiquidTokenManager roles - include Foundry internal address
-        liquidTokenManager.grantRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            foundryInternalCaller
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.PRICE_UPDATER_ROLE(),
-            foundryInternalCaller
-        );
+        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), foundryInternalCaller);
+        liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), foundryInternalCaller);
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), foundryInternalCaller);
 
         // TokenRegistryOracle roles - this is the critical part
         tokenRegistryOracle.grantRole(ORACLE_ADMIN_ROLE, foundryInternalCaller);
@@ -108,10 +97,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         // Create mock deposit token and mock strategy for testing
         mockDepositToken = new MockERC20("Mock Deposit Token", "MDT");
         mockDepositToken.mint(user1, 1000 ether);
-        mockTokenStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(mockDepositToken))
-        );
+        mockTokenStrategy = new MockStrategy(strategyManager, IERC20(address(mockDepositToken)));
 
         // Initialize token configurations based on network
         if (isHolesky) {
@@ -318,9 +304,7 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         vm.stopPrank();
     }
-    function _addTokenWithFallback(
-        TokenConfig memory cfg
-    ) internal returns (bool) {
+    function _addTokenWithFallback(TokenConfig memory cfg) internal returns (bool) {
         console.log("Adding %s...", cfg.name);
 
         // Create strategy if needed
@@ -345,10 +329,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                 cfg.fallbackSelector
             )
         {
-            console.log(
-                "  %s added successfully with primary source",
-                cfg.name
-            );
+            console.log("  %s added successfully with primary source", cfg.name);
             tokenAdded[cfg.token] = true;
             return true;
         } catch Error(string memory reason) {
@@ -358,9 +339,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
     }
     function _addMainnetTokensToManager() internal {
-        console.log(
-            "======= Adding Mainnet Tokens to LiquidTokenManager ======="
-        );
+        console.log("======= Adding Mainnet Tokens to LiquidTokenManager =======");
 
         // Step 1: Warp time to make Chainlink feeds fresh
         _warpToFreshChainlinkData();
@@ -398,9 +377,7 @@ contract RealWorldTokenPriceTest is BaseTest {
     }
 
     function _addHoleskyTokensToManager() internal {
-        console.log(
-            "======= Adding Holesky Tokens to LiquidTokenManager ======="
-        );
+        console.log("======= Adding Holesky Tokens to LiquidTokenManager =======");
 
         for (uint i = 0; i < holeskyTokens.length; i++) {
             TokenConfig memory cfg = holeskyTokens[i];
@@ -442,10 +419,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         // Mock the oracle price getter
         vm.mockCall(
             address(tokenRegistryOracle),
-            abi.encodeWithSelector(
-                ITokenRegistryOracle._getTokenPrice_getter.selector,
-                address(mockDepositToken)
-            ),
+            abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(mockDepositToken)),
             abi.encode(1e18, true) // price = 1e18, success = true
         );
 
@@ -479,10 +453,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         mockNativeToken.mint(user1, 1000 ether);
 
         // Create strategy for native token
-        nativeTokenStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(mockNativeToken))
-        );
+        nativeTokenStrategy = new MockStrategy(strategyManager, IERC20(address(mockNativeToken)));
 
         // Approve native token for LiquidToken contract
         vm.startPrank(user1);
@@ -510,11 +481,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         console.log("======= Token Status Report =======");
 
         // Check mock tokens
-        _checkTokenStatus(
-            address(mockDepositToken),
-            "Mock Deposit Token",
-            "MDT"
-        );
+        _checkTokenStatus(address(mockDepositToken), "Mock Deposit Token", "MDT");
         _checkTokenStatus(address(mockNativeToken), "EigenInu Token", "EINU");
 
         // Check real tokens
@@ -526,11 +493,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
     }
 
-    function _checkTokenStatus(
-        address token,
-        string memory name,
-        string memory symbol
-    ) internal {
+    function _checkTokenStatus(address token, string memory name, string memory symbol) internal {
         TokenStatus memory status;
         status.token = token;
         status.name = name;
@@ -548,27 +511,19 @@ contract RealWorldTokenPriceTest is BaseTest {
         status.added = tokenAdded[token];
 
         if (status.added) {
-            try tokenRegistryOracle.getTokenPrice(token) returns (
-                uint256 price
-            ) {
+            try tokenRegistryOracle.getTokenPrice(token) returns (uint256 price) {
                 status.priceWorks = true;
                 status.price = price;
                 status.configured = true;
                 console.log("%s: Price=%s ETH", status.symbol, price / 1e18);
             } catch {
                 // For native tokens, check LiquidTokenManager directly
-                try liquidTokenManager.getTokenInfo(IERC20(token)) returns (
-                    ILiquidTokenManager.TokenInfo memory info
-                ) {
+                try liquidTokenManager.getTokenInfo(IERC20(token)) returns (ILiquidTokenManager.TokenInfo memory info) {
                     if (info.pricePerUnit > 0) {
                         status.priceWorks = true;
                         status.price = info.pricePerUnit;
                         status.configured = true;
-                        console.log(
-                            "%s: Price=%s ETH (native)",
-                            status.symbol,
-                            info.pricePerUnit / 1e18
-                        );
+                        console.log("%s: Price=%s ETH (native)", status.symbol, info.pricePerUnit / 1e18);
                     } else {
                         status.priceWorks = false;
                         console.log("%s: Price=FAILED", status.symbol);
@@ -592,13 +547,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         // Array of Chainlink feed addresses
         address feed = 0x536218f9E9Eb48863970252233c8F271f554C2d0; // rETH
 
-        try AggregatorV3Interface(feed).latestRoundData() returns (
-            uint80,
-            int256,
-            uint256,
-            uint256 updatedAt,
-            uint80
-        ) {
+        try AggregatorV3Interface(feed).latestRoundData() returns (uint80, int256, uint256, uint256 updatedAt, uint80) {
             // Warp to 60 seconds after the latest update
             vm.warp(updatedAt + 60);
             console.log("Warped to timestamp: %s", updatedAt + 60);
@@ -623,30 +572,20 @@ contract RealWorldTokenPriceTest is BaseTest {
             if (status.priceWorks) {
                 successCount++;
                 console.log("%s: %s ETH", status.symbol, status.price / 1e18);
-                assertTrue(
-                    status.price > 0,
-                    "Token price should be greater than 0"
-                );
+                assertTrue(status.price > 0, "Token price should be greater than 0");
             } else {
                 console.log("%s: Failed to get price", status.symbol);
             }
         }
 
-        console.log(
-            "Price fetch success rate: %s/%s tokens",
-            successCount,
-            totalTokens
-        );
+        console.log("Price fetch success rate: %s/%s tokens", successCount, totalTokens);
         assertTrue(successCount > 0, "At least one token price should work");
     }
 
     function testDepositWithMockToken() public {
         vm.startPrank(admin);
         uint256 mockTokenPrice = 1.2e18; // 1.2 ETH per token
-        tokenRegistryOracle.updateRate(
-            IERC20(address(mockDepositToken)),
-            mockTokenPrice
-        );
+        tokenRegistryOracle.updateRate(IERC20(address(mockDepositToken)), mockTokenPrice);
         vm.stopPrank();
 
         vm.startPrank(user1);
@@ -663,11 +602,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         uint256 userLstBalance = liquidToken.balanceOf(user1);
         uint256 expectedSharesValue = (depositAmount * mockTokenPrice) / 1e18;
 
-        console.log(
-            "\nUser deposited %s mock tokens worth %s ETH",
-            depositAmount / 1e18,
-            expectedSharesValue / 1e18
-        );
+        console.log("\nUser deposited %s mock tokens worth %s ETH", depositAmount / 1e18, expectedSharesValue / 1e18);
         console.log("User received %s LST tokens", userLstBalance / 1e18);
 
         assertApproxEqRel(
@@ -683,8 +618,7 @@ contract RealWorldTokenPriceTest is BaseTest {
     function testNativeTokenPricing() public {
         console.log("\n======= Testing Native Token Price =======");
 
-        ILiquidTokenManager.TokenInfo memory info = liquidTokenManager
-            .getTokenInfo(IERC20(address(mockNativeToken)));
+        ILiquidTokenManager.TokenInfo memory info = liquidTokenManager.getTokenInfo(IERC20(address(mockNativeToken)));
         console.log("Native token price: %s ETH", info.pricePerUnit / 1e18);
         assertEq(info.pricePerUnit, 1e18, "Native token price should be 1e18");
 
@@ -722,9 +656,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         if (tokensAdded == 0) {
-            console.log(
-                "No real tokens were successfully added, skipping real token test"
-            );
+            console.log("No real tokens were successfully added, skipping real token test");
             return;
         }
 
@@ -738,21 +670,12 @@ contract RealWorldTokenPriceTest is BaseTest {
 
             if (cfg.sourceType == 0) {
                 // Native token - check LiquidTokenManager directly
-                ILiquidTokenManager.TokenInfo memory info = liquidTokenManager
-                    .getTokenInfo(IERC20(cfg.token));
-                console.log(
-                    "  Price: %s ETH (native)",
-                    info.pricePerUnit / 1e18
-                );
-                assertTrue(
-                    info.pricePerUnit == 1e18,
-                    "Native token price should be 1e18"
-                );
+                ILiquidTokenManager.TokenInfo memory info = liquidTokenManager.getTokenInfo(IERC20(cfg.token));
+                console.log("  Price: %s ETH (native)", info.pricePerUnit / 1e18);
+                assertTrue(info.pricePerUnit == 1e18, "Native token price should be 1e18");
             } else {
                 // Non-native token - check via oracle
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     console.log("  Price: %s ETH", price / 1e18);
                     assertTrue(price > 0, "Price should be greater than 0");
 
@@ -783,14 +706,9 @@ contract RealWorldTokenPriceTest is BaseTest {
             vm.startPrank(admin);
 
             // Test 1: Primary source should work initially
-            try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                uint256 primaryPrice
-            ) {
+            try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 primaryPrice) {
                 assertTrue(primaryPrice > 0, "Primary price should be valid");
-                console.log(
-                    "   Primary source working: %s ETH",
-                    primaryPrice / 1e18
-                );
+                console.log("   Primary source working: %s ETH", primaryPrice / 1e18);
 
                 // Test 2: Break primary source by setting invalid address
                 tokenRegistryOracle.configureToken(
@@ -804,21 +722,11 @@ contract RealWorldTokenPriceTest is BaseTest {
 
                 // Test 3: Should now use fallback (if configured)
                 if (cfg.fallbackSource != address(0)) {
-                    try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                        uint256 fallbackPrice
-                    ) {
-                        assertTrue(
-                            fallbackPrice > 0,
-                            "Fallback price should be valid"
-                        );
-                        console.log(
-                            "   Fallback source working: %s ETH",
-                            fallbackPrice / 1e18
-                        );
+                    try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 fallbackPrice) {
+                        assertTrue(fallbackPrice > 0, "Fallback price should be valid");
+                        console.log("   Fallback source working: %s ETH", fallbackPrice / 1e18);
                     } catch {
-                        console.log(
-                            "   Fallback failed (expected for some configurations)"
-                        );
+                        console.log("   Fallback failed (expected for some configurations)");
                     }
                 }
 
@@ -832,12 +740,8 @@ contract RealWorldTokenPriceTest is BaseTest {
                     cfg.fallbackSelector
                 );
             } catch {
-                console.log(
-                    "   Skipping %s - primary source not working",
-                    cfg.name
-                );
+                console.log("   Skipping %s - primary source not working", cfg.name);
             }
-
             vm.stopPrank();
         }
     }
@@ -852,13 +756,8 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 0) {
-                ILiquidTokenManager.TokenInfo memory info = liquidTokenManager
-                    .getTokenInfo(IERC20(cfg.token));
-                assertEq(
-                    info.pricePerUnit,
-                    1e18,
-                    "Native token should be exactly 1 ETH"
-                );
+                ILiquidTokenManager.TokenInfo memory info = liquidTokenManager.getTokenInfo(IERC20(cfg.token));
+                assertEq(info.pricePerUnit, 1e18, "Native token should be exactly 1 ETH");
                 console.log("   %s: 1.0 ETH (native)", cfg.name);
             }
         }
@@ -868,24 +767,12 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 1) {
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     assertTrue(price > 0, "Chainlink price should be positive");
-                    assertTrue(
-                        price >= 0.1e18 && price <= 10e18,
-                        "Chainlink price should be reasonable"
-                    );
-                    console.log(
-                        "   %s: %s ETH (chainlink)",
-                        cfg.name,
-                        price / 1e18
-                    );
+                    assertTrue(price >= 0.1e18 && price <= 10e18, "Chainlink price should be reasonable");
+                    console.log("   %s: %s ETH (chainlink)", cfg.name, price / 1e18);
                 } catch {
-                    console.log(
-                        "   %s: Chainlink price fetch failed",
-                        cfg.name
-                    );
+                    console.log("   %s: Chainlink price fetch failed", cfg.name);
                 }
             }
         }
@@ -895,19 +782,10 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     assertTrue(price > 0, "Curve price should be positive");
-                    assertTrue(
-                        price >= 0.1e18 && price <= 10e18,
-                        "Curve price should be reasonable"
-                    );
-                    console.log(
-                        "   %s: %s ETH (curve)",
-                        cfg.name,
-                        price / 1e18
-                    );
+                    assertTrue(price >= 0.1e18 && price <= 10e18, "Curve price should be reasonable");
+                    console.log("   %s: %s ETH (curve)", cfg.name, price / 1e18);
                 } catch {
                     console.log("   %s: Curve price fetch failed", cfg.name);
                 }
@@ -919,19 +797,10 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 3) {
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     assertTrue(price > 0, "Protocol price should be positive");
-                    assertTrue(
-                        price >= 0.1e18 && price <= 10e18,
-                        "Protocol price should be reasonable"
-                    );
-                    console.log(
-                        "   %s: %s ETH (protocol)",
-                        cfg.name,
-                        price / 1e18
-                    );
+                    assertTrue(price >= 0.1e18 && price <= 10e18, "Protocol price should be reasonable");
+                    console.log("   %s: %s ETH (protocol)", cfg.name, price / 1e18);
 
                     // Verify the function selector is being used
                     (
@@ -942,10 +811,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                         address fallbackSource,
                         bytes4 fallbackFn
                     ) = tokenRegistryOracle.tokenConfigs(cfg.token);
-                    assertTrue(
-                        fallbackFn != bytes4(0),
-                        "Protocol token should have function selector"
-                    );
+                    assertTrue(fallbackFn != bytes4(0), "Protocol token should have function selector");
                 } catch {
                     console.log("   %s: Protocol price fetch failed", cfg.name);
                 }
@@ -954,9 +820,7 @@ contract RealWorldTokenPriceTest is BaseTest {
     }
 
     function testCurveReentrancyProtection() public {
-        console.log(
-            "\n======= Testing Curve Reentrancy Protection (HAL-01 Fix) ======="
-        );
+        console.log("\n======= Testing Curve Reentrancy Protection (HAL-01 Fix) =======");
 
         TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
 
@@ -964,24 +828,18 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
-                console.log(
-                    "Testing reentrancy protection for %s...",
-                    cfg.name
-                );
+                console.log("Testing reentrancy protection for %s...", cfg.name);
 
                 vm.startPrank(admin);
 
                 // Test 1: Get baseline price without protection
                 uint256 baselinePrice;
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     baselinePrice = price;
                     console.log("  Baseline price: %s ETH", price / 1e18);
                 } catch {
                     console.log("  Could not get baseline price");
                 }
-
                 // Test 2: Enable reentrancy lock
                 address[] memory pools = new address[](1);
                 pools[0] = cfg.primarySource;
@@ -990,66 +848,39 @@ contract RealWorldTokenPriceTest is BaseTest {
 
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-                bool requiresLock = tokenRegistryOracle.requiresReentrancyLock(
-                    cfg.primarySource
-                );
+                bool requiresLock = tokenRegistryOracle.requiresReentrancyLock(cfg.primarySource);
                 assertTrue(requiresLock, "Reentrancy lock should be enabled");
                 console.log("  Reentrancy lock enabled for pool");
 
                 // Test 3: Price fetch with reentrancy protection
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
-                    assertTrue(
-                        price > 0,
-                        "Price should work with reentrancy protection"
-                    );
-                    console.log(
-                        "  Price with protection: %s ETH",
-                        price / 1e18
-                    );
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
+                    assertTrue(price > 0, "Price should work with reentrancy protection");
+                    console.log("  Price with protection: %s ETH", price / 1e18);
 
                     if (baselinePrice > 0) {
                         // Prices should be similar (within 1%)
-                        uint256 diff = price > baselinePrice
-                            ? price - baselinePrice
-                            : baselinePrice - price;
-                        assertTrue(
-                            diff * 100 < baselinePrice,
-                            "Prices should be similar with/without protection"
-                        );
+                        uint256 diff = price > baselinePrice ? price - baselinePrice : baselinePrice - price;
+                        assertTrue(diff * 100 < baselinePrice, "Prices should be similar with/without protection");
                         console.log("  Price consistency maintained");
                     }
                 } catch {
                     console.log("  Price fetch failed with protection");
                 }
-
                 // Test 4: Disable reentrancy lock
                 settings[0] = false;
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-                requiresLock = tokenRegistryOracle.requiresReentrancyLock(
-                    cfg.primarySource
-                );
+                requiresLock = tokenRegistryOracle.requiresReentrancyLock(cfg.primarySource);
                 assertFalse(requiresLock, "Reentrancy lock should be disabled");
                 console.log("  Reentrancy lock disabled");
 
                 // Test 5: Price fetch without protection
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
-                    assertTrue(
-                        price > 0,
-                        "Price should work without protection"
-                    );
-                    console.log(
-                        "  Price without protection: %s ETH",
-                        price / 1e18
-                    );
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
+                    assertTrue(price > 0, "Price should work without protection");
+                    console.log("  Price without protection: %s ETH", price / 1e18);
                 } catch {
                     console.log("  Price fetch failed without protection");
                 }
-
                 vm.stopPrank();
                 break; // Test only first Curve token found
             }
@@ -1057,18 +888,10 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         // Test mitigation implementation verification
         console.log(" HAL-01 mitigation verified:");
-        console.log(
-            "   remove_liquidity(0, [0,0]) implemented in _getCurvePrice"
-        );
-        console.log(
-            "   Properly detects reentrancy by checking if remove_liquidity reverts"
-        );
-        console.log(
-            "   Enhanced security: rejects prices from pools with missing locks"
-        );
-        console.log(
-            "   Per-pool reentrancy protection via requiresReentrancyLock"
-        );
+        console.log("   remove_liquidity(0, [0,0]) implemented in _getCurvePrice");
+        console.log("   Properly detects reentrancy by checking if remove_liquidity reverts");
+        console.log("   Enhanced security: rejects prices from pools with missing locks");
+        console.log("   Per-pool reentrancy protection via requiresReentrancyLock");
         console.log("   Batch configuration for efficient pool management");
 
         // Test CurvePoolReentrancyLockStatus event emission
@@ -1095,9 +918,7 @@ contract RealWorldTokenPriceTest is BaseTest {
             // Call getTokenPrice to trigger the event
             for (uint i = 0; i < tokens.length; i++) {
                 if (tokens[i].primarySource == testPool) {
-                    try
-                        tokenRegistryOracle.getTokenPrice(tokens[i].token)
-                    {} catch {}
+                    try tokenRegistryOracle.getTokenPrice(tokens[i].token) {} catch {}
                     break;
                 }
             }
@@ -1108,23 +929,17 @@ contract RealWorldTokenPriceTest is BaseTest {
 
             for (uint i = 0; i < entries.length; i++) {
                 // Event: CurvePoolReentrancyLockStatus(address indexed pool, bool lockEngaged)
-                bytes32 eventSignature = keccak256(
-                    "CurvePoolReentrancyLockStatus(address,bool)"
-                );
+                bytes32 eventSignature = keccak256("CurvePoolReentrancyLockStatus(address,bool)");
 
                 if (entries[i].topics[0] == eventSignature) {
                     foundEvent = true;
-                    console.log(
-                        "  Successfully emitted CurvePoolReentrancyLockStatus event"
-                    );
+                    console.log("  Successfully emitted CurvePoolReentrancyLockStatus event");
                     break;
                 }
             }
 
             if (!foundEvent) {
-                console.log(
-                    "  Warning: CurvePoolReentrancyLockStatus event not found"
-                );
+                console.log("  Warning: CurvePoolReentrancyLockStatus event not found");
             }
         }
 
@@ -1137,10 +952,7 @@ contract RealWorldTokenPriceTest is BaseTest {
         vm.startPrank(admin);
 
         // Test 1: Fresh prices should not be stale
-        assertFalse(
-            tokenRegistryOracle.arePricesStale(),
-            "Fresh prices should not be stale"
-        );
+        assertFalse(tokenRegistryOracle.arePricesStale(), "Fresh prices should not be stale");
         console.log(" Fresh prices correctly identified as not stale");
 
         // Test 2: Set emergency mode with short interval
@@ -1152,30 +964,19 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         // Warp to just before staleness threshold
         vm.warp(currentUpdateTime + 299);
-        assertFalse(
-            tokenRegistryOracle.arePricesStale(),
-            "Prices should be fresh within emergency interval"
-        );
+        assertFalse(tokenRegistryOracle.arePricesStale(), "Prices should be fresh within emergency interval");
 
         // Test 3: Prices should be stale after interval
         vm.warp(currentUpdateTime + 301); // Now past the 300 second threshold
-        assertTrue(
-            tokenRegistryOracle.arePricesStale(),
-            "Prices should be stale after emergency interval"
-        );
+        assertTrue(tokenRegistryOracle.arePricesStale(), "Prices should be stale after emergency interval");
         console.log(" Emergency staleness interval working correctly");
 
         // Test 4: Disable emergency mode
         tokenRegistryOracle.disableEmergencyInterval();
 
         // Should now use hidden threshold (much longer)
-        assertFalse(
-            tokenRegistryOracle.arePricesStale(),
-            "Should use hidden threshold after disabling emergency"
-        );
-        console.log(
-            " Hidden staleness threshold activated after disabling emergency"
-        );
+        assertFalse(tokenRegistryOracle.arePricesStale(), "Should use hidden threshold after disabling emergency");
+        console.log(" Hidden staleness threshold activated after disabling emergency");
 
         // Test 5: UpdateAllPricesIfNeeded should return false for fresh prices
         bool updated = tokenRegistryOracle.updateAllPricesIfNeeded();
@@ -1197,27 +998,16 @@ contract RealWorldTokenPriceTest is BaseTest {
         uint256 currentUpdateTime = tokenRegistryOracle.lastPriceUpdate();
         vm.warp(currentUpdateTime + 2); // 2 seconds past the 1 second threshold
 
-        assertTrue(
-            tokenRegistryOracle.arePricesStale(),
-            "Prices should be stale"
-        );
+        assertTrue(tokenRegistryOracle.arePricesStale(), "Prices should be stale");
 
         // Test 2: Update all prices - handle potential failures gracefully
         uint256 initialTimestamp = tokenRegistryOracle.lastPriceUpdate();
 
-        try tokenRegistryOracle.updateAllPricesIfNeeded() returns (
-            bool updated
-        ) {
+        try tokenRegistryOracle.updateAllPricesIfNeeded() returns (bool updated) {
             // Test 2a: Successful update path
             assertTrue(updated, "Prices should have been updated");
-            assertTrue(
-                tokenRegistryOracle.lastPriceUpdate() > initialTimestamp,
-                "Timestamp should be updated"
-            );
-            assertFalse(
-                tokenRegistryOracle.arePricesStale(),
-                "Prices should be fresh after update"
-            );
+            assertTrue(tokenRegistryOracle.lastPriceUpdate() > initialTimestamp, "Timestamp should be updated");
+            assertFalse(tokenRegistryOracle.arePricesStale(), "Prices should be fresh after update");
 
             console.log(" UpdateAllPrices successfully updated stale prices");
 
@@ -1229,9 +1019,7 @@ contract RealWorldTokenPriceTest is BaseTest {
 
             // This is actually expected behavior in production - if we can't get fresh prices, fail
             if (keccak256(bytes(reason)) == keccak256(bytes("NoFreshPrice"))) {
-                console.log(
-                    " Oracle correctly failed when unable to get fresh prices"
-                );
+                console.log(" Oracle correctly failed when unable to get fresh prices");
 
                 // Test individual tokens that do work
                 _testIndividualWorkingTokens();
@@ -1246,9 +1034,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                 // NoFreshPrice selector is keccak256("NoFreshPrice(address)")[:4]
                 if (errorSelector == 0x760c30b8) {
                     // This would be the actual selector
-                    console.log(
-                        " Oracle correctly failed when unable to get fresh prices for specific token"
-                    );
+                    console.log(" Oracle correctly failed when unable to get fresh prices for specific token");
                     _testIndividualWorkingTokens();
                 } else {
                     console.log(" Unexpected low-level error");
@@ -1256,7 +1042,6 @@ contract RealWorldTokenPriceTest is BaseTest {
                 }
             }
         }
-
         vm.stopPrank();
     }
 
@@ -1267,44 +1052,26 @@ contract RealWorldTokenPriceTest is BaseTest {
         for (uint i = 0; i < tokens.length; i++) {
             TokenConfig memory cfg = tokens[i];
             if (tokenAdded[cfg.token]) {
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     if (price > 0) {
                         updatedCount++;
-                        console.log(
-                            "   %s price available: %s ETH",
-                            cfg.name,
-                            price / 1e18
-                        );
+                        console.log("   %s price available: %s ETH", cfg.name, price / 1e18);
                     }
                 } catch {
                     // For native tokens, check LiquidTokenManager
                     if (cfg.sourceType == 0) {
-                        uint256 nativePrice = liquidTokenManager
-                            .getTokenInfo(IERC20(cfg.token))
-                            .pricePerUnit;
+                        uint256 nativePrice = liquidTokenManager.getTokenInfo(IERC20(cfg.token)).pricePerUnit;
                         if (nativePrice > 0) {
                             updatedCount++;
-                            console.log(
-                                "   %s price available: %s ETH (native)",
-                                cfg.name,
-                                nativePrice / 1e18
-                            );
+                            console.log("   %s price available: %s ETH (native)", cfg.name, nativePrice / 1e18);
                         }
                     }
                 }
             }
         }
 
-        console.log(
-            " Successfully verified prices for %s tokens",
-            updatedCount
-        );
-        assertTrue(
-            updatedCount > 0,
-            "At least one token price should be available"
-        );
+        console.log(" Successfully verified prices for %s tokens", updatedCount);
+        assertTrue(updatedCount > 0, "At least one token price should be available");
     }
 
     function _testIndividualWorkingTokens() internal {
@@ -1318,29 +1085,17 @@ contract RealWorldTokenPriceTest is BaseTest {
             if (tokenAdded[cfg.token]) {
                 if (cfg.sourceType == 0) {
                     // Native tokens should always work
-                    uint256 nativePrice = liquidTokenManager
-                        .getTokenInfo(IERC20(cfg.token))
-                        .pricePerUnit;
+                    uint256 nativePrice = liquidTokenManager.getTokenInfo(IERC20(cfg.token)).pricePerUnit;
                     if (nativePrice > 0) {
                         workingCount++;
-                        console.log(
-                            "   %s works: %s ETH (native)",
-                            cfg.name,
-                            nativePrice / 1e18
-                        );
+                        console.log("   %s works: %s ETH (native)", cfg.name, nativePrice / 1e18);
                     }
                 } else {
                     // Test other token types
-                    try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                        uint256 price
-                    ) {
+                    try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                         if (price > 0) {
                             workingCount++;
-                            console.log(
-                                "   %s works: %s ETH",
-                                cfg.name,
-                                price / 1e18
-                            );
+                            console.log("   %s works: %s ETH", cfg.name, price / 1e18);
                         }
                     } catch {
                         console.log("   %s failed to get price", cfg.name);
@@ -1350,16 +1105,11 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         console.log(" Found %s working tokens individually", workingCount);
-        assertTrue(
-            workingCount > 0,
-            "At least some tokens should work individually"
-        );
+        assertTrue(workingCount > 0, "At least some tokens should work individually");
     }
     //add more tests
     function testCurvePoolMethodPrioritization() public {
-        console.log(
-            "\n======= Testing Curve Pool Method Priority Order ======="
-        );
+        console.log("\n======= Testing Curve Pool Method Priority Order =======");
 
         TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
 
@@ -1387,26 +1137,18 @@ contract RealWorldTokenPriceTest is BaseTest {
                     abi.encode(1.3e18)
                 );
 
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     // Should use get_virtual_price first (1.5e18)
                     if (price == 1.5e18) {
-                        console.log(
-                            "  Correctly prioritizes get_virtual_price()"
-                        );
+                        console.log("  Correctly prioritizes get_virtual_price()");
                     } else if (price == 1.3e18) {
                         console.log("  Falls back to price_oracle()");
                     } else {
-                        console.log(
-                            "  Uses get_dy() fallback: %s ETH",
-                            price / 1e18
-                        );
+                        console.log("  Uses get_dy() fallback: %s ETH", price / 1e18);
                     }
                 } catch {
                     console.log("  Method priority test failed");
                 }
-
                 // Clear mocks
                 vm.clearMockedCalls();
                 vm.stopPrank();
@@ -1416,9 +1158,7 @@ contract RealWorldTokenPriceTest is BaseTest {
     }
 
     function testCurveReentrancyLockBoundaryConditions() public {
-        console.log(
-            "\n======= Testing Reentrancy Lock Boundary Conditions ======="
-        );
+        console.log("\n======= Testing Reentrancy Lock Boundary Conditions =======");
 
         TokenConfig[] memory tokens = isHolesky ? holeskyTokens : mainnetTokens;
 
@@ -1439,39 +1179,25 @@ contract RealWorldTokenPriceTest is BaseTest {
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
                 uint256 gasBefore = gasleft();
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     uint256 gasUsed = gasBefore - gasleft();
                     console.log("  Gas used with reentrancy lock: %s", gasUsed);
                     assertTrue(price > 0, "Should get valid price with lock");
                 } catch {
-                    console.log(
-                        "  Expected: Some pools may fail lock engagement test"
-                    );
+                    console.log("  Expected: Some pools may fail lock engagement test");
                 }
-
                 // Test 2: Disable lock and compare gas usage
                 settings[0] = false;
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
                 gasBefore = gasleft();
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     uint256 gasUsed = gasBefore - gasleft();
-                    console.log(
-                        "  Gas used without reentrancy lock: %s",
-                        gasUsed
-                    );
-                    assertTrue(
-                        price > 0,
-                        "Should get valid price without lock"
-                    );
+                    console.log("  Gas used without reentrancy lock: %s", gasUsed);
+                    assertTrue(price > 0, "Should get valid price without lock");
                 } catch {
                     console.log("  Price fetch failed without lock");
                 }
-
                 vm.stopPrank();
                 break;
             }
@@ -1483,9 +1209,7 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         // Skip this test on Holesky as the specific Curve pools aren't available
         if (isHolesky) {
-            console.log(
-                "Skipping Curve pool safety validation on Holesky testnet"
-            );
+            console.log("Skipping Curve pool safety validation on Holesky testnet");
             return;
         }
 
@@ -1505,35 +1229,20 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-        try tokenRegistryOracle.getCurvePrice(UNSAFE_ANKR_ETH_POOL) returns (
-            uint256 price,
-            bool success
-        ) {
+        try tokenRegistryOracle.getCurvePrice(UNSAFE_ANKR_ETH_POOL) returns (uint256 price, bool success) {
             if (success) {
-                console.log(
-                    "  Unsafe pool protected with reentrancy lock: %s ETH",
-                    price / 1e18
-                );
-                assertTrue(
-                    price > 0,
-                    "Protected unsafe pool should return valid price"
-                );
+                console.log("  Unsafe pool protected with reentrancy lock: %s ETH", price / 1e18);
+                assertTrue(price > 0, "Protected unsafe pool should return valid price");
             } else {
-                console.log(
-                    "  ! Unsafe pool failed even with protection (may not have remove_liquidity)"
-                );
+                console.log("  ! Unsafe pool failed even with protection (may not have remove_liquidity)");
             }
         } catch Error(string memory reason) {
-            if (
-                keccak256(bytes(reason)) ==
-                keccak256(bytes("CurveOracle: pool re-entrancy"))
-            ) {
+            if (keccak256(bytes(reason)) == keccak256(bytes("CurveOracle: pool re-entrancy"))) {
                 console.log("  Correctly detected reentrancy attempt");
             } else {
                 console.log("  Unsafe pool test failed: %s", reason);
             }
         }
-
         // Test safe pools don't need protection
         TokenConfig[] memory tokens = mainnetTokens; // Use mainnet tokens since we're on mainnet
         for (uint i = 0; i < tokens.length; i++) {
@@ -1545,14 +1254,9 @@ contract RealWorldTokenPriceTest is BaseTest {
                 settings[0] = false; // Don't require lock for safe pools
                 tokenRegistryOracle.batchSetRequiresLock(pools, settings);
 
-                try
-                    tokenRegistryOracle.getCurvePrice(cfg.primarySource)
-                returns (uint256 price, bool success) {
+                try tokenRegistryOracle.getCurvePrice(cfg.primarySource) returns (uint256 price, bool success) {
                     if (success) {
-                        console.log(
-                            "  Safe pool works without reentrancy lock: %s ETH",
-                            price / 1e18
-                        );
+                        console.log("  Safe pool works without reentrancy lock: %s ETH", price / 1e18);
                     }
                 } catch {
                     console.log("  Safe pool validation inconclusive");
@@ -1576,39 +1280,23 @@ contract RealWorldTokenPriceTest is BaseTest {
 
                 vm.startPrank(admin);
 
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     // Test reasonable bounds for ETH-denominated LSTs
                     assertTrue(price > 0, "Price should be positive");
-                    assertTrue(
-                        price >= 0.5e18,
-                        "Price should be at least 0.5 ETH (reasonable lower bound)"
-                    );
-                    assertTrue(
-                        price <= 2.0e18,
-                        "Price should be at most 2.0 ETH (reasonable upper bound)"
-                    );
+                    assertTrue(price >= 0.5e18, "Price should be at least 0.5 ETH (reasonable lower bound)");
+                    assertTrue(price <= 2.0e18, "Price should be at most 2.0 ETH (reasonable upper bound)");
 
-                    console.log(
-                        "  Price within reasonable bounds: %s ETH",
-                        price / 1e18
-                    );
+                    console.log("  Price within reasonable bounds: %s ETH", price / 1e18);
 
                     // Additional bounds check for LST tokens (should be close to 1 ETH)
                     if (price >= 0.95e18 && price <= 1.15e18) {
-                        console.log(
-                            "  LST price in expected range (0.95-1.15 ETH)"
-                        );
+                        console.log("  LST price in expected range (0.95-1.15 ETH)");
                     } else {
-                        console.log(
-                            "  ! Price outside typical LST range - verify manually"
-                        );
+                        console.log("  ! Price outside typical LST range - verify manually");
                     }
                 } catch {
                     console.log("  Could not get price for bounds validation");
                 }
-
                 vm.stopPrank();
                 break;
             }
@@ -1616,9 +1304,7 @@ contract RealWorldTokenPriceTest is BaseTest {
     }
 
     function testCurveIntegrationWithOracleStalenesss() public {
-        console.log(
-            "\n======= Testing Curve Integration with Oracle Staleness ======="
-        );
+        console.log("\n======= Testing Curve Integration with Oracle Staleness =======");
 
         vm.startPrank(admin);
 
@@ -1630,62 +1316,33 @@ contract RealWorldTokenPriceTest is BaseTest {
             if (tokenAdded[cfg.token] && cfg.sourceType == 2) {
                 // Get baseline price
                 uint256 baselinePrice;
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 price
-                ) {
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 price) {
                     baselinePrice = price;
-                    console.log(
-                        "Baseline price for %s: %s ETH",
-                        cfg.name,
-                        price / 1e18
-                    );
+                    console.log("Baseline price for %s: %s ETH", cfg.name, price / 1e18);
                 } catch {
-                    console.log(
-                        "Could not get baseline price for %s",
-                        cfg.name
-                    );
+                    console.log("Could not get baseline price for %s", cfg.name);
                     continue;
                 }
-
                 // Test 2: Force staleness and verify Curve prices still work
                 tokenRegistryOracle.setPriceUpdateInterval(1); // 1 second
 
                 uint256 currentTime = tokenRegistryOracle.lastPriceUpdate();
                 vm.warp(currentTime + 2); // Make prices stale
 
-                assertTrue(
-                    tokenRegistryOracle.arePricesStale(),
-                    "Prices should be stale"
-                );
+                assertTrue(tokenRegistryOracle.arePricesStale(), "Prices should be stale");
 
                 // Test 3: Curve prices should still be fetchable during staleness
-                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (
-                    uint256 stalePrice
-                ) {
-                    console.log(
-                        "Price during staleness: %s ETH",
-                        stalePrice / 1e18
-                    );
+                try tokenRegistryOracle.getTokenPrice(cfg.token) returns (uint256 stalePrice) {
+                    console.log("Price during staleness: %s ETH", stalePrice / 1e18);
 
                     // Price should be consistent
-                    uint256 diff = stalePrice > baselinePrice
-                        ? stalePrice - baselinePrice
-                        : baselinePrice - stalePrice;
-                    assertTrue(
-                        diff * 100 < baselinePrice,
-                        "Price should be consistent during staleness"
-                    );
+                    uint256 diff = stalePrice > baselinePrice ? stalePrice - baselinePrice : baselinePrice - stalePrice;
+                    assertTrue(diff * 100 < baselinePrice, "Price should be consistent during staleness");
 
-                    console.log(
-                        "  Curve price consistent during oracle staleness"
-                    );
+                    console.log("  Curve price consistent during oracle staleness");
                 } catch Error(string memory reason) {
-                    console.log(
-                        "  Expected: Curve price fetch may fail during staleness: %s",
-                        reason
-                    );
+                    console.log("  Expected: Curve price fetch may fail during staleness: %s", reason);
                 }
-
                 break;
             }
         }

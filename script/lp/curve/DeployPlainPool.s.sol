@@ -58,14 +58,8 @@ contract DeployPlainPool is Script {
         return pool;
     }
 
-    function _loadConfig(
-        string memory configFileName
-    ) internal view returns (PlainPoolConfig memory config) {
-        string memory configPath = string.concat(
-            "./configs/",
-            configFileName,
-            ".json"
-        );
+    function _loadConfig(string memory configFileName) internal view returns (PlainPoolConfig memory config) {
+        string memory configPath = string.concat("./configs/", configFileName, ".json");
         string memory json = vm.readFile(configPath);
 
         config.name = json.readString(".name");
@@ -77,10 +71,7 @@ contract DeployPlainPool is Script {
         config.assetType = 0; // ETH
         config.implementationIdx = 0;
 
-        console.log(
-            "[LP][Curve][Deploy] Deploying Plain Pool for ",
-            configFileName
-        );
+        console.log("[LP][Curve][Deploy] Deploying Plain Pool for ", configFileName);
         console.log("[LP][Curve][Deploy] Pool Name:", config.name);
         console.log("[LP][Curve][Deploy] Pool Symbol:", config.symbol);
         console.log("[LP][Curve][Deploy] Token 0:", config.token0);
@@ -89,15 +80,8 @@ contract DeployPlainPool is Script {
         console.log("[LP][Curve][Deploy] Fee:", config.fee);
     }
 
-    function _deployPool(
-        PlainPoolConfig memory config
-    ) internal returns (address pool) {
-        address[4] memory coins = [
-            config.token0,
-            config.token1,
-            address(0),
-            address(0)
-        ];
+    function _deployPool(PlainPoolConfig memory config) internal returns (address pool) {
+        address[4] memory coins = [config.token0, config.token1, address(0), address(0)];
 
         pool = ICurveFactory(CURVE_FACTORY).deploy_plain_pool(
             config.name,
@@ -114,15 +98,8 @@ contract DeployPlainPool is Script {
         return pool;
     }
 
-    function _saveDeploymentResult(
-        string memory configFileName,
-        address pool
-    ) internal {
-        string memory resultPath = string.concat(
-            "./outputs/",
-            configFileName,
-            "-result.json"
-        );
+    function _saveDeploymentResult(string memory configFileName, address pool) internal {
+        string memory resultPath = string.concat("./outputs/", configFileName, "-result.json");
         string memory result = string.concat(
             '{"pool":"',
             vm.toString(pool),

@@ -42,9 +42,7 @@ contract DeployMetapool is Script {
         uint256 implementationIdx;
     }
 
-    function run(
-        string memory configFileName
-    ) external returns (address metapool) {
+    function run(string memory configFileName) external returns (address metapool) {
         // Get pool config
         MetapoolConfig memory config = _loadConfig(configFileName);
 
@@ -59,14 +57,8 @@ contract DeployMetapool is Script {
         return metapool;
     }
 
-    function _loadConfig(
-        string memory configFileName
-    ) internal view returns (MetapoolConfig memory config) {
-        string memory configPath = string.concat(
-            "./configs/",
-            configFileName,
-            ".json"
-        );
+    function _loadConfig(string memory configFileName) internal view returns (MetapoolConfig memory config) {
+        string memory configPath = string.concat("./configs/", configFileName, ".json");
         string memory json = vm.readFile(configPath);
 
         config.basePool = SBTC_POOL; // Default to SBTC pool
@@ -77,10 +69,7 @@ contract DeployMetapool is Script {
         config.fee = json.readUint(".fee");
         config.implementationIdx = 0;
 
-        console.log(
-            "[LP][Curve][Deploy] Deploying Metapool for ",
-            configFileName
-        );
+        console.log("[LP][Curve][Deploy] Deploying Metapool for ", configFileName);
         console.log("[LP][Curve][Deploy] Base Pool:", config.basePool);
         console.log("[LP][Curve][Deploy] Metapool Name:", config.name);
         console.log("[LP][Curve][Deploy] Metapool Symbol:", config.symbol);
@@ -89,9 +78,7 @@ contract DeployMetapool is Script {
         console.log("[LP][Curve][Deploy] Fee:", config.fee);
     }
 
-    function _deployMetapool(
-        MetapoolConfig memory config
-    ) internal returns (address metapool) {
+    function _deployMetapool(MetapoolConfig memory config) internal returns (address metapool) {
         metapool = ICurveFactory(CURVE_FACTORY).deploy_metapool(
             config.basePool,
             config.name,
@@ -107,15 +94,8 @@ contract DeployMetapool is Script {
         return metapool;
     }
 
-    function _saveDeploymentResult(
-        string memory configFileName,
-        address metapool
-    ) internal {
-        string memory resultPath = string.concat(
-            "./outputs/",
-            configFileName,
-            "-result.json"
-        );
+    function _saveDeploymentResult(string memory configFileName, address metapool) internal {
+        string memory resultPath = string.concat("./outputs/", configFileName, "-result.json");
         string memory result = string.concat(
             '{"metapool":"',
             vm.toString(metapool),

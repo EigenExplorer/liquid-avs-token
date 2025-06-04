@@ -1,32 +1,28 @@
-import "dotenv/config";
+import 'dotenv/config'
 
-import {
-  type MetaTransactionData,
-  type SafeTransaction,
-  OperationType,
-} from "@safe-global/types-kit";
-import { apiKit, protocolKitOwnerAdmin, protocolKitOwnerPauser } from "./safe";
-import { fileURLToPath } from "node:url";
-import { getAddress } from "viem/utils";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { type MetaTransactionData, type SafeTransaction, OperationType } from '@safe-global/types-kit'
+import { apiKit, protocolKitOwnerAdmin, protocolKitOwnerPauser } from './safe'
+import { fileURLToPath } from 'node:url'
+import { getAddress } from 'viem/utils'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-export const NETWORK = getNetwork();
-export const DEPLOYMENT = getDeployment();
+export const NETWORK = getNetwork()
+export const DEPLOYMENT = getDeployment()
 
-export const SIGNER_ADMIN = process.env.SIGNER_ADMIN_PUBLIC_KEY;
-export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY;
+export const SIGNER_ADMIN = process.env.SIGNER_ADMIN_PUBLIC_KEY
+export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY
 
-export let LIQUID_TOKEN_ADDRESS = "";
-export let LIQUID_TOKEN_MANAGER_ADDRESS = "";
-export let STAKER_NODE_COORDINATOR_ADDRESS = "";
-export let TOKEN_REGISTRY_ORACLE_ADDRESS = "";
-export let PRICE_UPDATER = "";
-export let ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY; // Updates from deployment data if not local
-export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY; // Updates from deployment data if not local
+export let LIQUID_TOKEN_ADDRESS = ''
+export let LIQUID_TOKEN_MANAGER_ADDRESS = ''
+export let STAKER_NODE_COORDINATOR_ADDRESS = ''
+export let TOKEN_REGISTRY_ORACLE_ADDRESS = ''
+export let PRICE_UPDATER = ''
+export let ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY // Updates from deployment data if not local
+export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY // Updates from deployment data if not local
 
 /**
  * Returns the forge command used to call a task from the /script folder
@@ -37,13 +33,8 @@ export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY; // Updates from depl
  * @param params
  * @returns
  */
-export function forgeCommand(
-  task: string,
-  sender: string,
-  sig: string,
-  params: string
-): string {
-  return `forge script ../script/tasks/${task} --rpc-url ${getRpcUrl()} --json --sender ${sender} --sig '${sig}' -- ${getOutputFile()} ${params} -vvvv`;
+export function forgeCommand(task: string, sender: string, sig: string, params: string): string {
+    return `forge script ../script/tasks/${task} --rpc-url ${getRpcUrl()} --json --sender ${sender} --sig '${sig}' -- ${getOutputFile()} ${params} -vvvv`
 }
 
 /**
@@ -53,51 +44,46 @@ export function forgeCommand(
  * @returns
  */
 export async function createSafeTransactions(
-  stdout: string,
-  to: "admin" | "pauser" = "admin"
+    stdout: string,
+    to: 'admin' | 'pauser' = 'admin'
 ): Promise<SafeTransaction[]> {
-  const multisigAddress = to === "admin" ? ADMIN : PAUSER;
+    const multisigAddress = to === 'admin' ? ADMIN : PAUSER
 
-  if (!multisigAddress) throw new Error("Env vars not set correctly.");
+    if (!multisigAddress) throw new Error('Env vars not set correctly.')
 
-  const protocolKitOwner =
-    to === "admin" ? protocolKitOwnerAdmin : protocolKitOwnerPauser;
+    const protocolKitOwner = to === 'admin' ? protocolKitOwnerAdmin : protocolKitOwnerPauser
 
-  const broadcastMatch = stdout.match(/"transactions":"([^"]+)"/);
+    const broadcastMatch = stdout.match(/"transactions":"([^"]+)"/)
 
-  if (!broadcastMatch)
-    throw new Error("Could not find broadcast file path in output");
+    if (!broadcastMatch) throw new Error('Could not find broadcast file path in output')
 
-  const broadcastData = JSON.parse(
-    await fs.readFile(broadcastMatch[1].replace(/\\\\/g, "\\"), "utf8")
-  );
+    const broadcastData = JSON.parse(await fs.readFile(broadcastMatch[1].replace(/\\\\/g, '\\'), 'utf8'))
 
-  const transactions = broadcastData.transactions;
+    const transactions = broadcastData.transactions
 
-  if (!transactions || !Array.isArray(transactions))
-    throw new Error("No transactions found");
+    if (!transactions || !Array.isArray(transactions)) throw new Error('No transactions found')
 
-  const safeTransactions: SafeTransaction[] = [];
+    const safeTransactions: SafeTransaction[] = []
 
-  let nonce = Number(await apiKit.getNextNonce(multisigAddress));
+    let nonce = Number(await apiKit.getNextNonce(multisigAddress))
 
-  for (const tx of transactions) {
-    const metaTransactionData: MetaTransactionData = {
-      to: getAddress(tx.transaction.to),
-      value: Number.parseInt(tx.transaction.value, 16).toString(),
-      data: tx.transaction.input,
-      operation: OperationType.Call,
-    };
+    for (const tx of transactions) {
+        const metaTransactionData: MetaTransactionData = {
+            to: getAddress(tx.transaction.to),
+            value: Number.parseInt(tx.transaction.value, 16).toString(),
+            data: tx.transaction.input,
+            operation: OperationType.Call
+        }
 
-    const safeTransaction = await protocolKitOwner.createTransaction({
-      transactions: [metaTransactionData],
-      options: { nonce: nonce++ },
-    });
+        const safeTransaction = await protocolKitOwner.createTransaction({
+            transactions: [metaTransactionData],
+            options: { nonce: nonce++ }
+        })
 
-    safeTransactions.push(safeTransaction);
-  }
+        safeTransactions.push(safeTransaction)
+    }
 
-  return safeTransactions;
+    return safeTransactions
 }
 
 /**
@@ -108,42 +94,34 @@ export async function createSafeTransactions(
  * @returns
  */
 export async function proposeSafeTransaction(
-  safeTransaction: SafeTransaction,
-  origin: { title: string; description: string },
-  to: "admin" | "pauser" = "admin"
+    safeTransaction: SafeTransaction,
+    origin: { title: string; description: string },
+    to: 'admin' | 'pauser' = 'admin'
 ) {
-  const multisigAddress = to === "admin" ? ADMIN : PAUSER;
-  const signerAddress = to === "admin" ? SIGNER_ADMIN : SIGNER_PAUSER;
+    const multisigAddress = to === 'admin' ? ADMIN : PAUSER
+    const signerAddress = to === 'admin' ? SIGNER_ADMIN : SIGNER_PAUSER
 
-  if (!multisigAddress || !signerAddress)
-    throw new Error("Env vars not set correctly.");
+    if (!multisigAddress || !signerAddress) throw new Error('Env vars not set correctly.')
 
-  const protocolKitOwner =
-    to === "admin" ? protocolKitOwnerAdmin : protocolKitOwnerPauser;
+    const protocolKitOwner = to === 'admin' ? protocolKitOwnerAdmin : protocolKitOwnerPauser
 
-  const safeTxHash = await protocolKitOwner.getTransactionHash(safeTransaction);
-  const senderSignature = await protocolKitOwner.signHash(safeTxHash);
+    const safeTxHash = await protocolKitOwner.getTransactionHash(safeTransaction)
+    const senderSignature = await protocolKitOwner.signHash(safeTxHash)
 
-  await apiKit.proposeTransaction({
-    safeAddress: multisigAddress,
-    safeTransactionData: safeTransaction.data,
-    safeTxHash,
-    senderAddress: signerAddress,
-    senderSignature: senderSignature.data,
-    origin: JSON.stringify(origin),
-  });
+    await apiKit.proposeTransaction({
+        safeAddress: multisigAddress,
+        safeTransactionData: safeTransaction.data,
+        safeTxHash,
+        senderAddress: signerAddress,
+        senderSignature: senderSignature.data,
+        origin: JSON.stringify(origin)
+    })
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const pendingTransactions = (
-    await apiKit.getPendingTransactions(multisigAddress)
-  ).results;
+    const pendingTransactions = (await apiKit.getPendingTransactions(multisigAddress)).results
 
-  console.log(
-    `[Proposal] ${origin.title}: pending proposals: ${
-      pendingTransactions?.length || 0
-    }`
-  );
+    console.log(`[Proposal] ${origin.title}: pending proposals: ${pendingTransactions?.length || 0}`)
 }
 
 // --- Helper functions ---
@@ -155,9 +133,9 @@ export async function proposeSafeTransaction(
  * @returns
  */
 export function getDeployment(): string {
-  const deployment = process.env.DEPLOYMENT;
-  if (!deployment || deployment !== "local") return "public";
-  return "local";
+    const deployment = process.env.DEPLOYMENT
+    if (!deployment || deployment !== 'local') return 'public'
+    return 'local'
 }
 
 /**
@@ -167,9 +145,9 @@ export function getDeployment(): string {
  * @returns
  */
 export function getNetwork(): string {
-  const network = process.env.NETWORK;
-  if (!network || network !== "holesky") return "mainnet";
-  return "holesky";
+    const network = process.env.NETWORK
+    if (!network || network !== 'holesky') return 'mainnet'
+    return 'holesky'
 }
 
 /**
@@ -179,9 +157,9 @@ export function getNetwork(): string {
  * @returns
  */
 export function getRpcUrl(): string {
-  const rpcUrl = process.env.RPC_URL;
-  if (!rpcUrl || DEPLOYMENT === "local") return "http://localhost:8545";
-  return rpcUrl;
+    const rpcUrl = process.env.RPC_URL
+    if (!rpcUrl || DEPLOYMENT === 'local') return 'http://localhost:8545'
+    return rpcUrl
 }
 
 /**
@@ -191,9 +169,9 @@ export function getRpcUrl(): string {
  * @returns
  */
 export function getOutputFile(): string {
-  if (DEPLOYMENT === "local") return "/local/deployment_data.json";
-  if (NETWORK === "mainnet") return "/mainnet/deployment_data.json";
-  return "/holesky/deployment_data.json";
+    if (DEPLOYMENT === 'local') return '/local/deployment_data.json'
+    if (NETWORK === 'mainnet') return '/mainnet/deployment_data.json'
+    return '/holesky/deployment_data.json'
 }
 
 /**
@@ -203,26 +181,17 @@ export function getOutputFile(): string {
  * @returns
  */
 export async function refreshDeploymentAddresses() {
-  const output = await JSON.parse(
-    await fs.readFile(
-      path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`),
-      "utf8"
+    const output = await JSON.parse(
+        await fs.readFile(path.resolve(__dirname, `../../../script/outputs${getOutputFile()}`), 'utf8')
     )
-  );
 
-  LIQUID_TOKEN_ADDRESS = String(output.proxyAddress);
-  LIQUID_TOKEN_MANAGER_ADDRESS = String(
-    output.contractDeployments.proxy.liquidTokenManager.address
-  );
-  STAKER_NODE_COORDINATOR_ADDRESS = String(
-    output.contractDeployments.proxy.stakerNodeCoordinator.address
-  );
-  TOKEN_REGISTRY_ORACLE_ADDRESS = String(
-    output.contractDeployments.proxy.tokenRegistryOracle.address
-  );
-  ADMIN = String(output.roles.admin);
-  PAUSER = String(output.roles.pauser);
-  PRICE_UPDATER = String(output.roles.priceUpdater);
+    LIQUID_TOKEN_ADDRESS = String(output.proxyAddress)
+    LIQUID_TOKEN_MANAGER_ADDRESS = String(output.contractDeployments.proxy.liquidTokenManager.address)
+    STAKER_NODE_COORDINATOR_ADDRESS = String(output.contractDeployments.proxy.stakerNodeCoordinator.address)
+    TOKEN_REGISTRY_ORACLE_ADDRESS = String(output.contractDeployments.proxy.tokenRegistryOracle.address)
+    ADMIN = String(output.roles.admin)
+    PAUSER = String(output.roles.pauser)
+    PRICE_UPDATER = String(output.roles.priceUpdater)
 }
 
 /**
@@ -231,20 +200,18 @@ export async function refreshDeploymentAddresses() {
  * @param multisig
  * @returns
  */
-export async function getPendingProposals(
-  multisig: "admin" | "pauser" = "admin"
-) {
-  const multisigAddress = multisig === "admin" ? ADMIN : PAUSER;
+export async function getPendingProposals(multisig: 'admin' | 'pauser' = 'admin') {
+    const multisigAddress = multisig === 'admin' ? ADMIN : PAUSER
 
-  if (!multisigAddress) throw new Error("Env vars not set correctly.");
-  return (await apiKit.getPendingTransactions(multisigAddress)).results;
+    if (!multisigAddress) throw new Error('Env vars not set correctly.')
+    return (await apiKit.getPendingTransactions(multisigAddress)).results
 }
 
 export function isContractOurs(address: string): boolean {
-  return (
-    address === LIQUID_TOKEN_ADDRESS.toLowerCase() ||
-    address === LIQUID_TOKEN_MANAGER_ADDRESS.toLowerCase() ||
-    address === STAKER_NODE_COORDINATOR_ADDRESS.toLowerCase() ||
-    address === TOKEN_REGISTRY_ORACLE_ADDRESS.toLowerCase()
-  );
+    return (
+        address === LIQUID_TOKEN_ADDRESS.toLowerCase() ||
+        address === LIQUID_TOKEN_MANAGER_ADDRESS.toLowerCase() ||
+        address === STAKER_NODE_COORDINATOR_ADDRESS.toLowerCase() ||
+        address === TOKEN_REGISTRY_ORACLE_ADDRESS.toLowerCase()
+    )
 }

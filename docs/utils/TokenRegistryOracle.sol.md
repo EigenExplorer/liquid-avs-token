@@ -116,7 +116,14 @@ function initialize(Init memory init) public initializer;
 Configure a token with its primary and fallback sources
 
 ```solidity
-function configureToken(address token, uint8 primaryType, address primarySource, uint8 needsArg, address fallbackSource, bytes4 fallbackFn) external onlyRole(TOKEN_CONFIGURATOR_ROLE);
+function configureToken(
+    address token,
+    uint8 primaryType,
+    address primarySource,
+    uint8 needsArg,
+    address fallbackSource,
+    bytes4 fallbackFn
+) external onlyRole(TOKEN_CONFIGURATOR_ROLE);
 ```
 
 **Parameters**
@@ -376,7 +383,12 @@ function _getCurvePrice(address pool) internal view returns (uint256 price, bool
 Get price from contract call with maximum gas efficiency
 
 ```solidity
-function _getContractCallPrice(address token, address contractAddr, bytes4 selector, uint8 needsArg) internal view returns (uint256 price, bool success);
+function _getContractCallPrice(
+    address token,
+    address contractAddr,
+    bytes4 selector,
+    uint8 needsArg
+) internal view returns (uint256 price, bool success);
 ```
 
 **Parameters**
@@ -514,7 +526,12 @@ TEST ONLY: Get price from contract call
 _This function exposes the internal \_getContractCallPrice for testing purposes_
 
 ```solidity
-function _getContractCallPrice_exposed(address token, address contractAddr, bytes4 selector, uint8 needsArg) external view returns (uint256 price, bool success);
+function _getContractCallPrice_exposed(
+    address token,
+    address contractAddr,
+    bytes4 selector,
+    uint8 needsArg
+) external view returns (uint256 price, bool success);
 ```
 
 **Parameters**

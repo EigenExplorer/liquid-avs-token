@@ -17,14 +17,14 @@ import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 contract StakeAssetsToNodes is Script, Test {
     Vm cheats = Vm(VM_ADDRESS);
 
-    function run(
-      string memory configFileName,
-      LiquidTokenManager.NodeAllocation[] calldata allocations
-    ) public {
+    function run(string memory configFileName, LiquidTokenManager.NodeAllocation[] calldata allocations) public {
         string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
-        address liquidTokenManageraddress = stdJson.readAddress(config, ".contractDeployments.proxy.liquidTokenManager.address");
+        address liquidTokenManageraddress = stdJson.readAddress(
+            config,
+            ".contractDeployments.proxy.liquidTokenManager.address"
+        );
         LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
 
         vm.startBroadcast();
