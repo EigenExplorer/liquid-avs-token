@@ -30,6 +30,10 @@ contract LiquidTokenManager is
     using SafeERC20 for IERC20;
     using Math for uint256;
 
+    // ------------------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------------------
+
     /// @notice Role identifier for staking operations
     bytes32 public constant STRATEGY_CONTROLLER_ROLE = keccak256('STRATEGY_CONTROLLER_ROLE');
 
@@ -59,6 +63,10 @@ contract LiquidTokenManager is
 
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
+
+    // ------------------------------------------------------------------------------
+    // Init functions
+    // ------------------------------------------------------------------------------
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -91,6 +99,10 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
     }
+
+    // ------------------------------------------------------------------------------
+    // Core functions
+    // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidTokenManager
     function addToken(

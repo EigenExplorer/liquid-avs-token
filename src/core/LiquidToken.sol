@@ -26,15 +26,21 @@ contract LiquidToken is
 {
     using SafeERC20 for IERC20;
 
+    // ------------------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------------------
+
+    /// @notice Role identifier for pausing the contract
+    bytes32 public constant PAUSER_ROLE = keccak256('PAUSER_ROLE');
+
+    /// @notice LAT contracts
     ILiquidTokenManager public liquidTokenManager;
     ITokenRegistryOracle public tokenRegistryOracle;
 
-    /**
-    * @dev OUT OF SCOPE FOR V1
-    uint256 public constant WITHDRAWAL_DELAY = 14 days;
-    */
-
+    /// @notice Mapping of assets to their corresponding unstaked balances (held in this contract)
     mapping(address => uint256) public assetBalances;
+
+    /// @notice Mapping of tokens to their corresponding queued balances (unused in V1)
     mapping(address => uint256) public queuedAssetBalances;
 
     /**
@@ -44,7 +50,9 @@ contract LiquidToken is
     mapping(address => uint256) private _withdrawalNonce;
     */
 
-    bytes32 public constant PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    // ------------------------------------------------------------------------------
+    // Init functions
+    // ------------------------------------------------------------------------------
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
@@ -73,6 +81,10 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
     }
+
+    // ------------------------------------------------------------------------------
+    // Core functions
+    // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidToken
     function deposit(
