@@ -14,7 +14,9 @@ import {
     testBatchUpdateRates,
     testUpdateAllPricesIfNeeded,
     testGrantRole,
-    testRevokeRole
+    testRevokeRole,
+    testSetPriceUpdateInterval,
+    testDisableEmergencyInterval
 } from './tasks'
 
 /**
@@ -43,6 +45,8 @@ async function testAllTasks() {
         await testBatchUpdateRates()
         await testGrantRole()
         await testRevokeRole()
+        await testSetPriceUpdateInterval()
+        await testDisableEmergencyInterval()
     } catch {}
 }
 

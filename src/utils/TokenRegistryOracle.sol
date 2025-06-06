@@ -367,7 +367,6 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
                             price := answer
                         }
                     }
-
                     success := 1
                 }
             }
