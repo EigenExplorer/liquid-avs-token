@@ -20,6 +20,8 @@ import { batchUpdateRates } from '../../tasks/system/batchUpdateRates'
 import { updateAllPricesIfNeeded } from '../../tasks/system/updateAllPricesIfNeeded'
 import { grantRole } from '../../tasks/system/grantRole'
 import { revokeRole } from '../../tasks/system/revokeRole'
+import { setPriceUpdateInterval } from '../../tasks/system/setPriceUpdateInterval'
+import { disableEmergencyInterval } from '../../tasks/system/disableEmergencyInterval'
 
 // --- Manager tasks tests ---
 
@@ -735,6 +737,82 @@ export async function testRevokeRole() {
         ]
 
         await revokeRole(LIQUID_TOKEN_ADDRESS, args[0], args[1])
+
+        // Get proposed tx
+        const pendingTx = (
+            await apiKit.getPendingTransactions(ADMIN, {
+                limit: 1
+            })
+        ).results[0]
+
+        const txData = pendingTx.data as `0x${string}`
+        const expectedTxData = encodeFunctionData({
+            abi,
+            functionName,
+            args
+        })
+        passing = compareTxData(txData, expectedTxData, abi)
+
+        console.log(`[Test] ${functionName}: `, passing ? 'passing ✅' : 'failing ❌')
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+/**
+ * Test script for setting price update interval
+ *
+ */
+export async function testSetPriceUpdateInterval() {
+    try {
+        if (DEPLOYMENT !== 'local') throw new Error('Deployment is not local')
+        if (!ADMIN) throw new Error('Env vars not set correctly.')
+
+        let passing = true
+        const functionName = 'setPriceUpdateInterval'
+        const abi = parseAbi(['function setPriceUpdateInterval(uint256 interval)'])
+
+        const args: [bigint] = [86400n]
+
+        await setPriceUpdateInterval(args[0])
+
+        // Get proposed tx
+        const pendingTx = (
+            await apiKit.getPendingTransactions(ADMIN, {
+                limit: 1
+            })
+        ).results[0]
+
+        const txData = pendingTx.data as `0x${string}`
+        const expectedTxData = encodeFunctionData({
+            abi,
+            functionName,
+            args
+        })
+        passing = compareTxData(txData, expectedTxData, abi)
+
+        console.log(`[Test] ${functionName}: `, passing ? 'passing ✅' : 'failing ❌')
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+/**
+ * Test script for disabling emergency interval
+ *
+ */
+export async function testDisableEmergencyInterval() {
+    try {
+        if (DEPLOYMENT !== 'local') throw new Error('Deployment is not local')
+        if (!ADMIN) throw new Error('Env vars not set correctly.')
+
+        let passing = true
+        const functionName = 'disableEmergencyInterval'
+        const abi = parseAbi(['function disableEmergencyInterval()'])
+
+        const args: [] = []
+
+        await disableEmergencyInterval()
 
         // Get proposed tx
         const pendingTx = (
