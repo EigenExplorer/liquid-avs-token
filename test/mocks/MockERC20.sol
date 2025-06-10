@@ -38,4 +38,4 @@ contract MockERC20NoDecimals is IERC20 {
     function transferFrom(address, address, uint256) external pure returns (bool) {
         return true;
     }
-} 
+}

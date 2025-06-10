@@ -17,32 +17,15 @@ contract MockStrategy is StrategyBase {
         underlyingToken = _underlyingToken;
     }
 
-    function _beforeDeposit(
-        IERC20 token,
-        uint256 amount
-    ) internal virtual override {
-        require(
-            token == underlyingToken,
-            "MockStrategy: Can only deposit underlyingToken"
-        );
+    function _beforeDeposit(IERC20 token, uint256 amount) internal virtual override {
+        require(token == underlyingToken, "MockStrategy: Can only deposit underlyingToken");
     }
 
-    function _beforeWithdrawal(
-        address recipient,
-        IERC20 token,
-        uint256 amountShares
-    ) internal virtual override {
-        require(
-            token == underlyingToken,
-            "MockStrategy: Can only withdraw underlyingToken"
-        );
+    function _beforeWithdrawal(address recipient, IERC20 token, uint256 amountShares) internal virtual override {
+        require(token == underlyingToken, "MockStrategy: Can only withdraw underlyingToken");
     }
 
-    function _afterWithdrawal(
-        address recipient,
-        IERC20 token,
-        uint256 amountToSend
-    ) internal virtual override {
+    function _afterWithdrawal(address recipient, IERC20 token, uint256 amountToSend) internal virtual override {
         token.safeTransfer(recipient, amountToSend);
     }
 }

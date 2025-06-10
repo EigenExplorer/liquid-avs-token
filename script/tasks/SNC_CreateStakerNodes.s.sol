@@ -22,7 +22,10 @@ contract CreateStakerNodes is Script, Test {
         string memory configPath = string(bytes(string.concat("script/outputs", configFileName)));
         string memory config = vm.readFile(configPath);
 
-        address stakerNodeCoordinatorAddress = stdJson.readAddress(config, ".contractDeployments.proxy.stakerNodeCoordinator.address");
+        address stakerNodeCoordinatorAddress = stdJson.readAddress(
+            config,
+            ".contractDeployments.proxy.stakerNodeCoordinator.address"
+        );
         StakerNodeCoordinator stakerNodeCoordinator = StakerNodeCoordinator(stakerNodeCoordinatorAddress);
         uint256[] memory nodeIds = new uint256[](count);
 
@@ -38,7 +41,7 @@ contract CreateStakerNodes is Script, Test {
                 nodeIds[i] = node.getId();
             }
         }
-        
+
         vm.stopBroadcast();
 
         return nodeIds;

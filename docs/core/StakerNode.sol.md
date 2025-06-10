@@ -70,11 +70,11 @@ function initialize(Init memory init) public notZeroAddress(address(init.coordin
 Deposits assets into Eigenlayer strategies
 
 ```solidity
-function depositAssets(IERC20[] calldata assets, uint256[] calldata amounts, IStrategy[] calldata strategies)
-    external
-    override
-    nonReentrant
-    onlyRole(LIQUID_TOKEN_MANAGER_ROLE);
+function depositAssets(
+    IERC20[] calldata assets,
+    uint256[] calldata amounts,
+    IStrategy[] calldata strategies
+) external override nonReentrant onlyRole(LIQUID_TOKEN_MANAGER_ROLE);
 ```
 
 **Parameters**
@@ -90,10 +90,11 @@ function depositAssets(IERC20[] calldata assets, uint256[] calldata amounts, ISt
 Delegates the StakerNode's assets to an operator
 
 ```solidity
-function delegate(address operator, ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature, bytes32 approverSalt)
-    public
-    override
-    onlyRole(STAKER_NODES_DELEGATOR_ROLE);
+function delegate(
+    address operator,
+    ISignatureUtilsMixinTypes.SignatureWithExpiry memory signature,
+    bytes32 approverSalt
+) public override onlyRole(STAKER_NODES_DELEGATOR_ROLE);
 ```
 
 **Parameters**

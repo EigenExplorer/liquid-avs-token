@@ -128,7 +128,18 @@ function initialize(Init memory init) public initializer;
 Adds a new token to the registry and configures its price sources
 
 ```solidity
-function addToken(IERC20 token, uint8 decimals, uint256 initialPrice, uint256 volatilityThreshold, IStrategy strategy, uint8 primaryType, address primarySource, uint8 needsArg, address fallbackSource, bytes4 fallbackFn) external onlyRole(DEFAULT_ADMIN_ROLE);
+function addToken(
+    IERC20 token,
+    uint8 decimals,
+    uint256 initialPrice,
+    uint256 volatilityThreshold,
+    IStrategy strategy,
+    uint8 primaryType,
+    address primarySource,
+    uint8 needsArg,
+    address fallbackSource,
+    bytes4 fallbackFn
+) external onlyRole(DEFAULT_ADMIN_ROLE);
 ```
 
 **Parameters**
@@ -296,7 +307,11 @@ function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
 Stakes assets to a specific node
 
 ```solidity
-function stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant;
+function stakeAssetsToNode(
+    uint256 nodeId,
+    IERC20[] memory assets,
+    uint256[] memory amounts
+) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant;
 ```
 
 **Parameters**
@@ -312,7 +327,9 @@ function stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] mem
 Stakes assets to multiple nodes
 
 ```solidity
-function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant;
+function stakeAssetsToNodes(
+    NodeAllocation[] calldata allocations
+) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant;
 ```
 
 **Parameters**
@@ -342,7 +359,12 @@ function _stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] me
 Delegate a set of staker nodes to a corresponding set of operators
 
 ```solidity
-function delegateNodes(uint256[] memory nodeIds, address[] memory operators, ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries, bytes32[] calldata approverSalts) external onlyRole(STRATEGY_CONTROLLER_ROLE);
+function delegateNodes(
+    uint256[] memory nodeIds,
+    address[] memory operators,
+    ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+    bytes32[] calldata approverSalts
+) external onlyRole(STRATEGY_CONTROLLER_ROLE);
 ```
 
 **Parameters**

@@ -70,7 +70,11 @@ function initialize(Init calldata init) external initializer;
 Allows users to deposit multiple assets and receive shares
 
 ```solidity
-function deposit(IERC20Upgradeable[] calldata assets, uint256[] calldata amounts, address receiver) external nonReentrant whenNotPaused returns (uint256[] memory);
+function deposit(
+    IERC20Upgradeable[] calldata assets,
+    uint256[] calldata amounts,
+    address receiver
+) external nonReentrant whenNotPaused returns (uint256[] memory);
 ```
 
 **Parameters**
@@ -92,7 +96,10 @@ function deposit(IERC20Upgradeable[] calldata assets, uint256[] calldata amounts
 Credits queued balances for a given set of asset
 
 ```solidity
-function creditQueuedAssetBalances(IERC20Upgradeable[] calldata assets, uint256[] calldata amounts) external whenNotPaused;
+function creditQueuedAssetBalances(
+    IERC20Upgradeable[] calldata assets,
+    uint256[] calldata amounts
+) external whenNotPaused;
 ```
 
 **Parameters**
@@ -107,7 +114,10 @@ function creditQueuedAssetBalances(IERC20Upgradeable[] calldata assets, uint256[
 Allows the LiquidTokenManager to transfer assets from this contract
 
 ```solidity
-function transferAssets(IERC20Upgradeable[] calldata assetsToRetrieve, uint256[] calldata amounts) external whenNotPaused;
+function transferAssets(
+    IERC20Upgradeable[] calldata assetsToRetrieve,
+    uint256[] calldata amounts
+) external whenNotPaused;
 ```
 
 **Parameters**

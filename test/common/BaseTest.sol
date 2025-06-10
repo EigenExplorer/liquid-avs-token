@@ -34,6 +34,7 @@ contract BaseTest is Test {
     uint8 constant SOURCE_TYPE_CHAINLINK = 1;
     uint8 constant SOURCE_TYPE_CURVE = 2;
     uint8 constant SOURCE_TYPE_PROTOCOL = 3;
+    uint8 constant SOURCE_TYPE_NATIVE = 0;
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;
@@ -134,39 +135,23 @@ contract BaseTest is Test {
         console.log("Role checks before adding tokens:");
         console.log(
             "Deployer has DEFAULT_ADMIN_ROLE:",
-            liquidTokenManager.hasRole(
-                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-                deployer
-            )
+            liquidTokenManager.hasRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), deployer)
         );
         console.log(
             "Deployer has STRATEGY_CONTROLLER_ROLE:",
-            liquidTokenManager.hasRole(
-                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-                deployer
-            )
+            liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), deployer)
         );
         console.log(
             "admin has TOKEN_CONFIGURATOR_ROLE:",
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-                admin
-            )
+            tokenRegistryOracle.hasRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), admin)
         );
 
         // Get price feed data using proper try/catch syntax
-        try testTokenFeed.latestRoundData() returns (
-            uint80,
-            int256 price,
-            uint256,
-            uint256,
-            uint80
-        ) {
+        try testTokenFeed.latestRoundData() returns (uint80, int256 price, uint256, uint256, uint80) {
             console.log("testTokenFeed price:", uint256(price));
         } catch {
             console.log("Failed to get testTokenFeed price");
         }
-
         // Add tokens as deployer (who must have admin role)
         vm.startPrank(deployer);
 
@@ -189,7 +174,6 @@ contract BaseTest is Test {
         } catch {
             console.log("First token add failed with unknown error");
         }
-
         try
             liquidTokenManager.addToken(
                 IERC20(address(testToken2)),
@@ -216,116 +200,41 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
 
         // LiquidTokenManager
-        if (
-            liquidTokenManager.hasRole(
-                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-                deployer
-            )
-        ) {
-            liquidTokenManager.renounceRole(
-                liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-                deployer
-            );
+        if (liquidTokenManager.hasRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), deployer)) {
+            liquidTokenManager.renounceRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), deployer);
         }
-        if (
-            liquidTokenManager.hasRole(
-                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-                deployer
-            )
-        ) {
-            liquidTokenManager.renounceRole(
-                liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-                deployer
-            );
+        if (liquidTokenManager.hasRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), deployer)) {
+            liquidTokenManager.renounceRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), deployer);
         }
 
         // TokenRegistryOracle
-        if (
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-                deployer
-            )
-        ) {
-            tokenRegistryOracle.renounceRole(
-                tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-                deployer
-            );
+        if (tokenRegistryOracle.hasRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), deployer)) {
+            tokenRegistryOracle.renounceRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), deployer);
         }
-        if (
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-                deployer
-            )
-        ) {
-            tokenRegistryOracle.renounceRole(
-                tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-                deployer
-            );
+        if (tokenRegistryOracle.hasRole(tokenRegistryOracle.ORACLE_ADMIN_ROLE(), deployer)) {
+            tokenRegistryOracle.renounceRole(tokenRegistryOracle.ORACLE_ADMIN_ROLE(), deployer);
         }
-        if (
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-                deployer
-            )
-        ) {
-            tokenRegistryOracle.renounceRole(
-                tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-                deployer
-            );
+        if (tokenRegistryOracle.hasRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), deployer)) {
+            tokenRegistryOracle.renounceRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), deployer);
         }
-        if (
-            tokenRegistryOracle.hasRole(
-                tokenRegistryOracle.RATE_UPDATER_ROLE(),
-                deployer
-            )
-        ) {
-            tokenRegistryOracle.renounceRole(
-                tokenRegistryOracle.RATE_UPDATER_ROLE(),
-                deployer
-            );
+        if (tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), deployer)) {
+            tokenRegistryOracle.renounceRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), deployer);
         }
 
         // StakerNodeCoordinator
-        if (
-            stakerNodeCoordinator.hasRole(
-                stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-                deployer
-            )
-        ) {
-            stakerNodeCoordinator.renounceRole(
-                stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-                deployer
-            );
+        if (stakerNodeCoordinator.hasRole(stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(), deployer)) {
+            stakerNodeCoordinator.renounceRole(stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(), deployer);
         }
-        if (
-            stakerNodeCoordinator.hasRole(
-                stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-                deployer
-            )
-        ) {
-            stakerNodeCoordinator.renounceRole(
-                stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-                deployer
-            );
+        if (stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), deployer)) {
+            stakerNodeCoordinator.renounceRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), deployer);
         }
-        if (
-            stakerNodeCoordinator.hasRole(
-                stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-                deployer
-            )
-        ) {
-            stakerNodeCoordinator.renounceRole(
-                stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-                deployer
-            );
+        if (stakerNodeCoordinator.hasRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), deployer)) {
+            stakerNodeCoordinator.renounceRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), deployer);
         }
 
         // LiquidToken
         if (liquidToken.hasRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer)) {
-            liquidToken.renounceRole(
-                liquidToken.DEFAULT_ADMIN_ROLE(),
-                deployer
-            );
+            liquidToken.renounceRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer);
         }
         if (liquidToken.hasRole(liquidToken.PAUSER_ROLE(), deployer)) {
             liquidToken.renounceRole(liquidToken.PAUSER_ROLE(), deployer);
@@ -336,24 +245,19 @@ contract BaseTest is Test {
     function _initializeSelectors() internal {
         // Initialize all common function selectors for price sources
         exchangeRateSelector = bytes4(keccak256("exchangeRate()"));
-        getPooledEthBySharesSelector = bytes4(
-            keccak256("getPooledEthByShares(uint256)")
-        );
+        getPooledEthBySharesSelector = bytes4(keccak256("getPooledEthByShares(uint256)"));
         convertToAssetsSelector = bytes4(keccak256("convertToAssets(uint256)"));
         getRateSelector = bytes4(keccak256("getRate()"));
         stEthPerTokenSelector = bytes4(keccak256("stEthPerToken()"));
         swETHToETHRateSelector = bytes4(keccak256("swETHToETHRate()"));
         ratioSelector = bytes4(keccak256("ratio()"));
-        underlyingBalanceFromSharesSelector = bytes4(
-            keccak256("underlyingBalanceFromShares(uint256)")
-        );
+        underlyingBalanceFromSharesSelector = bytes4(keccak256("underlyingBalanceFromShares(uint256)"));
         mETHToETHSelector = bytes4(keccak256("mETHToETH(uint256)"));
     }
 
     function _setupELContracts() private {
         uint256 chainId = block.chainid;
-        NetworkAddresses.Addresses memory addresses = NetworkAddresses
-            .getAddresses(chainId);
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
 
         strategyManager = IStrategyManager(addresses.strategyManager);
         delegationManager = IDelegationManager(addresses.delegationManager);
@@ -363,14 +267,8 @@ contract BaseTest is Test {
         // Base test tokens
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
-        mockStrategy = new MockStrategy(
-            strategyManager,
-            IERC20(address(testToken))
-        );
-        mockStrategy2 = new MockStrategy(
-            strategyManager,
-            IERC20(address(testToken2))
-        );
+        mockStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
+        mockStrategy2 = new MockStrategy(strategyManager, IERC20(address(testToken2)));
 
         // Deploy price feed mocks with realistic values for test tokens
         testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
@@ -387,39 +285,17 @@ contract BaseTest is Test {
 
     function _deployProxies() private {
         tokenRegistryOracle = TokenRegistryOracle(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(_tokenRegistryOracleImplementation),
-                    proxyAdminAddress,
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
         liquidTokenManager = LiquidTokenManager(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(_liquidTokenManagerImplementation),
-                    proxyAdminAddress,
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, ""))
         );
         liquidToken = LiquidToken(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(_liquidTokenImplementation),
-                    proxyAdminAddress,
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(_liquidTokenImplementation), proxyAdminAddress, ""))
         );
         stakerNodeCoordinator = StakerNodeCoordinator(
             address(
-                new TransparentUpgradeableProxy(
-                    address(_stakerNodeCoordinatorImplementation),
-                    proxyAdminAddress,
-                    ""
-                )
+                new TransparentUpgradeableProxy(address(_stakerNodeCoordinatorImplementation), proxyAdminAddress, "")
             )
         );
     }
@@ -429,16 +305,10 @@ contract BaseTest is Test {
 
         // Grant TOKEN_CONFIGURATOR_ROLE to admin
         vm.startPrank(deployer);
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            admin
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), admin);
 
         // Grant TOKEN_CONFIGURATOR_ROLE to deployer too
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            deployer
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), deployer);
         vm.stopPrank();
 
         vm.startPrank(admin);
@@ -490,36 +360,18 @@ contract BaseTest is Test {
 
         // Grant roles
         vm.startPrank(deployer);
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.DEFAULT_ADMIN_ROLE(),
-            address(this)
-        );
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.ORACLE_ADMIN_ROLE(),
-            address(this)
-        );
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            address(this)
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), address(this));
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.ORACLE_ADMIN_ROLE(), address(this));
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), address(this));
 
         // Critical: Grant TOKEN_CONFIGURATOR_ROLE to deployer who will add tokens
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(),
-            deployer
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.TOKEN_CONFIGURATOR_ROLE(), deployer);
 
         // Grant RATE_UPDATER_ROLE to user2
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.RATE_UPDATER_ROLE(),
-            user2
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), user2);
 
         // Grant RATE_UPDATER_ROLE to deployer temporarily
-        tokenRegistryOracle.grantRole(
-            tokenRegistryOracle.RATE_UPDATER_ROLE(),
-            deployer
-        );
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), deployer);
         vm.stopPrank();
     }
 
@@ -530,9 +382,7 @@ contract BaseTest is Test {
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
-            tokenRegistryOracle: ITokenRegistryOracle(
-                address(tokenRegistryOracle)
-            ),
+            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
@@ -544,14 +394,8 @@ contract BaseTest is Test {
 
         // Grant roles
         vm.startPrank(deployer);
-        liquidTokenManager.grantRole(
-            liquidTokenManager.DEFAULT_ADMIN_ROLE(),
-            address(this)
-        );
-        liquidTokenManager.grantRole(
-            liquidTokenManager.STRATEGY_CONTROLLER_ROLE(),
-            address(this)
-        );
+        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this));
+        liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
         vm.stopPrank();
     }
 
@@ -574,18 +418,9 @@ contract BaseTest is Test {
 
         // Grant roles
         vm.startPrank(deployer);
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(),
-            address(this)
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(),
-            address(this)
-        );
-        stakerNodeCoordinator.grantRole(
-            stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(),
-            address(this)
-        );
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.DEFAULT_ADMIN_ROLE(), address(this));
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), address(this));
+        stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), address(this));
         vm.stopPrank();
     }
 
@@ -596,12 +431,8 @@ contract BaseTest is Test {
             symbol: "LST",
             initialOwner: deployer,
             pauser: pauser,
-            liquidTokenManager: ILiquidTokenManager(
-                address(liquidTokenManager)
-            ),
-            tokenRegistryOracle: ITokenRegistryOracle(
-                address(tokenRegistryOracle)
-            )
+            liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),
+            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle))
         });
 
         vm.prank(deployer);
@@ -667,12 +498,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Protocol rate as the primary price source
      */
-    function _setupProtocolToken(
-        address token,
-        address contract_,
-        bytes4 selector,
-        bool needsArg
-    ) internal {
+    function _setupProtocolToken(address token, address contract_, bytes4 selector, bool needsArg) internal {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -711,20 +537,13 @@ contract BaseTest is Test {
         bytes4 fallbackFn
     ) internal {
         vm.prank(admin);
-        tokenRegistryOracle.configureToken(
-            token,
-            primaryType,
-            primarySource,
-            needsArg,
-            fallbackSource,
-            fallbackFn
-        );
+        tokenRegistryOracle.configureToken(token, primaryType, primarySource, needsArg, fallbackSource, fallbackFn);
     }
 
     /**
      * @dev Gets the price of a token directly from TokenRegistryOracle
      */
-    function _getTokenPrice(address token) internal view returns (uint256) {
+    function _getTokenPrice(address token) internal returns (uint256) {
         return tokenRegistryOracle.getTokenPrice(token);
     }
 
@@ -754,24 +573,17 @@ contract BaseTest is Test {
     }
 
     // Helper to create a new price source mock for a token - updated to use int256
-    function _createMockPriceFeed(
-        int256 price,
-        uint8 decimals
-    ) internal returns (MockChainlinkFeed) {
+    function _createMockPriceFeed(int256 price, uint8 decimals) internal returns (MockChainlinkFeed) {
         return new MockChainlinkFeed(price, decimals);
     }
 
-    function _createMockProtocolToken(
-        uint256 exchangeRate
-    ) internal returns (MockProtocolToken) {
+    function _createMockProtocolToken(uint256 exchangeRate) internal returns (MockProtocolToken) {
         MockProtocolToken token = new MockProtocolToken();
         token.setExchangeRate(exchangeRate);
         return token;
     }
 
-    function _createMockCurvePool(
-        uint256 virtualPrice
-    ) internal returns (MockCurvePool) {
+    function _createMockCurvePool(uint256 virtualPrice) internal returns (MockCurvePool) {
         MockCurvePool pool = new MockCurvePool();
         pool.setVirtualPrice(virtualPrice);
         return pool;

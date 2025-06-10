@@ -1,7 +1,7 @@
-import { updateAllPricesIfNeeded } from "../../tasks/system/updateAllPricesIfNeeded";
-import { ADMIN } from "../../utils/forge";
-import { apiKit } from "../../utils/safe";
-import { refreshDeployment } from "../../workflows/refreshDeployment";
+import { updateAllPricesIfNeeded } from '../../tasks/system/updateAllPricesIfNeeded'
+import { ADMIN } from '../../utils/forge'
+import { apiKit } from '../../utils/safe'
+import { refreshDeployment } from '../../workflows/refreshDeployment'
 
 /**
  * To run this script, edit the params and run
@@ -12,34 +12,32 @@ import { refreshDeployment } from "../../workflows/refreshDeployment";
  *
  */
 async function manualUpdateAllPricesIfNeeded() {
-  try {
-    if (!ADMIN) throw new Error("Env vars not set correctly.");
+    try {
+        if (!ADMIN) throw new Error('Env vars not set correctly.')
 
-    // ------------------------------------------------------------------------------------
-    // Function params, edit these!
-    // ------------------------------------------------------------------------------------
-    // ------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------
+        // Function params, edit these!
+        // ------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------
 
-    await refreshDeployment();
-    await updateAllPricesIfNeeded();
+        await refreshDeployment()
+        await updateAllPricesIfNeeded()
 
-    const pendingTransactions = (
-      await apiKit.getPendingTransactions(ADMIN, {
-        limit: 1,
-      })
-    ).results;
+        const pendingTransactions = (
+            await apiKit.getPendingTransactions(ADMIN, {
+                limit: 1
+            })
+        ).results
 
-    if (pendingTransactions.length > 0) {
-      console.log(
-        `[Manual][System] Update rates of all tokens: nonce: ${pendingTransactions[0].nonce}`
-      );
+        if (pendingTransactions.length > 0) {
+            console.log(`[Manual][System] Update rates of all tokens: nonce: ${pendingTransactions[0].nonce}`)
+        }
+    } catch (error) {
+        console.log('[Manual] Error: ', error.message)
     }
-  } catch (error) {
-    console.log("[Manual] Error: ", error.message);
-  }
 }
 
-(async () => {
-  console.log("[Manual] Running manual tx proposal...");
-  await manualUpdateAllPricesIfNeeded();
-})();
+;(async () => {
+    console.log('[Manual] Running manual tx proposal...')
+    await manualUpdateAllPricesIfNeeded()
+})()

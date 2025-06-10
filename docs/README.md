@@ -5,10 +5,10 @@ This repo contains the LiquidAvsToken contract and its documentation.
 ## Contents
 
 - Core Components
-  - [LiquidToken](#liquidtoken)
-  - [LiquidTokenManager](#liquidtokenmanager)
-  - [StakerNode](#stakernode)
-  - [StakerNodeCoordinator](#stakernodecoordinator)
+    - [LiquidToken](#liquidtoken)
+    - [LiquidTokenManager](#liquidtokenmanager)
+    - [StakerNode](#stakernode)
+    - [StakerNodeCoordinator](#stakernodecoordinator)
 - User Flows
 
 ## Core Components

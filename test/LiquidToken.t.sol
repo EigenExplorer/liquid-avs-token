@@ -6,7 +6,6 @@ import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import "forge-std/console.sol";
 
 import {BaseTest} from "./common/BaseTest.sol";
@@ -22,34 +21,22 @@ contract LiquidTokenTest is BaseTest {
 
         // --- Register testToken ---
         if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken)))) {
-            try
-                liquidTokenManager.setVolatilityThreshold(
-                    IERC20(address(testToken)),
-                    0
-                )
-            {
+            try liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken)), 0) {
                 console.log("Volatility threshold disabled for testToken");
             } catch Error(string memory reason) {
                 console.log("Failed to set volatility threshold:", reason);
             } catch (bytes memory) {
-                console.log(
-                    "Failed to set volatility threshold (unknown error)"
-                );
+                console.log("Failed to set volatility threshold (unknown error)");
             }
         } else {
             console.log("testToken not supported, adding it first");
             vm.startPrank(admin);
 
             // Mock the oracle price getter for testToken
-            bytes4 getTokenPriceSelector = bytes4(
-                keccak256("_getTokenPrice_getter(address)")
-            );
+            bytes4 getTokenPriceSelector = bytes4(keccak256("_getTokenPrice_getter(address)"));
             vm.mockCall(
                 address(tokenRegistryOracle),
-                abi.encodeWithSelector(
-                    getTokenPriceSelector,
-                    address(testToken)
-                ),
+                abi.encodeWithSelector(getTokenPriceSelector, address(testToken)),
                 abi.encode(1e18, true) // price = 1e18, success = true
             );
 
@@ -77,37 +64,22 @@ contract LiquidTokenTest is BaseTest {
 
         // --- Register testToken2 ---
         if (liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))) {
-            try
-                liquidTokenManager.setVolatilityThreshold(
-                    IERC20(address(testToken2)),
-                    0
-                )
-            {
+            try liquidTokenManager.setVolatilityThreshold(IERC20(address(testToken2)), 0) {
                 console.log("Volatility threshold disabled for testToken2");
             } catch Error(string memory reason) {
-                console.log(
-                    "Failed to set volatility threshold for testToken2:",
-                    reason
-                );
+                console.log("Failed to set volatility threshold for testToken2:", reason);
             } catch (bytes memory) {
-                console.log(
-                    "Failed to set volatility threshold for testToken2 (unknown error)"
-                );
+                console.log("Failed to set volatility threshold for testToken2 (unknown error)");
             }
         } else {
             console.log("testToken2 not supported, adding it");
             vm.startPrank(admin);
 
             // Mock the oracle price getter for testToken2
-            bytes4 getTokenPriceSelector = bytes4(
-                keccak256("_getTokenPrice_getter(address)")
-            );
+            bytes4 getTokenPriceSelector = bytes4(keccak256("_getTokenPrice_getter(address)"));
             vm.mockCall(
                 address(tokenRegistryOracle),
-                abi.encodeWithSelector(
-                    getTokenPriceSelector,
-                    address(testToken2)
-                ),
+                abi.encodeWithSelector(getTokenPriceSelector, address(testToken2)),
                 abi.encode(5e17, true) // price = 0.5e18, success = true
             );
 
@@ -141,24 +113,12 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 10 ether;
 
-        uint256[] memory mintedShares = liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amounts,
-            user1
-        );
+        uint256[] memory mintedShares = liquidToken.deposit(assets, amounts, user1);
         uint256 shares = mintedShares[0];
 
         assertEq(shares, 10 ether, "Incorrect number of shares minted");
-        assertEq(
-            liquidToken.balanceOf(user1),
-            10 ether,
-            "Incorrect balance after deposit"
-        );
-        assertEq(
-            testToken.balanceOf(address(liquidToken)),
-            10 ether,
-            "Incorrect token balance in LiquidToken"
-        );
+        assertEq(liquidToken.balanceOf(user1), 10 ether, "Incorrect balance after deposit");
+        assertEq(testToken.balanceOf(address(liquidToken)), 10 ether, "Incorrect token balance in LiquidToken");
     }
 
     function testTransferAssets() public {
@@ -169,20 +129,13 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256[] memory amountsToTransfer = new uint256[](1);
         amountsToTransfer[0] = 5 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
-        );
+        liquidToken.transferAssets(assets, amountsToTransfer);
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
@@ -204,19 +157,11 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), 10 ether);
         testToken2.approve(address(liquidToken), 5 ether);
 
-        uint256[] memory mintedShares = liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        uint256[] memory mintedShares = liquidToken.deposit(assets, amountsToDeposit, user1);
         uint256 shares1 = mintedShares[0];
         uint256 shares2 = mintedShares[1];
 
-        assertEq(
-            shares1,
-            10 ether,
-            "Incorrect number of shares minted for token1"
-        );
+        assertEq(shares1, 10 ether, "Incorrect number of shares minted for token1");
         assertEq(
             shares2,
             2.5 ether, // Changed from 5 ether to 2.5 ether
@@ -243,11 +188,7 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), 10 ether);
         testToken2.approve(address(liquidToken), 5 ether);
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
         vm.stopPrank();
 
         uint256[] memory amountsToTransfer = new uint256[](2);
@@ -255,10 +196,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[1] = 2 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
-        );
+        liquidToken.transferAssets(assets, amountsToTransfer);
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
@@ -281,11 +219,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(ILiquidToken.ArrayLengthMismatch.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositZeroAmount() public {
@@ -296,11 +230,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 0 ether;
 
         vm.expectRevert(ILiquidToken.ZeroAmount.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositUnsupportedAsset() public {
@@ -312,17 +242,8 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.UnsupportedAsset.selector,
-                address(unsupportedToken)
-            )
-        );
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILiquidToken.UnsupportedAsset.selector, address(unsupportedToken)));
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testDepositZeroShares() public {
@@ -334,21 +255,13 @@ contract LiquidTokenTest is BaseTest {
 
         vm.mockCall(
             address(liquidTokenManager),
-            abi.encodeWithSelector(
-                ILiquidTokenManager.convertToUnitOfAccount.selector,
-                IERC20(address(testToken)),
-                10
-            ),
+            abi.encodeWithSelector(ILiquidTokenManager.convertToUnitOfAccount.selector, IERC20(address(testToken)), 10),
             abi.encode(0) // Conversion returns zero, leading to ZeroShares
         );
 
         vm.prank(user1);
         vm.expectRevert(ILiquidToken.ZeroShares.selector);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testTransferAssetsNotLiquidTokenManager() public {
@@ -358,13 +271,8 @@ contract LiquidTokenTest is BaseTest {
         amounts[0] = 5 ether;
 
         vm.prank(user1);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.NotLiquidTokenManager.selector,
-                user1
-            )
-        );
-        liquidToken.transferAssets(_convertToUpgradeable(assets), amounts);
+        vm.expectRevert(abi.encodeWithSelector(ILiquidToken.NotLiquidTokenManager.selector, user1));
+        liquidToken.transferAssets(assets, amounts);
     }
 
     function testTransferAssetsInsufficientBalance() public {
@@ -374,28 +282,16 @@ contract LiquidTokenTest is BaseTest {
         amountsToDeposit[0] = 10 ether;
 
         vm.prank(user1);
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
 
         uint256[] memory amountsToTransfer = new uint256[](1);
         amountsToTransfer[0] = 20 ether; // More than available
 
         vm.prank(address(liquidTokenManager));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ILiquidToken.InsufficientBalance.selector,
-                address(testToken),
-                10 ether,
-                20 ether
-            )
+            abi.encodeWithSelector(ILiquidToken.InsufficientBalance.selector, address(testToken), 10 ether, 20 ether)
         );
-        liquidToken.transferAssets(
-            _convertToUpgradeable(assets),
-            amountsToTransfer
-        );
+        liquidToken.transferAssets(assets, amountsToTransfer);
     }
 
     function testPause() public {
@@ -413,11 +309,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testUnpause() public {
@@ -436,11 +328,7 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amountsToDeposit = new uint256[](1);
         amountsToDeposit[0] = 10 ether;
 
-        liquidToken.deposit(
-            _convertToUpgradeable(assets),
-            amountsToDeposit,
-            user1
-        );
+        liquidToken.deposit(assets, amountsToDeposit, user1);
     }
 
     function testPauseUnauthorized() public {
@@ -464,14 +352,10 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = maxAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1);
+        liquidToken.deposit(assets, amounts, user1);
 
         // Verify total assets matches deposit
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            maxAmount,
-            "Total assets should match max deposit"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), maxAmount, "Total assets should match max deposit");
 
         // Test precision with small amounts
         uint256 smallAmount = 1;
@@ -481,7 +365,7 @@ contract LiquidTokenTest is BaseTest {
         testToken.approve(address(liquidToken), smallAmount);
         amounts[0] = smallAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user2);
+        liquidToken.deposit(assets, amounts, user2);
 
         // Verify small amounts are tracked correctly
         assertEq(
@@ -506,24 +390,16 @@ contract LiquidTokenTest is BaseTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = depositAmount;
 
-        liquidToken.deposit(_convertToUpgradeable(assets), amounts, user1);
+        liquidToken.deposit(assets, amounts, user1);
 
         // Verify initial total assets
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            depositAmount,
-            "Initial total assets incorrect"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Initial total assets incorrect");
 
         // Simulate strategy migration
         vm.startPrank(admin);
 
         // Verify total assets remained constant through migration
-        assertEq(
-            liquidToken.assetBalances(address(testToken)),
-            depositAmount,
-            "Total assets changed during migration"
-        );
+        assertEq(liquidToken.assetBalances(address(testToken)), depositAmount, "Total assets changed during migration");
     }
 
     /// Tests for withdrawal functionality that will be implemented in future versions
@@ -1558,17 +1434,4 @@ contract LiquidTokenTest is BaseTest {
         assertEq(liquidToken.queuedAssetBalances(address(testToken)), 0, "Queued assets should be 0 until withdrawal is fulfilled");
     }
     */
-
-    // Helper function to convert IERC20[] to IERC20Upgradeable[](for test)
-    function _convertToUpgradeable(
-        IERC20[] memory tokens
-    ) internal pure returns (IERC20Upgradeable[] memory) {
-        IERC20Upgradeable[] memory upgradeableTokens = new IERC20Upgradeable[](
-            tokens.length
-        );
-        for (uint256 i = 0; i < tokens.length; i++) {
-            upgradeableTokens[i] = IERC20Upgradeable(address(tokens[i]));
-        }
-        return upgradeableTokens;
-    }
 }

@@ -58,7 +58,7 @@ else
     exit 1
 fi
 
-# User action (1/1): Edit deployment info
+# User action (1/2): Edit deployment info
 LAT_NAME="xskate-eth"
 CHAIN="mainnet"
 
