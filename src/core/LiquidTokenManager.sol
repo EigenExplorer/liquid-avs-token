@@ -180,14 +180,14 @@ contract LiquidTokenManager is
         // Check for pending withdrawal balances
         if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
 
-        // Check for staked balances
+        // Check for staked withdrawable balances
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 len = nodes.length;
 
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                uint256 stakedBalance = getWithdrawableAssetBalanceNode(token, nodes[i].getId());
-                if (stakedBalance > 0) {
+                uint256 stakedWithdrawableBalance = getWithdrawableAssetBalanceNode(token, nodes[i].getId());
+                if (stakedWithdrawableBalance > 0) {
                     revert TokenInUse(token);
                 }
             }
@@ -480,9 +480,7 @@ contract LiquidTokenManager is
         return balances;
     }
 
-    /// @notice Gets the withdrawable balance of an asset for all nodes
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
-    /// @param asset The asset token address
+    /// @inheritdoc ILiquidTokenManager
     function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
@@ -498,10 +496,7 @@ contract LiquidTokenManager is
         return totalBalance;
     }
 
-    /// @notice Gets the withdrawable balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
-    /// @param asset The asset token address
-    /// @param nodeId The ID of the node
+    /// @inheritdoc ILiquidTokenManager
     function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
@@ -513,10 +508,7 @@ contract LiquidTokenManager is
         return _getWithdrawableAssetBalanceNode(asset, node);
     }
 
-    /// @notice Gets the withdrawable balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
-    /// @param asset The asset token address
-    /// @param node The node to get the staked balance for
+    /// @dev Called by `getWithdrawableAssetBalance` and `getWithdrawableAssetBalanceNode`
     function _getWithdrawableAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
