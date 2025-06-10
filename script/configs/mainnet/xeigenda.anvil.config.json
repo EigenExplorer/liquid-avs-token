@@ -1,0 +1,41 @@
+{
+    "avsAddress": "0x870679e138bcdf293b7ff14dd44b70fc97e12fc0",
+    "contracts": {
+        "stakerNodeCoordinator": {
+            "init": {
+                "maxNodes": 10
+            }
+        },
+        "liquidToken": {
+            "init": {
+                "name": "EigenDA Native Liquid Avs Token",
+                "symbol": "xEigenDA"
+            }
+        }
+    },
+    "tokens": [
+        {
+            "name": "Eigen",
+            "addresses": {
+                "token": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+                "strategy": "0xacb55c530acdb2849e6d4f36992cd8c9d50ed8f7"
+            },
+            "params": {
+                "volatilityThreshold": "0",
+                "decimals": 18
+            },
+            "oracle": {
+                "sourceType": 0,
+                "primarySource": "0x0000000000000000000000000000000000000000",
+                "needsArg": 0,
+                "fallbackSource": "0x0000000000000000000000000000000000000000",
+                "fallbackSelector": "0x00000000"
+            }
+        }
+    ],
+    "roles": {
+        "admin": "",
+        "pauser": "",
+        "priceUpdater": ""
+    }
+}

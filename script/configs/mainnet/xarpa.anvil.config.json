@@ -1,0 +1,41 @@
+{
+    "avsAddress": "0x1de75eaab2df55d467494a172652579e6fa4540e",
+    "contracts": {
+        "stakerNodeCoordinator": {
+            "init": {
+                "maxNodes": 10
+            }
+        },
+        "liquidToken": {
+            "init": {
+                "name": "ARPA Native Liquid Avs Token",
+                "symbol": "xARPA"
+            }
+        }
+    },
+    "tokens": [
+        {
+            "name": "ARPA",
+            "addresses": {
+                "token": "0xba50933c268f567bdc86e1ac131be072c6b0b71a",
+                "strategy": "0x66ea956907f7ed2fd816106f2f4d8c384c6d4f92"
+            },
+            "params": {
+                "volatilityThreshold": "0",
+                "decimals": 18
+            },
+            "oracle": {
+                "sourceType": 0,
+                "primarySource": "0x0000000000000000000000000000000000000000",
+                "needsArg": 0,
+                "fallbackSource": "0x0000000000000000000000000000000000000000",
+                "fallbackSelector": "0x00000000"
+            }
+        }
+    ],
+    "roles": {
+        "admin": "",
+        "pauser": "",
+        "priceUpdater": ""
+    }
+}

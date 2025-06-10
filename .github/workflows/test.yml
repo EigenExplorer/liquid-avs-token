@@ -1,40 +1,59 @@
 name: test
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    push:
+        branches:
+            - dev
+            - main
+    pull_request:
+        branches:
+            - dev
+            - main
 
 env:
-  FOUNDRY_PROFILE: ci
+    FOUNDRY_PROFILE: default
 
 jobs:
-  check:
-    strategy:
-      fail-fast: true
+    check:
+        strategy:
+            fail-fast: true
 
-    name: Build and test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        name: Build and test
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: false
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+              with:
+                  version: stable
 
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
+            - name: Clean and initialize minimal submodules
+              run: |
+                  rm -rf lib
 
-      - name: Run Forge tests
-        run: |
-          forge test --fork-url ${{ secrets.RPC_URL }} -vvv
-        id: test
+                  git submodule init
+                  git submodule update
+
+                  forge install
+
+            - name: Run Forge build
+              run: |
+                  # Install solc 0.8.27 directly
+                  mkdir -p ~/.cache/solidity
+                  cd ~/.cache/solidity
+                  wget -q https://github.com/ethereum/solidity/releases/download/v0.8.27/solc-static-linux
+                  chmod +x solc-static-linux
+                  ln -sf solc-static-linux solc
+                  export PATH="$PATH:$HOME/.cache/solidity"
+
+                  forge --version
+                  forge build --sizes --optimizer-runs 200 --via-ir --use solc:0.8.27
+              id: build
+
+            - name: Run Forge tests
+              run: |
+                  forge test --fork-url ${{ secrets.RPC_URL }} -vvvv --optimizer-runs 200 --via-ir --use solc:0.8.27
+              id: test

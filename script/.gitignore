@@ -1,0 +1,8 @@
+outputs/local/*
+configs/local/*
+!outputs/local/abi
+outputs/local/abi/*
+outputs/holesky/*
+!outputs/holesky/abi
+outputs/holesky/abi/*
+lp/curve/outputs/*
