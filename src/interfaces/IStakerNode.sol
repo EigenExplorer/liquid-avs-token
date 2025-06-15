@@ -86,10 +86,30 @@ interface IStakerNode {
         IStrategy[] calldata strategies
     ) external;
 
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegate() external;
-    */
+    /// @notice Creates a withdrawal request of EL for a set of strategies
+    /// @dev EL creates one withdrawal request regardless of the number of strategies
+    /// @param strategies The set of strategies to withdraw from
+    /// @param shareAmounts The amount of shares (unscaled `depositShares`) to withdraw per strategy
+    /// @return The withdrawal root hash from Eigenlayer
+    function withdrawAssets(
+        IStrategy[] calldata strategies,
+        uint256[] calldata shareAmounts
+    ) external returns (bytes32);
+
+    /// @notice Completes a set of withdrawal requests on EL and retrieves funds
+    /// @dev The funds are always withdrawn in tokens and sent to `LiquidTokenManager`, ie the node never keeps unstaked assets
+    /// @param withdrawals The set of EL withdrawals to complete and associated data
+    /// @param tokens The set of tokens to receive funds in
+    /// @return Array of token addresses that were received from the withdrawal
+    function completeWithdrawals(
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens
+    ) external returns (IERC20[] memory);
+
+    /// @notice Undelegates the node from the current operator and withdraws all shares from all strategies
+    /// @dev EL creates one withdrawal request per strategy in the case of undelegation
+    /// @return Array of withdrawal root hashes from Eigenlayer
+    function undelegate() external returns (bytes32[] memory);
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract

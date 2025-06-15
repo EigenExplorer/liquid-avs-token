@@ -10,6 +10,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /**
  * @title StakerNodeCoordinator
@@ -31,11 +32,14 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     IStrategyManager public override strategyManager;
     IDelegationManager public override delegationManager;
 
-    /// @notice OZ and LAT contracts
+    /// @notice OZ and v1 LAT contracts
     UpgradeableBeacon public upgradeableBeacon;
     IStakerNode[] private stakerNodes;
 
     uint256 public override maxNodes;
+
+    /// @notice v2 LAT contracts
+    IWithdrawalManager public override withdrawalManager;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -57,6 +61,7 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
             address(init.stakerNodeCreator) == address(0) ||
             address(init.stakerNodesDelegator) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
+            address(init.withdrawalManager) == address(0) ||
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0)
         ) {
@@ -72,6 +77,7 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
 
         liquidTokenManager = init.liquidTokenManager;
+        withdrawalManager = init.withdrawalManager;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         maxNodes = init.maxNodes;
