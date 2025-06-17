@@ -44,11 +44,11 @@ contract LiquidToken is
     /// @notice Mapping of tokens to their corresponding queued balances
     mapping(address => uint256) public queuedAssetBalances;
 
-    /// @notice Mapping of user addresses to their corresponding withdrawal nonces
-    mapping(address => uint256) private _withdrawalNonce;
-
     /// @notice v2 LAT contracts
     IWithdrawalManager public withdrawalManager;
+
+    /// @notice Mapping of user addresses to their corresponding withdrawal nonces
+    mapping(address => uint256) private _withdrawalNonce;
 
     // ------------------------------------------------------------------------------
     // Init functions

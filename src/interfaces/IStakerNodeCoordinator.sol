@@ -7,6 +7,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract

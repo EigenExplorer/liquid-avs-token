@@ -4,6 +4,8 @@ pragma solidity ^0.8.27;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
@@ -57,6 +59,9 @@ interface IStakerNode {
 
     /// @notice Error for undelegating node when not delegated
     error NodeIsNotDelegated();
+
+    /// @notice Error thrown when array lengths don't match in function parameters
+    error LengthMismatch(uint256 length1, uint256 length2);
 
     // ============================================================================
     // FUNCTIONS

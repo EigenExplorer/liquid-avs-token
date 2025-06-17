@@ -9,6 +9,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -32,7 +33,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Role identifier for delegation operations
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
-    /// @notice LAT contracts
+    /// @notice v1 LAT contracts
     IStakerNodeCoordinator public coordinator;
 
     uint256 public id;

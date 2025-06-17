@@ -185,7 +185,7 @@ interface IWithdrawalManager {
     /// @param receivedAmounts Total amounts per for `receivedAssets` (after any slashing)
     function recordRedemptionCompleted(
         bytes32 redemptionId,
-        IERC20[] calldata assets,
+        IERC20[] calldata receivedAssets,
         uint256[] calldata receivedAmounts
     ) external returns (uint256[] memory);
 
