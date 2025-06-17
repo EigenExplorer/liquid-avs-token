@@ -133,7 +133,12 @@ interface ILiquidToken {
     /// @notice Debits queued balances for a given set of assets
     /// @param assets The assets to debit
     /// @param amounts The debit amounts expressed in native token
-    function debitQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external;
+    /// @param sharesToBurn Escrow LAT shares to burn along with this debit (is non-zero only for user withdrawal fulfilment)
+    function debitQueuedAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
+        uint256 sharesToBurn
+    ) external;
 
     /// @notice Credits asset balances for a given set of assets
     /// @param assets The assets to credit

@@ -936,7 +936,7 @@ contract LiquidTokenManager is
         // If receiver is `LiquidToken`, fulfillment is complete since the request has come from rebalancing or node undelegation
         if (receiver == address(liquidToken)) {
             // If there was slashing during the withdrawal queue period, we handle its accounting in the call to `recordRedemptionCompleted()`
-            liquidToken.debitQueuedAssetBalances(receivedTokens, receivedAmounts);
+            liquidToken.debitQueuedAssetBalances(receivedTokens, receivedAmounts, 0);
             // Credit LiquidToken's asset balances
             liquidToken.creditAssetBalances(receivedTokens, receivedAmounts);
         }

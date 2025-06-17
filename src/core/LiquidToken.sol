@@ -189,18 +189,17 @@ contract LiquidToken is
         if (balanceOf(msg.sender) < totalShares)
             revert InsufficientBalance(IERC20(address(this)), totalShares, balanceOf(msg.sender));
 
-        // Receive LAT shares
-        _transfer(msg.sender, address(this), totalShares);
-
-        // Burn shares since there is no cancelling the withdrawal request
-        _burn(address(this), totalShares);
-
-        // Create a withdrawal request for the user
+        // Generate requestId
         bytes32 requestId = keccak256(
             abi.encodePacked(msg.sender, assets, amounts, block.timestamp, _withdrawalNonce[msg.sender])
         );
-        withdrawalManager.createWithdrawalRequest(assets, amounts, msg.sender, requestId);
         _withdrawalNonce[msg.sender] += 1;
+
+        // Receive escrow LAT shares to be burned when user fulfills their withdrawal
+        _transfer(msg.sender, address(this), totalShares);
+
+        // Create a withdrawal request for the user
+        withdrawalManager.createWithdrawalRequest(assets, amounts, totalShares, msg.sender, requestId);
 
         return requestId;
     }
@@ -223,14 +222,26 @@ contract LiquidToken is
     }
 
     /// @inheritdoc ILiquidToken
-    function debitQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
+    function debitQueuedAssetBalances(
+        IERC20[] calldata assets,
+        uint256[] calldata amounts,
+        uint256 sharesToBurn
+    ) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager) && msg.sender != address(withdrawalManager))
             revert UnauthorizedAccess(msg.sender);
 
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
+        if (sharesToBurn > 0 && balanceOf(address(this)) < sharesToBurn) {
+            revert InsufficientBalance(IERC20(address(this)), sharesToBurn, balanceOf(address(this)));
+        }
+
         for (uint256 i = 0; i < assets.length; i++) {
             queuedAssetBalances[address(assets[i])] -= amounts[i];
+        }
+
+        if (sharesToBurn > 0) {
+            _burn(address(this), sharesToBurn);
         }
     }
 

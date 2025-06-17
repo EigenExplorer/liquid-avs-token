@@ -37,6 +37,7 @@ interface IWithdrawalManager {
     /// @param assets Array of token addresses being withdrawn
     /// @param requestedAmounts Array of amounts being withdrawn per asset (in the unit of the asset)
     /// @param withdrawableAmounts Array of amounts withdrawable per asset after any slashing (in the unit of the asset)
+    /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param requestTime Timestamp when the withdrawal was requested
     /// @param canFulfill Whether the withdrawal can be fulfilled by the user (set to true after redemption completion)
     struct WithdrawalRequest {
@@ -44,6 +45,7 @@ interface IWithdrawalManager {
         IERC20[] assets;
         uint256[] requestedAmounts;
         uint256[] withdrawableAmounts;
+        uint256 sharesDeposited;
         uint256 requestTime;
         bool canFulfill;
     }
@@ -57,12 +59,14 @@ interface IWithdrawalManager {
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
     /// @param amounts Array of amounts being withdrawn per asset
+    /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param timestamp Block timestamp when the request was made
     event WithdrawalInitiated(
         bytes32 indexed requestId,
         address indexed user,
         IERC20[] assets,
         uint256[] amounts,
+        uint256 sharesDeposited,
         uint256 timestamp
     );
 
@@ -105,6 +109,9 @@ interface IWithdrawalManager {
 
     /// @notice Error thrown when a zero address is provided where a non-zero address is required
     error ZeroAddress();
+
+    /// @notice Error for zero amount
+    error ZeroAmount();
 
     /// @notice Error thrown when a function restricted to LiquidToken is called by another address
     /// @param sender Address that attempted the call
@@ -160,11 +167,13 @@ interface IWithdrawalManager {
     /// @notice Creates a withdrawal request for a user when they initate one via `LiquidToken`
     /// @param assets The final assets the the user wants to end up with
     /// @param amounts The withdrawal amounts per asset
+    /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param user The requesting user's address
     /// @param requestId The unique identifier of the withdrawal request
     function createWithdrawalRequest(
         IERC20[] memory assets,
         uint256[] memory amounts,
+        uint256 sharesDeposited,
         address user,
         bytes32 requestId
     ) external;

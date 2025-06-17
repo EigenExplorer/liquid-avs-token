@@ -89,16 +89,19 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
     function createWithdrawalRequest(
         IERC20[] memory assets,
         uint256[] memory amounts,
+        uint256 sharesDeposited,
         address user,
         bytes32 requestId
     ) external override nonReentrant {
         if (msg.sender != address(liquidToken)) revert NotLiquidToken(msg.sender);
+        if (sharesDeposited == 0) revert ZeroAmount();
 
         WithdrawalRequest memory request = WithdrawalRequest({
             user: user,
             assets: assets,
             requestedAmounts: amounts,
             withdrawableAmounts: amounts,
+            sharesDeposited: sharesDeposited,
             requestTime: block.timestamp,
             canFulfill: false
         });
@@ -106,7 +109,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[user].push(requestId);
 
-        emit WithdrawalInitiated(requestId, user, assets, amounts, block.timestamp);
+        emit WithdrawalInitiated(requestId, user, assets, amounts, sharesDeposited, block.timestamp);
     }
 
     /// @inheritdoc IWithdrawalManager
@@ -130,6 +133,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         address user = request.user;
         IERC20[] memory assets = request.assets;
         uint256[] memory amounts = request.withdrawableAmounts;
+        uint256 sharesDeposited = request.sharesDeposited;
 
         delete withdrawalRequests[requestId];
         bytes32[] storage userRequests = userWithdrawalRequests[user];
@@ -142,7 +146,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         }
 
         // Fulfillment is complete
-        liquidToken.debitQueuedAssetBalances(assets, amounts);
+        liquidToken.debitQueuedAssetBalances(assets, amounts, sharesDeposited);
 
         for (uint256 i = 0; i < assets.length; i++) {
             assets[i].safeTransfer(msg.sender, amounts[i]);
@@ -245,8 +249,10 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
 
         // Account for withdrawal period slashing in queued withdrawal balances
         // If the redemption is for rebalancing or undelegation, all internal accounting will now be complete after this
-        // If the redemption is for user withdrawals, the queued balances will still contain the withdrawable amounts
-        liquidToken.debitQueuedAssetBalances(receivedAssets, slashedAmounts);
+        // If the redemption is for user withdrawals,
+        //  - the queued balances will still contain the withdrawable amounts
+        //  - the deposited escrow LAT shares are still to be burnt
+        liquidToken.debitQueuedAssetBalances(receivedAssets, slashedAmounts, 0);
 
         return redemptionRequestedAmounts;
     }
