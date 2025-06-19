@@ -1,5 +1,6 @@
 {
     "avsAddress": "0x22cac0e6a1465f043428e8aef737b3cb09d0eeda",
+    "baseAsset": "0x0fc2a55d5bd13033f1ee0cdd11f60f7efe66f467",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -9,7 +10,7 @@
         "liquidToken": {
             "init": {
                 "name": "Lagrange Native Liquid Avs Token",
-                "symbol": "xLagrange-ETH"
+                "symbol": "xLagrange"
             }
         }
     },

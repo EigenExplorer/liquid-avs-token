@@ -1,5 +1,6 @@
 {
     "avsAddress": "0x870679e138bcdf293b7ff14dd44b70fc97e12fc0",
+    "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -9,7 +10,7 @@
         "liquidToken": {
             "init": {
                 "name": "EigenDA ETH Liquid Avs Token",
-                "symbol": "xEigenDA"
+                "symbol": "xEigenDA-ETH"
             }
         }
     },
