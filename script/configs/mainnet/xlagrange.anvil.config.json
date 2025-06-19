@@ -1,5 +1,5 @@
 {
-    "avsAddress": "0x870679e138bcdf293b7ff14dd44b70fc97e12fc0",
+    "avsAddress": "0x22cac0e6a1465f043428e8aef737b3cb09d0eeda",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -8,17 +8,17 @@
         },
         "liquidToken": {
             "init": {
-                "name": "EigenDA Native Liquid Avs Token",
-                "symbol": "xEigenDA"
+                "name": "Lagrange Native Liquid Avs Token",
+                "symbol": "xLagrange-ETH"
             }
         }
     },
     "tokens": [
         {
-            "name": "Eigen",
+            "name": "LA",
             "addresses": {
-                "token": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
-                "strategy": "0xacb55c530acdb2849e6d4f36992cd8c9d50ed8f7"
+                "token": "0x0fc2a55d5bd13033f1ee0cdd11f60f7efe66f467",
+                "strategy": "0xdcd1206683adc3d6cc3619c4045cbd7ec179b403"
             },
             "params": {
                 "volatilityThreshold": "0",
