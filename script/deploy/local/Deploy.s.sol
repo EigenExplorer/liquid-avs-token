@@ -357,6 +357,7 @@ contract Deploy is Script, Test {
             ILiquidToken.Init({
                 name: LIQUID_TOKEN_NAME,
                 symbol: LIQUID_TOKEN_SYMBOL,
+                baseAsset: address(0), // Placeholder for test environment
                 initialOwner: admin,
                 pauser: pauser,
                 liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),

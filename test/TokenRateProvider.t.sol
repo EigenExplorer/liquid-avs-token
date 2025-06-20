@@ -29,7 +29,7 @@ contract TokenRateProviderTest is BaseTest {
     MockERC20 public stethToken; // Lido staked ETH - Protocol source
     MockERC20 public osethToken; // Origin Dollar's osETH - Curve source
     MockERC20 public unibtcToken; // UniBTC - BTC-denominated token
-    MockERC20 public eigenInuToken; //native token
+    IERC20 public eigenInuToken; //native token
 
     // Mock price sources
     MockChainlinkFeed public rethFeed; // rETH/ETH feed (~1.04 ETH per rETH)
@@ -303,13 +303,13 @@ contract TokenRateProviderTest is BaseTest {
             console.log("uniBTC token add failed with unknown error");
             revert("uniBTC add failed with unknown error");
         }
-        // Add native token
-        eigenInuToken = new MockERC20("EigenInu", "EINU");
-        eigenInuStrategy = new MockStrategy(strategyManager, IERC20(address(eigenInuToken)));
+        // Add native token - use actual EIGEN token to match baseAsset
+        eigenInuToken = IERC20(0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83); // Actual EIGEN token
+        eigenInuStrategy = new MockStrategy(strategyManager, eigenInuToken);
 
         console.log("Adding native token...");
         liquidTokenManager.addToken(
-            IERC20(address(eigenInuToken)),
+            eigenInuToken,
             18,
             0,
             eigenInuStrategy,

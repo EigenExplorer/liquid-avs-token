@@ -16,6 +16,7 @@ interface ILiquidToken {
     struct Init {
         string name;
         string symbol;
+        address baseAsset;  // The primary asset this LAT represents (ETH, EIGEN, LA, etc.)
         ILiquidTokenManager liquidTokenManager;
         ITokenRegistryOracle tokenRegistryOracle;
         address initialOwner;
@@ -207,6 +208,10 @@ interface ILiquidToken {
     /// @param assetList The list of assets to get queued balances for
     /// @return An array of queued asset balances
     function balanceQueuedAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+
+    /// @notice Returns the base asset address that this LAT represents
+    /// @return The address of the base asset (use special address for ETH)
+    function baseAsset() external view returns (address);
 
     /// @notice Pauses the contract
     function pause() external;
