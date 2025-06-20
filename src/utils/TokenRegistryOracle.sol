@@ -332,12 +332,9 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
     function _getChainlinkPrice(address feed) internal view returns (uint256 price, bool success) {
         if (feed == address(0)) return (0, false);
 
-        // Compute staleness threshold
-        uint256 staleness = _emergencyMode ? _emergencyInterval : StalenessThreshold.getHiddenThreshold(_stalenessSalt);
-
         assembly {
             let ptr := mload(0x40)
-            mstore(ptr, shl(224, 0xfeaf968c)) // selector for `latestRoundData()`
+            mstore(ptr, shl(224, 0xfeaf968c)) // left-align selector // latestRoundData()
 
             let callSuccess := staticcall(gas(), feed, ptr, 4, ptr, 160)
 
@@ -349,35 +346,31 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
 
                 // Check validity
                 if and(and(gt(answer, 0), gt(updatedAt, 0)), iszero(lt(answeredInRound, roundId))) {
-                    // Check staleness: block.timestamp > updatedAt + staleness
-                    // If not stale, proceed
-                    if iszero(gt(timestamp(), add(updatedAt, staleness))) {
-                        mstore(ptr, shl(224, 0x313ce567)) // selector for `decimals()`
-                        let decSuccess := staticcall(gas(), feed, ptr, 4, ptr, 32)
-                        let decimals := 8
-                        if decSuccess {
-                            decimals := and(mload(ptr), 0xff)
-                        }
-
-                        switch lt(decimals, 18)
-                        case 1 {
-                            price := mul(answer, exp(10, sub(18, decimals)))
-                        }
-                        case 0 {
-                            switch gt(decimals, 18)
-                            case 1 {
-                                price := div(answer, exp(10, sub(decimals, 18)))
-                            }
-                            default {
-                                price := answer
-                            }
-                        }
-                        success := 1
+                    // Call decimals()
+                    mstore(ptr, shl(224, 0x313ce567)) // selector for decimals()
+                    let decSuccess := staticcall(gas(), feed, ptr, 4, ptr, 32)
+                    let decimals := 8
+                    if decSuccess {
+                        decimals := and(mload(ptr), 0xff)
                     }
+
+                    switch lt(decimals, 18)
+                    case 1 {
+                        price := mul(answer, exp(10, sub(18, decimals)))
+                    }
+                    case 0 {
+                        switch gt(decimals, 18)
+                        case 1 {
+                            price := div(answer, exp(10, sub(decimals, 18)))
+                        }
+                        default {
+                            price := answer
+                        }
+                    }
+                    success := 1
                 }
             }
         }
-        // If stale, success remains 0
     }
 
     /// @dev Called by `_updateAllPrices` and `getTokenPrice`
@@ -495,5 +488,4 @@ contract TokenRegistryOracle is ITokenRegistryOracle, Initializable, AccessContr
             }
         }
     }
-
 }

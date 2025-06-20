@@ -242,16 +242,29 @@ interface ILiquidTokenManager {
     /// @return IERC20 Interface for the corresponding token
     function getStrategyToken(IStrategy strategy) external view returns (IERC20);
 
-    /// @notice Gets the staked asset balance for all nodes
+    /// @notice Gets the staked deposits balance of an asset for all nodes
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
     /// @return The total staked balance of the asset across all nodes
-    function getStakedAssetBalance(IERC20 asset) external view returns (uint256);
+    function getDepositAssetBalance(IERC20 asset) external view returns (uint256);
 
-    /// @notice Gets the staked asset balance for a specific node
+    /// @notice Gets the staked deposits balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the specific node
-    function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+
+    /// @notice Gets the withdrawable balance of an asset for all nodes
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256);
+
+    /// @notice Gets the withdrawable balance of an asset for a specific node
+    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @param asset The asset token address
+    /// @param nodeId The ID of the node
+    function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
 
     /// @notice Checks if a token is supported
     /// @param token Address of the token to check

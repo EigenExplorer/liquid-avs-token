@@ -391,8 +391,8 @@ contract LiquidToken is
                 _balanceQueuedAsset(supportedTokens[i])
             );
 
-            // Staked Asset Balances
-            total += liquidTokenManager.getStakedAssetBalance(supportedTokens[i]);
+            // Staked Withdrawable Asset Balances
+            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i]);
         }
 
         return total;
