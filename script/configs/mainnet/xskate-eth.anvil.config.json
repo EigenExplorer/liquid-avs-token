@@ -1,5 +1,6 @@
 {
     "avsAddress": "0xfc569b3b74e15cf48aa684144e072e839fd89380",
+    "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
