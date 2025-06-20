@@ -71,6 +71,7 @@ contract Deploy is Script, Test {
 
     // Deployment-level config
     address public AVS_ADDRESS;
+    address public BASE_ASSET;
     uint256 public STAKER_NODE_COORDINATOR_MAX_NODES;
     string public LIQUID_TOKEN_NAME;
     string public LIQUID_TOKEN_SYMBOL;
@@ -190,6 +191,7 @@ contract Deploy is Script, Test {
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(deployConfigData, ".roles.priceUpdater");
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
+        BASE_ASSET = stdJson.readAddress(deployConfigData, ".baseAsset");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(
             deployConfigData,
             ".contracts.stakerNodeCoordinator.init.maxNodes"
@@ -604,6 +606,7 @@ contract Deploy is Script, Test {
         vm.serializeString(parent_object, "name", LIQUID_TOKEN_NAME);
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
+        vm.serializeAddress(parent_object, "baseAsset", BASE_ASSET);
         vm.serializeUint(parent_object, "chainId", block.chainid);
         vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES);
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
