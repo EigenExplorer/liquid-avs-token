@@ -603,6 +603,7 @@ contract Deploy is Script, Test {
         // Top level properties
         vm.serializeAddress(parent_object, "proxyAddress", address(liquidToken));
         vm.serializeAddress(parent_object, "implementationAddress", address(liquidTokenImpl));
+        vm.serializeAddress(parent_object, "proxyAdminAddress", address(proxyAdmin));
         vm.serializeString(parent_object, "name", LIQUID_TOKEN_NAME);
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
@@ -712,7 +713,6 @@ contract Deploy is Script, Test {
 
         // Roles section
         string memory roles = "roles";
-        vm.serializeAddress(roles, "deployer", address(proxyAdmin));
         vm.serializeAddress(roles, "admin", admin);
         vm.serializeAddress(roles, "pauser", pauser);
         string memory roles_output = vm.serializeAddress(roles, "priceUpdater", priceUpdater);
