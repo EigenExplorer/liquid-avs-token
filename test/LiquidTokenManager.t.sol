@@ -832,7 +832,7 @@ contract LiquidTokenManagerTest is BaseTest {
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);
     }
 
-    function testGetStakedAssetBalanceInvalidNodeId() public {
+    function testGetDepositAssetBalanceInvalidNodeId() public {
         if (!isLocalTestNetwork) {
             // Skip this test on non-test networks
             return;
@@ -849,10 +849,10 @@ contract LiquidTokenManagerTest is BaseTest {
         }
     }
 
-    function testGetStakedAssetBalanceInvalidStrategy() public {
+    function testGetDepositAssetBalanceInvalidStrategy() public {
         uint256 nodeId = 1;
         vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.StrategyNotFound.selector, address(0x123)));
-        liquidTokenManager.getStakedAssetBalanceNode(IERC20(address(0x123)), nodeId);
+        liquidTokenManager.getDepositAssetBalanceNode(IERC20(address(0x123)), nodeId);
     }
 
     function testShareCalculation() public {

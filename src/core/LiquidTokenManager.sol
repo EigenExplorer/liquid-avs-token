@@ -180,14 +180,14 @@ contract LiquidTokenManager is
         // Check for pending withdrawal balances
         if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
 
-        // Check for staked balances
+        // Check for staked withdrawable balances
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 len = nodes.length;
 
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                uint256 stakedBalance = getStakedAssetBalanceNode(token, nodes[i].getId());
-                if (stakedBalance > 0) {
+                uint256 stakedWithdrawableBalance = getWithdrawableAssetBalanceNode(token, nodes[i].getId());
+                if (stakedWithdrawableBalance > 0) {
                     revert TokenInUse(token);
                 }
             }
@@ -430,7 +430,7 @@ contract LiquidTokenManager is
     }
 
     /// @inheritdoc ILiquidTokenManager
-    function getStakedAssetBalance(IERC20 asset) external view returns (uint256) {
+    function getDepositAssetBalance(IERC20 asset) external view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -439,14 +439,14 @@ contract LiquidTokenManager is
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 totalBalance = 0;
         for (uint256 i = 0; i < nodes.length; i++) {
-            totalBalance += _getStakedAssetBalanceNode(asset, nodes[i]);
+            totalBalance += _getDepositAssetBalanceNode(asset, nodes[i]);
         }
 
         return totalBalance;
     }
 
     /// @inheritdoc ILiquidTokenManager
-    function getStakedAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
+    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
@@ -454,16 +454,77 @@ contract LiquidTokenManager is
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
 
-        return _getStakedAssetBalanceNode(asset, node);
+        return _getDepositAssetBalanceNode(asset, node);
     }
 
-    /// @dev Called by `getStakedAssetBalance` and `getStakedAssetBalanceNode`
-    function _getStakedAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
+    /// @dev Called by `getDepositAssetBalance` and `getDepositAssetBalanceNode`
+    function _getDepositAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
         IStrategy strategy = tokenStrategies[asset];
         if (address(strategy) == address(0)) {
             revert StrategyNotFound(address(asset));
         }
-        return strategy.userUnderlyingView(address(node));
+        return strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
+    }
+
+    /// @notice Gets the staked deposits balance (`depositShares`) of all assets for a specific node
+    /// @dev Currently unused
+    function _getAllDepositAssetBalanceNode(IStakerNode node) internal view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](supportedTokens.length);
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            IStrategy strategy = tokenStrategies[supportedTokens[i]];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(supportedTokens[i]));
+            }
+            balances[i] = strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
+        }
+        return balances;
+    }
+
+    /// @inheritdoc ILiquidTokenManager
+    function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        uint256 totalBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i]);
+        }
+
+        return totalBalance;
+    }
+
+    /// @inheritdoc ILiquidTokenManager
+    function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+
+        return _getWithdrawableAssetBalanceNode(asset, node);
+    }
+
+    /// @dev Called by `getWithdrawableAssetBalance` and `getWithdrawableAssetBalanceNode`
+    function _getWithdrawableAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStrategy[] memory strategies = new IStrategy[](1);
+        strategies[0] = strategy;
+
+        (uint256[] memory withdrawableShares, ) = delegationManager.getWithdrawableShares(address(node), strategies);
+
+        if (withdrawableShares[0] == 0) {
+            return 0;
+        }
+
+        return strategy.sharesToUnderlyingView(withdrawableShares[0]); // Converts EL shares to underlying asset value
     }
 
     /// @inheritdoc ILiquidTokenManager
