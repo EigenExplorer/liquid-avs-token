@@ -8,7 +8,10 @@ const __dirname = path.dirname(__filename)
 
 const LAT_DEPLOYMENTS_REPO = process.env.LAT_DEPLOYMENTS_REPO
 const GITHUB_ACCESS_TOKEN = process.env.GITHUB_ACCESS_TOKEN
-const DEPLOYMENT_DATA_PATH = path.resolve(__dirname, '../../../script/outputs/holesky/deployment_data.json')
+const DEPLOYMENT_DATA_PATH = path.resolve(
+    __dirname,
+    `../../../script/outputs/${process.env.NETWORK}/deployment_data.json`
+)
 
 interface VersionWithTimestamp {
     timestamp: number
@@ -18,7 +21,7 @@ interface VersionWithTimestamp {
 
 /**
  * Fetches the latest `info.json` from the Github deployments repo and updates
- * the existing `script/outputs/holesky/deployment_data.json`
+ * the existing `script/outputs/<chain>/deployment_data.json`
  * Note: This process is skipped on local deployments
  *
  * @returns
