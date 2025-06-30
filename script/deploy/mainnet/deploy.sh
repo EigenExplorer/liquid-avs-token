@@ -579,3 +579,45 @@ cd - > /dev/null
 rm -rf $TEMP_DIR
 
 echo "[Deploy] Deployment, verification complete and $GITHUB_REPO repo updated."
+
+
+#-----------------------------------------------------------------------------------------------------
+# ADD TOKENS (NEW STEP)
+#-----------------------------------------------------------------------------------------------------
+
+echo "[Deploy] Starting token addition step..."
+
+forge script --via-ir --optimize true script/deploy/$CHAIN/Deploy.s.sol:Deploy \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $DEPLOYER_PRIVATE_KEY \
+    --sig "addTokens(string)" \
+    -- $DEPLOYMENT_CONFIG_FILE
+
+ADD_TOKENS_STATUS=$?
+
+if [ $ADD_TOKENS_STATUS -ne 0 ]; then
+    echo "[Deploy] Warning: Token addition had some failures. Please check logs and consider manual intervention."
+else
+    echo "[Deploy] Token addition completed successfully."
+fi
+#-----------------------------------------------------------------------------------------------------
+# TRANSFER OWNERSHIP & ROLES (NEW FINAL STEP)
+#-----------------------------------------------------------------------------------------------------
+
+echo "[Deploy] Starting ownership transfer step..."
+
+forge script --via-ir --optimize true script/deploy/$CHAIN/Deploy.s.sol:Deploy \
+    --rpc-url $RPC_URL --broadcast \
+    --private-key $DEPLOYER_PRIVATE_KEY \
+    --sig "transferOwnershipAndRoles()" \
+    -- $DEPLOYMENT_CONFIG_FILE
+
+TRANSFER_OWNERSHIP_STATUS=$?
+
+if [ $TRANSFER_OWNERSHIP_STATUS -ne 0 ]; then
+    echo "[Deploy] Warning: Ownership transfer encountered issues. Please check logs."
+else
+    echo "[Deploy] Ownership transfer completed successfully."
+fi
+
+echo "add token and ownership transferation completed."

@@ -14,6 +14,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockStrategy} from "./mocks/MockStrategy.sol";
 
@@ -27,7 +28,8 @@ contract RealWorldTokenPriceTest is BaseTest {
     // Native token for testing
     MockERC20 public mockNativeToken;
     MockStrategy public nativeTokenStrategy;
-
+    address public constant ETH_TOKEN = 0xbeaC0eeEeeeeEEeEeEEEEeeEEeEeeeEeeEEBEaC0;
+    IStrategy public constant ETH_STRATEGY = IStrategy(0xbeaC0eeEeeeeEEeEeEEEEeeEEeEeeeEeeEEBEaC0);
     // Token configuration structure
     struct TokenConfig {
         string name;
@@ -815,7 +817,262 @@ contract RealWorldTokenPriceTest is BaseTest {
 
         vm.stopPrank();
     }
+    function testDebugErrors() public {
+        console.log("=== Debugging actual error data ===");
 
+        // Test 1: TokenExists (if token already exists)
+        bytes memory payload1 = abi.encodeWithSelector(
+            liquidTokenManager.addToken.selector,
+            IERC20(ETH_TOKEN),
+            18,
+            0,
+            ETH_STRATEGY,
+            0,
+            address(0),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        (bool success1, bytes memory data1) = address(liquidTokenManager).call(payload1);
+        console.log("Test 1 - Success:", success1);
+        if (!success1) {
+            console.log("Error data length:", data1.length);
+            console.logBytes(data1);
+            if (data1.length >= 4) {
+                bytes4 selector1;
+                assembly {
+                    selector1 := mload(add(data1, 32))
+                }
+                console.logBytes4(selector1);
+            }
+        }
+
+        // Test 2: ZeroAddress
+        bytes memory payload2 = abi.encodeWithSelector(
+            liquidTokenManager.addToken.selector,
+            IERC20(address(0)),
+            18,
+            0,
+            ETH_STRATEGY,
+            0,
+            address(0),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        (bool success2, bytes memory data2) = address(liquidTokenManager).call(payload2);
+        console.log("Test 2 - Success:", success2);
+        if (!success2) {
+            console.log("Error data length:", data2.length);
+            console.logBytes(data2);
+            if (data2.length >= 4) {
+                bytes4 selector2;
+                assembly {
+                    selector2 := mload(add(data2, 32))
+                }
+                console.logBytes4(selector2);
+            }
+        }
+    }
+
+    function testSpecificErrors() public {
+        console.log("Testing ZeroAddress error...");
+        vm.expectRevert(ILiquidTokenManager.ZeroAddress.selector);
+        liquidTokenManager.addToken(IERC20(address(0)), 18, 0, IStrategy(ETH_STRATEGY), 0, address(0), 0, address(0), bytes4(0));
+
+        console.log("Testing InvalidDecimals error...");
+        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        liquidTokenManager.addToken(
+            IERC20(ETH_TOKEN),
+            0, // Invalid decimals
+            0,
+            IStrategy(ETH_STRATEGY),
+            0,
+            address(0),
+            0,
+            address(0),
+            bytes4(0)
+        );
+        
+        console.log("Testing TokenExists error...");
+        // Create a fresh token and strategy for testing TokenExists
+        MockERC20 testToken = new MockERC20("TestToken", "TEST");
+        MockStrategy testStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
+        
+        // Add test token first time (should succeed)
+        liquidTokenManager.addToken(
+            IERC20(address(testToken)),
+            18,
+            0,
+            IStrategy(address(testStrategy)),
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
+        );
+        
+        console.log("Successfully added test token");
+        
+        // Try to add the same token again (should revert with TokenExists)
+        vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.TokenExists.selector, address(testToken)));
+        liquidTokenManager.addToken(
+            IERC20(address(testToken)),
+            18,
+            0,
+            IStrategy(address(testStrategy)),
+            0, // primaryType
+            address(0), // primarySource
+            0, // needsArg
+            address(0), // fallbackSource
+            bytes4(0) // fallbackFn
+        );
+    }
+
+    function testAddEthTokenLowLevel() public {
+        // Low-level call to capture raw revert data
+        bytes memory payload = abi.encodeWithSelector(
+            liquidTokenManager.addToken.selector,
+            IERC20(ETH_TOKEN),
+            18,
+            0,
+            ETH_STRATEGY,
+            0,
+            address(0),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        (bool success, bytes memory data) = address(liquidTokenManager).call(payload);
+        console.log("Call success:", success);
+        console.log("Returned data length:", data.length);
+        console.logBytes(data);
+
+        if (!success && data.length > 0) {
+            // Handle the revert data
+            if (data.length >= 4) {
+                bytes4 selector;
+                assembly {
+                    selector := mload(add(data, 32))
+                }
+                console.log("Error selector:");
+                console.logBytes4(selector);
+
+                // Create error data without selector
+                bytes memory errorData;
+                if (data.length > 4) {
+                    errorData = new bytes(data.length - 4);
+                    for (uint i = 4; i < data.length; i++) {
+                        errorData[i - 4] = data[i];
+                    }
+                }
+
+                // Check for standard Error(string) selector
+                if (selector == 0x08c379a0) {
+                    if (errorData.length > 0) {
+                        string memory reason = abi.decode(errorData, (string));
+                        console.log("Revert reason:", reason);
+                    }
+                }
+                // Check for Panic(uint256) selector
+                else if (selector == 0x4e487b71) {
+                    if (errorData.length >= 32) {
+                        uint256 panicCode = abi.decode(errorData, (uint256));
+                        console.log("Panic code:", panicCode);
+                    }
+                }
+                // Handle custom errors
+                else if (selector == bytes4(keccak256("TokenExists(address)"))) {
+                    if (errorData.length >= 32) {
+                        address existingToken = abi.decode(errorData, (address));
+                        console.log("Token already exists:", existingToken);
+                    }
+                } else if (selector == bytes4(keccak256("ZeroAddress()"))) {
+                    console.log("Zero address error");
+                } else if (selector == bytes4(keccak256("InvalidDecimals()"))) {
+                    console.log("Invalid decimals error");
+                } else {
+                    console.log("Unknown error type");
+                }
+            } else {
+                console.log("Empty revert data");
+            }
+        } else if (!success) {
+            console.log("Call failed with no revert data");
+        } else {
+            console.log("Token added successfully");
+        }
+    }
+    function testAddEthToken() public {
+        // Method 1: Using try-catch with high-level call
+        try
+            liquidTokenManager.addToken(IERC20(ETH_TOKEN), 18, 0, ETH_STRATEGY, 0, address(0), 0, address(0), bytes4(0))
+        {
+            // Success case
+            console.log("Token added successfully");
+        } catch Error(string memory reason) {
+            // Catch revert(string)
+            console.log("Revert reason:", reason);
+        } catch Panic(uint errorCode) {
+            // Catch panic errors (assert failures, division by zero, etc.)
+            console.log("Panic code:", errorCode);
+        } catch (bytes memory lowLevelData) {
+            // Catch custom errors
+            console.log("Low-level revert data length:", lowLevelData.length);
+
+            // Extract first 4 bytes as error selector
+            if (lowLevelData.length >= 4) {
+                bytes4 selector;
+                assembly {
+                    selector := mload(add(lowLevelData, 32))
+                }
+                console.log("Error selector:");
+                console.logBytes4(selector);
+
+                // Create a new bytes array without the selector for decoding
+                bytes memory errorData;
+                if (lowLevelData.length > 4) {
+                    errorData = new bytes(lowLevelData.length - 4);
+                    for (uint i = 4; i < lowLevelData.length; i++) {
+                        errorData[i - 4] = lowLevelData[i];
+                    }
+                }
+
+                // Decode known custom errors
+                if (selector == bytes4(keccak256("TokenExists(address)"))) {
+                    if (errorData.length >= 32) {
+                        address existingToken = abi.decode(errorData, (address));
+                        console.log("Token already exists:", existingToken);
+                    }
+                } else if (selector == bytes4(keccak256("ZeroAddress()"))) {
+                    console.log("Zero address error");
+                } else if (selector == bytes4(keccak256("InvalidDecimals()"))) {
+                    console.log("Invalid decimals error");
+                } else if (selector == bytes4(keccak256("InvalidThreshold()"))) {
+                    console.log("Invalid threshold error");
+                } else if (selector == bytes4(keccak256("StrategyAlreadyAssigned(address,address)"))) {
+                    if (errorData.length >= 64) {
+                        (address strategy, address token) = abi.decode(errorData, (address, address));
+                        console.log("Strategy already assigned to strategy:", strategy);
+                        console.log("Strategy already assigned to token:", token);
+                    }
+                } else if (selector == bytes4(keccak256("InvalidPriceSource()"))) {
+                    console.log("Invalid price source error");
+                } else if (selector == bytes4(keccak256("TokenPriceFetchFailed()"))) {
+                    console.log("Token price fetch failed error");
+                } else {
+                    console.log("Unknown custom error");
+                    console.logBytes(lowLevelData);
+                }
+            } else {
+                console.log("Revert data too short");
+                console.logBytes(lowLevelData);
+            }
+        }
+    }
     function testNativeTokenPricing() public {
         console.log("\n======= Testing Native Token Price =======");
 

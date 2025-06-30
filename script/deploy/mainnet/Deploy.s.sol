@@ -146,8 +146,8 @@ contract Deploy is Script, Test {
         deployImplementations();
         deployProxies();
         initializeProxies();
-        addAndConfigureTokens();
-        transferOwnership();
+        //addAndConfigureTokens();
+        //transferOwnership();
 
         verifyDeployment();
 
@@ -238,6 +238,69 @@ contract Deploy is Script, Test {
 
             tokens[i] = TokenConfig({name: name, addresses: addrs, params: params, oracle: oracle});
         }
+    }
+
+    function addTokens() external {
+        TokenConfig[] memory addable = _getAddableTokens(tokens);
+        for (uint256 i = 0; i < addable.length; ++i) {
+            try
+                liquidTokenManager.addToken(
+                    IERC20(addable[i].addresses.token),
+                    uint8(addable[i].params.decimals),
+                    uint256(addable[i].params.volatilityThreshold),
+                    IStrategy(addable[i].addresses.strategy),
+                    addable[i].oracle.sourceType,
+                    addable[i].oracle.primarySource,
+                    addable[i].oracle.needsArg,
+                    addable[i].oracle.fallbackSource,
+                    addable[i].oracle.fallbackSelector
+                )
+            {
+                // Optional: emit event or log success
+            } catch {
+                // Optional: emit event or log failure but continue
+            }
+        }
+
+        // Configure curve pools that require reentrancy locks
+        string memory networkConfigPath = "script/configs/mainnet.json";
+        string memory networkConfigData = vm.readFile(networkConfigPath);
+
+        uint256 poolCount = 0;
+        while (true) {
+            string memory poolPath = string.concat(".curvePoolsRequireLock[", vm.toString(poolCount), "]");
+            try this._readAddress(networkConfigData, poolPath) returns (address) {
+                poolCount++;
+            } catch {
+                break;
+            }
+        }
+
+        if (poolCount > 0) {
+            address[] memory pools = new address[](poolCount);
+            bool[] memory settings = new bool[](poolCount);
+
+            for (uint256 i = 0; i < poolCount; i++) {
+                string memory poolPath = string.concat(".curvePoolsRequireLock[", vm.toString(i), "]");
+                pools[i] = stdJson.readAddress(networkConfigData, poolPath);
+                settings[i] = true;
+            }
+
+            tokenRegistryOracle.batchSetRequiresLock(pools, settings);
+        }
+    }
+
+    function transferOwnershipAndRoles() external {
+        proxyAdmin.transferOwnership(admin);
+        require(proxyAdmin.owner() == admin, "Proxy admin ownership transfer failed");
+
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), admin);
+        tokenRegistryOracle.grantRole(tokenRegistryOracle.ORACLE_ADMIN_ROLE(), admin);
+        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), admin);
+
+        tokenRegistryOracle.renounceRole(tokenRegistryOracle.DEFAULT_ADMIN_ROLE(), msg.sender);
+        tokenRegistryOracle.renounceRole(tokenRegistryOracle.ORACLE_ADMIN_ROLE(), msg.sender);
+        liquidTokenManager.renounceRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), msg.sender);
     }
 
     function deployInfrastructure() internal {
