@@ -141,10 +141,12 @@ contract LiquidTokenManager is
             );
         }
 
-        try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
-            if (decimalsFromContract == 0) revert InvalidDecimals();
-            if (decimals != decimalsFromContract) revert InvalidDecimals();
-        } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
+        if (address(token).code.length > 0) {
+            try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
+                if (decimalsFromContract == 0) revert InvalidDecimals();
+                if (decimals != decimalsFromContract) revert InvalidDecimals();
+            } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
+        }
         uint256 fetchedPrice;
         if (!isNative) {
             (uint256 price, bool ok) = tokenRegistryOracle._getTokenPrice_getter(address(token));
