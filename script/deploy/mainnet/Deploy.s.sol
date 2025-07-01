@@ -368,19 +368,23 @@ contract Deploy is Script, Test {
     }
 
     function addAndConfigureTokens() internal {
-        TokenConfig[] memory addable = _getAddableTokens(tokens);
+        TokenConfig[] memory addable = tokens;
         for (uint256 i = 0; i < addable.length; ++i) {
-            liquidTokenManager.addToken(
-                IERC20(addable[i].addresses.token),
-                uint8(addable[i].params.decimals),
-                uint256(addable[i].params.volatilityThreshold),
-                IStrategy(addable[i].addresses.strategy),
-                addable[i].oracle.sourceType,
-                addable[i].oracle.primarySource,
-                addable[i].oracle.needsArg,
-                addable[i].oracle.fallbackSource,
-                addable[i].oracle.fallbackSelector
-            );
+            try
+                liquidTokenManager.addToken(
+                    IERC20(addable[i].addresses.token),
+                    uint8(addable[i].params.decimals),
+                    uint256(addable[i].params.volatilityThreshold),
+                    IStrategy(addable[i].addresses.strategy),
+                    addable[i].oracle.sourceType,
+                    addable[i].oracle.primarySource,
+                    addable[i].oracle.needsArg,
+                    addable[i].oracle.fallbackSource,
+                    addable[i].oracle.fallbackSelector
+                )
+            {} catch {
+                console.log("[WARNING] Unable to add token: ", addable[i].addresses.token);
+            }
         }
 
         // Configure curve pools that require reentrancy locks
@@ -509,7 +513,7 @@ contract Deploy is Script, Test {
 
         // Assets and strategies
         IERC20[] memory registeredTokens = liquidTokenManager.getSupportedTokens();
-        TokenConfig[] memory addableTokens = _getAddableTokens(tokens);
+        TokenConfig[] memory addableTokens = tokens;
         require(
             registeredTokens.length == addableTokens.length,
             "LiquidTokenManager: wrong number of registered tokens"
@@ -763,24 +767,5 @@ contract Deploy is Script, Test {
             address(
                 uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)))
             );
-    }
-
-    function _getAddableTokens(TokenConfig[] memory tokens) internal pure returns (TokenConfig[] memory) {
-        uint256 count = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
-            if (tokens[i].oracle.sourceType == 0 && tokens[i].oracle.primarySource == address(0)) {
-                continue; // Skip native tokens (like Eigen)
-            }
-            count++;
-        }
-        TokenConfig[] memory filtered = new TokenConfig[](count);
-        uint256 j = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
-            if (tokens[i].oracle.sourceType == 0 && tokens[i].oracle.primarySource == address(0)) {
-                continue;
-            }
-            filtered[j++] = tokens[i];
-        }
-        return filtered;
     }
 }
