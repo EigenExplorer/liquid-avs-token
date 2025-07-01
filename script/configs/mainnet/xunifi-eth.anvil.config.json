@@ -1,5 +1,5 @@
 {
-    "avsAddress": "0xc9e94bf890c9b4f11685d576bc65b08e0e87556f",
+    "avsAddress": "0x2d86e90ed40a034c753931ee31b1bd5e1970113d",
     "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
@@ -9,8 +9,8 @@
         },
         "liquidToken": {
             "init": {
-                "name": "zScore by Zeru ETH Liquid Avs Token",
-                "symbol": "xzScore-ETH"
+                "name": "Puffer UniFi ETH Liquid Avs Token",
+                "symbol": "xUniFi-ETH"
             }
         }
     },

@@ -1,5 +1,5 @@
 {
-    "avsAddress": "0xc9e94bf890c9b4f11685d576bc65b08e0e87556f",
+    "avsAddress": "0x71a77037870169d47aad6c2c9360861a4c0df2bf",
     "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
@@ -9,8 +9,8 @@
         },
         "liquidToken": {
             "init": {
-                "name": "zScore by Zeru ETH Liquid Avs Token",
-                "symbol": "xzScore-ETH"
+                "name": "AltLayer ETH Liquid Avs Token",
+                "symbol": "xAltLayer-ETH"
             }
         }
     },
