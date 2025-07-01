@@ -1,6 +1,6 @@
 {
-    "avsAddress": "0x1de75eaab2df55d467494a172652579e6fa4540e",
-    "baseAsset": "0xba50933c268f567bdc86e1ac131be072c6b0b71a",
+    "avsAddress": "0x71a77037870169d47aad6c2c9360861a4c0df2bf",
+    "baseAsset": "0x8457ca5040ad67fdebbcc8edce889a335bc0fbfb",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -9,17 +9,17 @@
         },
         "liquidToken": {
             "init": {
-                "name": "ARPA Native Liquid Avs Token",
-                "symbol": "xARPA"
+                "name": "AltLayer Native Liquid Avs Token",
+                "symbol": "xAltLayer"
             }
         }
     },
     "tokens": [
         {
-            "name": "ARPA",
+            "name": "ALT",
             "addresses": {
-                "token": "0xba50933c268f567bdc86e1ac131be072c6b0b71a",
-                "strategy": "0x66ea956907f7ed2fd816106f2f4d8c384c6d4f92"
+                "token": "0x8457ca5040ad67fdebbcc8edce889a335bc0fbfb",
+                "strategy": "0x73a18a6304d05b495ecb161dbf1ab496461bbf2e"
             },
             "params": {
                 "volatilityThreshold": "0",
