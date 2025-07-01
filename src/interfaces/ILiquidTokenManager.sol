@@ -14,10 +14,6 @@ import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
 /// @title ILiquidTokenManager Interface
 /// @notice Interface for the LiquidTokenManager contract
 interface ILiquidTokenManager {
-    // ============================================================================
-    // STRUCTS
-    // ============================================================================
-
     /// @notice Initialization parameters for LiquidTokenManager
     struct Init {
         ILiquidToken liquidToken;
@@ -30,7 +26,7 @@ interface ILiquidTokenManager {
         address priceUpdater;
     }
 
-    /// @notice Supported token information
+    /// @notice Struct to hold token information
     /// @param decimals The number of decimals for the token
     /// @param pricePerUnit The price per unit of the token
     /// @param volatilityThreshold The allowed change ratio for price update, in 1e18. Must be 0 (disabled) or >= 0.01 * 1e18 and <= 1 * 1e18.
@@ -46,11 +42,18 @@ interface ILiquidTokenManager {
         IERC20[] assets;
         uint256[] amounts;
     }
-
     // ============================================================================
     // EVENTS
     // ============================================================================
-
+    event SwapAndStake(
+        address indexed user,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 nodeId,
+        bool usedQuoterFirstStrategy
+    );
     /// @notice Emitted when a new token is set
     event TokenAdded(
         IERC20 indexed token,
@@ -62,7 +65,12 @@ interface ILiquidTokenManager {
     );
 
     /// @notice Emitted when a token's price is updated
-    event TokenPriceUpdated(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, address indexed updater);
+    event TokenPriceUpdated(
+        IERC20 indexed token,
+        uint256 oldPrice,
+        uint256 newPrice,
+        address indexed updater
+    );
 
     /// @notice Emitted when the volatility threshold for an asset is updated
     event VolatilityThresholdUpdated(
@@ -73,10 +81,20 @@ interface ILiquidTokenManager {
     );
 
     /// @notice Emitted when a price update fails due to change exceeding the volatility threshold
-    event VolatilityCheckFailed(IERC20 indexed token, uint256 oldPrice, uint256 newPrice, uint256 changeRatio);
+    event VolatilityCheckFailed(
+        IERC20 indexed token,
+        uint256 oldPrice,
+        uint256 newPrice,
+        uint256 changeRatio
+    );
 
     /// @notice Emitted when assets are staked to a node
-    event AssetsStakedToNode(uint256 indexed nodeId, IERC20[] assets, uint256[] amounts, address indexed staker);
+    event AssetsStakedToNode(
+        uint256 indexed nodeId,
+        IERC20[] assets,
+        uint256[] amounts,
+        address indexed staker
+    );
 
     /// @notice Emitted when assets are deposited to Eigenlayer
     event AssetsDepositedToEigenlayer(
@@ -91,14 +109,9 @@ interface ILiquidTokenManager {
 
     /// @notice Emitted when a staker node is undelegated from its current operator
     event NodeUndelegated(uint256 nodeId, address indexed operator);
-
-    /// @notice Emitted when a token is removed from the registry
-    event TokenRemoved(IERC20 indexed token, address indexed remover);
-
     // ============================================================================
     // CUSTOM ERRORS
     // ============================================================================
-
     /// @notice Error for zero address
     error ZeroAddress();
 
@@ -117,14 +130,14 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when price source configuration is invalid
     error InvalidPriceSource();
 
+    /// @notice Emitted when a token is removed from the registry
+    event TokenRemoved(IERC20 indexed token, address indexed remover);
+
     /// @notice Error when token price fetch fails during token addition
     error TokenPriceFetchFailed();
 
     /// @notice Error when strategy is not found
     error StrategyNotFound(address asset);
-
-    /// @notice Error when token is not found for a strategy
-    error TokenForStrategyNotFound(address strategy);
 
     /// @notice Error for mismatched array lengths
     error LengthMismatch(uint256 length1, uint256 length2);
@@ -134,12 +147,6 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when an invalid decimals value is provided
     error InvalidDecimals();
-
-    /// @notice Error thrown when an address is not a valid contract
-    error NotAContract();
-
-    /// @notice Error thrown when a strategy is already assigned to another token
-    error StrategyAlreadyAssigned(address strategy, address existingToken);
 
     /// @notice Error thrown when an invalid price is provided
     error InvalidPrice();
@@ -181,18 +188,66 @@ interface ILiquidTokenManager {
     ) external;
 
     /// @notice Removes a token from the registry
-    /// @param token Address of the token to remove
+    /// @param token The address of the token to remove
     function removeToken(IERC20 token) external;
 
     /// @notice Updates the price of a token
-    /// @param token Address of the token to update
-    /// @param newPrice New price for the token
+    /// @param token The address of the token to update
+    /// @param newPrice The new price for the token
     function updatePrice(IERC20 token, uint256 newPrice) external;
 
-    /// @notice Updates the volatility threshold for price updates
-    /// @param asset The asset to update threshold for
-    /// @param newThreshold The new volatility threshold (in 1e18 precision)
-    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external;
+    /// @notice Checks if a token is supported
+    /// @param token The address of the token to check
+    /// @return bool indicating whether the token is supported
+    function tokenIsSupported(IERC20 token) external view returns (bool);
+
+    /// @notice Converts a token amount to the unit of account
+    /// @param token The address of the token to convert
+    /// @param amount The amount of tokens to convert
+    /// @return The converted amount in the unit of account
+    function convertToUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256);
+
+    /// @notice Converts an amount in the unit of account to a token amount
+    /// @param token The address of the token to convert to
+    /// @param amount The amount in the unit of account to convert
+    /// @return The converted amount in the specified token
+    function convertFromUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256);
+
+    /// @notice Retrieves the list of supported tokens
+    /// @return An array of addresses of supported tokens
+    function getSupportedTokens() external view returns (IERC20[] memory);
+
+    /// @notice Retrieves the information for a specific token
+    /// @param token The address of the token to get information for
+    /// @return TokenInfo struct containing the token's information
+    function getTokenInfo(
+        IERC20 token
+    ) external view returns (TokenInfo memory);
+
+    /// @notice Returns the strategy for a given asset
+    /// @param asset The asset to get the strategy for
+    /// @return The IStrategy interface for the corresponding strategy
+    function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
+
+    /// @notice Stakes assets to a specific node
+    /// @param nodeId The ID of the node to stake to
+    /// @param assets The assets to stake
+    /// @param amounts The amounts of each asset to stake
+    function stakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) external;
+
+    /// @notice Stakes assets to multiple nodes
+    /// @param allocations The allocations of assets to nodes
+    function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
     /// @notice Delegate a set of staker nodes to a corresponding set of operators
     /// @param nodeIds The IDs of the staker nodes
@@ -202,20 +257,13 @@ interface ILiquidTokenManager {
     function delegateNodes(
         uint256[] calldata nodeIds,
         address[] calldata operators,
-        ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[]
+            calldata approverSignatureAndExpiries,
         bytes32[] calldata approverSalts
     ) external;
 
-    /// @notice Stakes assets to a specific node
-    /// @param nodeId The ID of the node to stake to
-    /// @param assets Array of asset addresses to stake
-    /// @param amounts Array of amounts to stake for each asset
-    function stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) external;
-
-    /// @notice Stakes assets to multiple nodes
-    /// @param allocations Array of NodeAllocation structs containing staking information
-    function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
-
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
     /// @dev Out OF SCOPE FOR V1
     /**
     function undelegateNodes(
@@ -223,70 +271,29 @@ interface ILiquidTokenManager {
     ) external;
     */
 
-    /// @notice Retrieves the list of supported tokens
-    /// @return An array of addresses of supported tokens
-    function getSupportedTokens() external view returns (IERC20[] memory);
-
-    /// @notice Retrieves the information for a specific token
-    /// @param token Address of the token to get information for
-    /// @return TokenInfo struct containing the token's information
-    function getTokenInfo(IERC20 token) external view returns (TokenInfo memory);
-
-    /// @notice Returns the strategy for a given asset
-    /// @param asset Asset to get the strategy for
-    /// @return IStrategy Interface for the corresponding strategy
-    function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
-
-    /// @notice Returns the token for a given strategy
-    /// @param strategy Strategy to get the token for
-    /// @return IERC20 Interface for the corresponding token
-    function getStrategyToken(IStrategy strategy) external view returns (IERC20);
-
-    /// @notice Gets the staked deposits balance of an asset for all nodes
-    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
+    /// @notice Gets the staked asset balance for all nodes
     /// @param asset The asset to check the balance for
     /// @return The total staked balance of the asset across all nodes
-    function getDepositAssetBalance(IERC20 asset) external view returns (uint256);
+    function getStakedAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256);
 
-    /// @notice Gets the staked deposits balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
+    /// @notice Gets the staked asset balance for a specific node
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
     /// @return The staked balance of the asset for the specific node
-    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+    function getStakedAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId
+    ) external view returns (uint256);
 
-    /// @notice Gets the withdrawable balance of an asset for all nodes
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
-    /// @param asset The asset token address
-    function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256);
-
-    /// @notice Gets the withdrawable balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
-    /// @param asset The asset token address
-    /// @param nodeId The ID of the node
-    function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
-
-    /// @notice Checks if a token is supported
-    /// @param token Address of the token to check
-    /// @return bool indicating whether the token is supported
-    function tokenIsSupported(IERC20 token) external view returns (bool);
-
-    /// @notice Converts a token amount to the unit of account
-    /// @param token Address of the token to convert
-    /// @param amount Amount of tokens to convert
-    /// @return The converted amount in the unit of account
-    function convertToUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
-
-    /// @notice Converts an amount in the unit of account to a token amount
-    /// @param token Address of the token to convert to
-    /// @param amount Amount in the unit of account to convert
-    /// @return The converted amount in the specified token
-    function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256);
-
-    /// @notice Check if a strategy is supported
-    /// @param strategy The strategy address
-    /// @return True if the strategy is supported
-    function isStrategySupported(IStrategy strategy) external view returns (bool);
+    /// @notice Updates the volatility threshold for price updates
+    /// @param asset The asset to update threshold for
+    /// @param newThreshold The new volatility threshold (in 1e18 precision)
+    function setVolatilityThreshold(
+        IERC20 asset,
+        uint256 newThreshold
+    ) external;
 
     /// @notice Returns the token registry oracle contract
     /// @return The ITokenRegistryOracle interface
@@ -302,7 +309,10 @@ interface ILiquidTokenManager {
 
     /// @notice Returns the StakerNodeCoordinator contract
     /// @return The IStakerNodeCoordinator interface
-    function stakerNodeCoordinator() external view returns (IStakerNodeCoordinator);
+    function stakerNodeCoordinator()
+        external
+        view
+        returns (IStakerNodeCoordinator);
 
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
