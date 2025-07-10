@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "./interfaces/IUniswapV3Router.sol";
 import "./interfaces/IUniswapV3Quoter.sol";
@@ -23,7 +24,7 @@ import "./interfaces/IFrxETHMinter.sol";
  *      - Gas-optimized execution with minimal redundancy
  *      - Enterprise-grade security and validation
  */
-contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
+contract FinalAutoRouting is Initializable, ReentrancyGuardUpgradeable, PausableUpgradeable, OwnableUpgradeable {
     using SafeERC20 for IERC20;
 
     // ============================================================================
@@ -31,36 +32,34 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // ============================================================================
 
     /// @notice WETH contract for protocol interactions
-    IWETH public immutable WETH;
+    IWETH public WETH;
 
     /// @notice Uniswap V3 Router for DEX operations
-    IUniswapV3Router public immutable uniswapRouter;
+    IUniswapV3Router public uniswapRouter;
 
-    /// @notice Uniswap V3 Quoter for price discovery ✅ NEW
-    IUniswapV3Quoter public immutable uniswapQuoter;
+    /// @notice Uniswap V3 Quoter for price discovery
+    IUniswapV3Quoter public uniswapQuoter;
 
     /// @notice frxETH Minter for direct minting operations
-    IFrxETHMinter public immutable frxETHMinter;
+    IFrxETHMinter public frxETHMinter;
 
     /// @notice Password hash for secure route management
-    bytes32 private immutable ROUTE_PASSWORD_HASH;
+    bytes32 public ROUTE_PASSWORD_HASH;
 
     /// @notice Maximum allowed slippage (20%)
     uint256 public constant MAX_SLIPPAGE = 2000;
 
     /// @notice ETH placeholder address
-    address public constant ETH_ADDRESS =
-        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address public constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
 
     /// @notice Known token addresses for special routes
-    address public constant SFRXETH =
-        0xac3E018457B222d93114458476f3E3416Abbe38F;
+    address public constant SFRXETH = 0xac3E018457B222d93114458476f3E3416Abbe38F;
     address public constant FRXETH = 0x5E8422345238F34275888049021821E8E08CAa1f;
     address public constant RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
     address public constant OSETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
 
-    /// @notice Quoter-first configuration ✅ NEW
+    /// @notice Quoter-first configuration  
     uint256 public constant TIGHT_BUFFER_BPS = 20; // 0.2% buffer for primary swap
     uint256 public constant QUOTE_MAX_AGE = 30; // 30 seconds max quote age
     uint256 public constant MAX_CURVE_TOKENS = 8;
@@ -81,7 +80,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     /// @notice Authorized callers (typically LiquidTokenManager)
     mapping(address => bool) public authorizedCallers;
 
-    /// @notice Slippage tolerance per token pair (basis points) ✅ MODIFIED: Now for fallback only
+    /// @notice Slippage tolerance per token pair (basis points)  MODIFIED: Now for fallback only
     mapping(address => mapping(address => uint256)) public slippageTolerance;
 
     /// @notice Asset type classification
@@ -91,8 +90,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     mapping(address => bool) public whitelistedPools;
 
     /// @notice Supported tokens registry
-    mapping(address => bool) public supportedTokens;
-
+    mapping(address => bool) public farSupportedTokens;
     /// @notice Emergency pause status per pool
     mapping(address => bool) public poolPaused;
 
@@ -116,7 +114,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     mapping(address => mapping(address => RouteConfig)) public routes;
 
     // ============================================================================
-    // DYNAMIC DEX REGISTRY (NEW FEATURE)
+    // DYNAMIC DEX REGISTRY 
     // ============================================================================
 
     /// @notice Registered dynamic DEXes for backend integration
@@ -166,7 +164,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         DIRECT_MINT
     }
 
-    /// @notice Quoter data structure ✅ NEW
+    /// @notice Quoter data structure  
     struct QuoteData {
         uint256 expectedOutput;
         uint256 timestamp;
@@ -276,13 +274,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address indexed updatedBy,
         uint256 timestamp
     );
-    event TokenSupported(
-        address indexed token,
-        bool status,
-        AssetType assetType,
-        uint8 decimals,
-        uint256 timestamp
-    );
+    event TokenSupported(address indexed token, bool status, AssetType assetType, uint8 decimals, uint256 timestamp);
     event CustomRouteEnabled(
         address indexed tokenIn,
         address indexed tokenOut,
@@ -290,12 +282,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address indexed enabledBy,
         uint256 timestamp
     );
-    event PoolEmergencyPaused(
-        address indexed pool,
-        address indexed pausedBy,
-        string reason,
-        uint256 timestamp
-    );
+    event PoolEmergencyPaused(address indexed pool, address indexed pausedBy, string reason, uint256 timestamp);
     event ProtocolEmergencyPaused(
         Protocol indexed protocol,
         address indexed pausedBy,
@@ -317,19 +304,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address indexed caller,
         uint256 timestamp
     );
-    event RouteManagerUpdated(
-        address indexed oldManager,
-        address indexed newManager,
-        uint256 timestamp
-    );
-    event RouteConfigured(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        Protocol protocol,
-        address pool
-    );
+    event RouteManagerUpdated(address indexed oldManager, address indexed newManager, uint256 timestamp);
+    event RouteConfigured(address indexed tokenIn, address indexed tokenOut, Protocol protocol, address pool);
 
-    /// @notice Quoter-specific events ✅ NEW
+    /// @notice Quoter-specific events  
     event QuoterSwapAttempted(
         address indexed tokenIn,
         address indexed tokenOut,
@@ -355,24 +333,11 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         uint256 timestamp
     );
     // Security Events
-    event DangerousSelectorAdded(
-        bytes4 indexed selector,
-        string reason,
-        address indexed addedBy,
-        uint256 timestamp
-    );
+    event DangerousSelectorAdded(bytes4 indexed selector, string reason, address indexed addedBy, uint256 timestamp);
 
-    event DangerousSelectorRemoved(
-        bytes4 indexed selector,
-        address indexed removedBy,
-        uint256 timestamp
-    );
+    event DangerousSelectorRemoved(bytes4 indexed selector, address indexed removedBy, uint256 timestamp);
 
-    event SelectorValidationFailed(
-        bytes4 indexed selector,
-        address indexed dex,
-        uint256 timestamp
-    );
+    event SelectorValidationFailed(bytes4 indexed selector, address indexed dex, uint256 timestamp);
     // ============================================================================
     // ERRORS
     // ============================================================================
@@ -384,7 +349,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     error InvalidSlippage();
     error ZeroAmount();
     error PoolNotWhitelisted();
-    error TokenNotSupported();
+    error TokenNotSupportedByFAR();
     error PoolIsPaused();
     error ProtocolIsPaused();
     error InvalidParameter(string parameter);
@@ -405,8 +370,8 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     error TooManySteps();
     error InvalidStep();
     error UnauthorizedRouteManager();
-    error QuoteTooOld(); // ✅ NEW
-    error NoConfigSlippage(); // ✅ NEW
+    error QuoteTooOld(); 
+    error NoConfigSlippage(); 
     // DEX Registry Errors
     error DEXNotRegistered();
     error DEXAlreadyRegistered();
@@ -467,44 +432,383 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // ============================================================================
     // CONSTRUCTOR & INITIALIZATION
     // ============================================================================
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
-    constructor(
+    /// @notice Initialize the contract with all required parameters
+    /// @param _weth WETH contract address
+    /// @param _uniswapRouter Uniswap V3 Router address
+    /// @param _uniswapQuoter Uniswap V3 Quoter address
+    /// @param _frxETHMinter frxETH Minter address
+    /// @param _routeManager Route manager address
+    /// @param _routePasswordHash Password hash for route management
+    /// @param _liquidTokenManager LTM address for authorization
+    /// @param _initializeProduction Whether to auto-apply production config
+    function initialize(
         address _weth,
         address _uniswapRouter,
-        address _uniswapQuoter, // ✅ NEW: Quoter parameter
+        address _uniswapQuoter,
         address _frxETHMinter,
         address _routeManager,
         bytes32 _routePasswordHash,
         address _liquidTokenManager,
-        bool _initializeProduction // ✅ NEW: Auto-apply production config
-    ) Ownable() {
+        bool _initializeProduction
+    ) external initializer {
+        // Initialize parent contracts
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+
+        // Validate addresses
         if (_weth == address(0)) revert InvalidAddress();
         if (_uniswapRouter == address(0)) revert InvalidAddress();
-        if (_uniswapQuoter == address(0)) revert InvalidAddress(); // ✅ NEW
+        if (_uniswapQuoter == address(0)) revert InvalidAddress();
         if (_frxETHMinter == address(0)) revert InvalidAddress();
         if (_routeManager == address(0)) revert InvalidAddress();
         if (_liquidTokenManager == address(0)) revert InvalidAddress();
-        if (_routePasswordHash == bytes32(0))
-            revert InvalidParameter("routePasswordHash");
+        if (_routePasswordHash == bytes32(0)) revert InvalidParameter("routePasswordHash");
 
+        // Set immutable-like storage variables
         WETH = IWETH(_weth);
         uniswapRouter = IUniswapV3Router(_uniswapRouter);
-        uniswapQuoter = IUniswapV3Quoter(_uniswapQuoter); // ✅ NEW
+        uniswapQuoter = IUniswapV3Quoter(_uniswapQuoter);
         frxETHMinter = IFrxETHMinter(_frxETHMinter);
         routeManager = _routeManager;
         ROUTE_PASSWORD_HASH = _routePasswordHash;
 
+        // Authorize LTM
         authorizedCallers[_liquidTokenManager] = true;
-        emit AuthorizedCallerUpdated(
-            _liquidTokenManager,
-            true,
-            msg.sender,
-            block.timestamp
-        );
-        // ✅ Auto-apply production slippage configuration
+        emit AuthorizedCallerUpdated(_liquidTokenManager, true, msg.sender, block.timestamp);
+
+        // Apply production configuration if requested
         if (_initializeProduction) {
             _applyProductionSlippageConfig();
+            _applyProductionTokenConfig();
+            _applyProductionPoolConfig();
+            _applyProductionRouteConfig();
         }
+    }
+
+    /// @notice Apply production token configuration - ETH LST + BTC only (no cross-category)
+    function _applyProductionTokenConfig() internal {
+        // ETH LST tokens (18 decimals) - From your exact test data
+        address[13] memory ethTokens = [
+            0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, // WETH
+            0xE95A203B1a91a908F9B9CE46459d101078c2c3cb, // ankrETH
+            0xBe9895146f7AF43049ca1c1AE358B0541Ea49704, // cbETH
+            0xA35b1B31Ce002FBF2058D22F30f95D405200A15b, // ETHx
+            0x5E8422345238F34275888049021821E8E08CAa1f, // frxETH
+            0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549, // lsETH
+            0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa, // mETH
+            0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3, // OETH
+            0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38, // osETH
+            0xae78736Cd615f374D3085123A210448E74Fc6393, // rETH
+            0xac3E018457B222d93114458476f3E3416Abbe38F, // sfrxETH
+            0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84, // stETH
+            0xf951E335afb289353dc249e82926178EaC7DEd78 // swETH
+        ];
+
+        for (uint256 i = 0; i < ethTokens.length; i++) {
+            farSupportedTokens[ethTokens[i]] = true;
+            assetTypes[ethTokens[i]] = AssetType.ETH_LST;
+            tokenDecimals[ethTokens[i]] = 18;
+        }
+
+        // Native ETH support
+        farSupportedTokens[ETH_ADDRESS] = true;
+        assetTypes[ETH_ADDRESS] = AssetType.ETH_LST;
+        tokenDecimals[ETH_ADDRESS] = 18;
+
+        // BTC tokens - Only BTC to BTC wrapped (from your config)
+        address[3] memory btcTokens = [
+            0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // WBTC (8 decimals)
+            0xf6718b2701D4a6498eF77D7c152b2137Ab28b8A3, // stBTC (18 decimals)
+            0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568 // uniBTC (8 decimals)
+        ];
+
+        uint8[3] memory btcDecimals = [8, 18, 8]; // Exact from your config
+
+        for (uint256 i = 0; i < btcTokens.length; i++) {
+            farSupportedTokens[btcTokens[i]] = true;
+            assetTypes[btcTokens[i]] = AssetType.BTC_WRAPPED;
+            tokenDecimals[btcTokens[i]] = btcDecimals[i];
+        }
+    }
+    /// @notice Apply production pool whitelist - Only pools from your test/config
+    function _applyProductionPoolConfig() internal {
+        // Exact pools from your poolWhitelist in config
+        address[17] memory pools = [
+            0xff9704a23d4C4F57C69d86E1113c1e9204Cd804E, // WETH/ankrETH (fee: 3000)
+            0x840DEEef2f115Cf50DA625F7368C24af6fE74410, // WETH/cbETH (fee: 500)
+            0x5d811a9d059dDAB0C18B385ad3b752f734f011cB, // WETH/lsETH (fee: 500)
+            0x04708077eCa6bb527a5BBbD6358ffb043a9c1C14, // WETH/mETH (fee: 500)
+            0x52299416C469843F4e0d54688099966a6c7d720f, // WETH/OETH (fee: 500)
+            0x553e9C493678d8606d6a5ba284643dB2110Df823, // WETH/rETH (fee: 100)
+            0x63818BbDd21E69bE108A23aC1E84cBf66399Bd7D, // WETH/stETH (fee: 10000)
+            0x30eA22C879628514f1494d4BBFEF79D21A6B49A2, // WETH/swETH (fee: 500)
+            0x4585FE77225b41b697C938B018E2Ac67Ac5a20c0, // WBTC/stBTC (fee: 500)
+            0x109707Ad4AbD299b3cF6F2b011c2bff88523E2f0, // WBTC/uniBTC (fee: 3000)
+            0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2, // ETH/ankrETH Curve
+            0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492, // ETH/ETHx Curve
+            0xa1F8A6807c402E4A15ef4EBa36528A3FED24E577, // ETH/frxETH Curve
+            0xDC24316b9AE028F1497c275EB9192a3Ea0f67022, // ETH/stETH Curve
+            0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d, // rETH/osETH Curve
+            // Additional pools from your config
+            0xCBCdF9626bC03E24f779434178A73a0B4bad62eD, // WETH/WBTC (for BTC routes only)
+            0x242017eE869bF0734Bc5E4feb086A52e6391Dd0d // Additional pool from config
+        ];
+
+        for (uint256 i = 0; i < pools.length; i++) {
+            whitelistedPools[pools[i]] = true;
+
+            // Configure Curve pools (indices 10-14)
+            if (i >= 10 && i <= 14) {
+                curvePoolTokenCounts[pools[i]] = 2;
+                curvePoolInterfaces[pools[i]] = CurveInterface.Both;
+            }
+        }
+    }
+
+    /// @notice Apply production routes - ETH LST + BTC only (no cross-category)
+    function _applyProductionRouteConfig() internal {
+        // === ETH LST ROUTES (WETH -> ETH LST via Uniswap V3) ===
+
+        // WETH -> ankrETH (fee: 3000)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xE95A203B1a91a908F9B9CE46459d101078c2c3cb] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0xff9704a23d4C4F57C69d86E1113c1e9204Cd804E,
+            fee: 3000,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> cbETH (fee: 500)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xBe9895146f7AF43049ca1c1AE358B0541Ea49704] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x840DEEef2f115Cf50DA625F7368C24af6fE74410,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> lsETH (fee: 500)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x5d811a9d059dDAB0C18B385ad3b752f734f011cB,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> mETH (fee: 500)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x04708077eCa6bb527a5BBbD6358ffb043a9c1C14,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> OETH (fee: 500)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x52299416C469843F4e0d54688099966a6c7d720f,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> rETH (fee: 100)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xae78736Cd615f374D3085123A210448E74Fc6393] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x553e9C493678d8606d6a5ba284643dB2110Df823,
+            fee: 100,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> stETH (fee: 10000)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x63818BbDd21E69bE108A23aC1E84cBf66399Bd7D,
+            fee: 10000,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WETH -> swETH (fee: 500)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xf951E335afb289353dc249e82926178EaC7DEd78] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x30eA22C879628514f1494d4BBFEF79D21A6B49A2,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // === ETH LST ROUTES (ETH -> ETH LST via Curve) ===
+
+        // ETH -> ankrETH
+        routes[ETH_ADDRESS][0xE95A203B1a91a908F9B9CE46459d101078c2c3cb] = RouteConfig({
+            protocol: Protocol.Curve,
+            pool: 0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2,
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 1,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // ETH -> ETHx
+        routes[ETH_ADDRESS][0xA35b1B31Ce002FBF2058D22F30f95D405200A15b] = RouteConfig({
+            protocol: Protocol.Curve,
+            pool: 0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492,
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 1,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // ETH -> frxETH
+        routes[ETH_ADDRESS][0x5E8422345238F34275888049021821E8E08CAa1f] = RouteConfig({
+            protocol: Protocol.Curve,
+            pool: 0xa1F8A6807c402E4A15ef4EBa36528A3FED24E577,
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 1,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // ETH -> stETH
+        routes[ETH_ADDRESS][0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84] = RouteConfig({
+            protocol: Protocol.Curve,
+            pool: 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022,
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 1,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // === DIRECT MINT ROUTES ===
+
+        // ETH -> sfrxETH (Direct Mint)
+        routes[ETH_ADDRESS][0xac3E018457B222d93114458476f3E3416Abbe38F] = RouteConfig({
+            protocol: Protocol.DirectMint,
+            pool: address(0),
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: 0xbAFA44EFE7901E04E39Dad13167D089C559c1138 // frxETHMinter
+        });
+
+        // === MULTI-HOP ROUTES ===
+
+        // WETH -> osETH (via rETH)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38] = RouteConfig({
+            protocol: Protocol.MultiHop,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: abi.encodePacked(
+                address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2), // WETH
+                uint24(100), // fee
+                address(0xae78736Cd615f374D3085123A210448E74Fc6393) // rETH
+            ),
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: 0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d // Curve pool rETH/osETH
+        });
+
+        // === MULTI-STEP ROUTES ===
+
+        // WETH -> sfrxETH (unwrap + mint)
+        routes[0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2][0xac3E018457B222d93114458476f3E3416Abbe38F] = RouteConfig({
+            protocol: Protocol.MultiStep,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: 0xbAFA44EFE7901E04E39Dad13167D089C559c1138 // frxETHMinter
+        });
+
+        // === BTC ROUTES (WBTC -> BTC Wrapped only) ===
+
+        // WBTC -> stBTC
+        routes[0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599][0xf6718b2701D4a6498eF77D7c152b2137Ab28b8A3] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x4585FE77225b41b697C938B018E2Ac67Ac5a20c0,
+            fee: 500,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
+
+        // WBTC -> uniBTC
+        routes[0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599][0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568] = RouteConfig({
+            protocol: Protocol.UniswapV3,
+            pool: 0x109707Ad4AbD299b3cF6F2b011c2bff88523E2f0,
+            fee: 3000,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0)
+        });
     }
 
     /// @notice Initialize contract (unchanged - keeping all validation)
@@ -518,14 +822,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         SlippageConfig[] calldata slippageConfigs
     ) external onlyOwner {
         if (initialized) revert AlreadyInitialized();
-        if (tokenAddresses.length != tokenTypes.length)
-            revert InvalidParameter("tokenArrays");
-        if (tokenAddresses.length != decimals.length)
-            revert InvalidParameter("decimalsArray");
-        if (poolAddresses.length != poolTokenCounts.length)
-            revert InvalidParameter("poolArrays");
-        if (poolAddresses.length != curveInterfaces.length)
-            revert InvalidParameter("interfaceArrays");
+        if (tokenAddresses.length != tokenTypes.length) revert InvalidParameter("tokenArrays");
+        if (tokenAddresses.length != decimals.length) revert InvalidParameter("decimalsArray");
+        if (poolAddresses.length != poolTokenCounts.length) revert InvalidParameter("poolArrays");
+        if (poolAddresses.length != curveInterfaces.length) revert InvalidParameter("interfaceArrays");
 
         // Configure supported tokens
         unchecked {
@@ -534,20 +834,13 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 uint8 tokenDecimal = decimals[i];
 
                 if (token == address(0)) revert InvalidAddress();
-                if (tokenDecimal == 0 || tokenDecimal > 77)
-                    revert InvalidDecimals();
+                if (tokenDecimal == 0 || tokenDecimal > 77) revert InvalidDecimals();
 
-                supportedTokens[token] = true;
+                farSupportedTokens[token] = true;
                 assetTypes[token] = tokenTypes[i];
                 tokenDecimals[token] = tokenDecimal;
 
-                emit TokenSupported(
-                    token,
-                    true,
-                    tokenTypes[i],
-                    tokenDecimal,
-                    block.timestamp
-                );
+                emit TokenSupported(token, true, tokenTypes[i], tokenDecimal, block.timestamp);
             }
         }
 
@@ -556,10 +849,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             for (uint256 i = 0; i < poolAddresses.length; ++i) {
                 address pool = poolAddresses[i];
                 if (pool == address(0)) revert InvalidAddress();
-                if (
-                    poolTokenCounts[i] == 0 ||
-                    poolTokenCounts[i] > MAX_CURVE_TOKENS
-                ) {
+                if (poolTokenCounts[i] == 0 || poolTokenCounts[i] > MAX_CURVE_TOKENS) {
                     revert InvalidParameter("tokenCount");
                 }
 
@@ -567,31 +857,20 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 curvePoolTokenCounts[pool] = poolTokenCounts[i];
                 curvePoolInterfaces[pool] = curveInterfaces[i];
 
-                emit PoolWhitelisted(
-                    pool,
-                    true,
-                    curveInterfaces[i],
-                    msg.sender,
-                    block.timestamp
-                );
+                emit PoolWhitelisted(pool, true, curveInterfaces[i], msg.sender, block.timestamp);
             }
         }
 
-        // Configure fallback slippage settings ✅ MODIFIED: Now explicitly for fallback
+        // Configure fallback slippage settings  MODIFIED: Now explicitly for fallback
         unchecked {
             for (uint256 i = 0; i < slippageConfigs.length; ++i) {
                 SlippageConfig memory config = slippageConfigs[i];
-                if (
-                    config.tokenIn == address(0) ||
-                    config.tokenOut == address(0)
-                ) {
+                if (config.tokenIn == address(0) || config.tokenOut == address(0)) {
                     revert InvalidAddress();
                 }
-                if (config.slippageBps > MAX_SLIPPAGE)
-                    revert InvalidParameter("slippage");
+                if (config.slippageBps > MAX_SLIPPAGE) revert InvalidParameter("slippage");
 
-                slippageTolerance[config.tokenIn][config.tokenOut] = config
-                    .slippageBps;
+                slippageTolerance[config.tokenIn][config.tokenOut] = config.slippageBps;
                 emit SlippageConfigured(
                     config.tokenIn,
                     config.tokenOut,
@@ -606,7 +885,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // MAIN SWAP FUNCTION - QUOTER-FIRST APPROACH ✅ COMPLETELY REWRITTEN
+    // MAIN SWAP FUNCTION - QUOTER-FIRST APPROACH  COMPLETELY REWRITTEN
     // ============================================================================
 
     /**
@@ -631,47 +910,27 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         // Basic validations
         if (params.amountIn == 0) revert ZeroAmount();
         if (!initialized) revert NotInitialized();
-        if (params.tokenIn == params.tokenOut)
-            revert InvalidParameter("sameToken");
+        if (params.tokenIn == params.tokenOut) revert InvalidParameter("sameToken");
 
         _validateTokenSupport(params.tokenIn, params.tokenOut);
 
         // Generate route hash for tracking
         bytes32 routeHash = keccak256(
-            abi.encode(
-                params.tokenIn,
-                params.tokenOut,
-                params.protocol,
-                params.routeData,
-                block.timestamp
-            )
+            abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
         );
 
         // Handle token input
         address actualTokenIn = _handleTokenInput(params);
 
-        // ✅ STEP 1: Try quoter-first approach (tight slippage)
-        QuoteData memory quote = _getQuote(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            params
-        );
+        //  STEP 1: Try quoter-first approach (tight slippage)
+        QuoteData memory quote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
 
         if (quote.valid) {
-            try
-                this._executeSwapWithQuote(actualTokenIn, params, quote)
-            returns (uint256 result) {
+            try this._executeSwapWithQuote(actualTokenIn, params, quote) returns (uint256 result) {
                 amountOut = result;
                 _handleTokenOutput(params.tokenOut, amountOut);
 
-                emit QuoterSwapAttempted(
-                    params.tokenIn,
-                    params.tokenOut,
-                    params.amountIn,
-                    quote.expectedOutput,
-                    true
-                );
+                emit QuoterSwapAttempted(params.tokenIn, params.tokenOut, params.amountIn, quote.expectedOutput, true);
                 emit AssetSwapped(
                     params.tokenIn,
                     params.tokenOut,
@@ -685,43 +944,23 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 );
                 return amountOut;
             } catch {
-                emit QuoterSwapAttempted(
-                    params.tokenIn,
-                    params.tokenOut,
-                    params.amountIn,
-                    quote.expectedOutput,
-                    false
-                );
+                emit QuoterSwapAttempted(params.tokenIn, params.tokenOut, params.amountIn, quote.expectedOutput, false);
                 // Continue to fallback
             }
         }
 
-        // ✅ STEP 2: Fallback to config slippage
-        uint256 configSlippage = slippageTolerance[params.tokenIn][
-            params.tokenOut
-        ];
+        //  STEP 2: Fallback to config slippage
+        uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
         if (configSlippage == 0) {
-            configSlippage = _getDefaultSlippage(
-                params.tokenIn,
-                params.tokenOut
-            );
+            configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
         }
         if (configSlippage == 0) revert NoConfigSlippage();
 
         // Execute with fallback slippage
-        amountOut = _executeSwapWithConfig(
-            actualTokenIn,
-            params,
-            configSlippage
-        );
+        amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
         _handleTokenOutput(params.tokenOut, amountOut);
 
-        emit FallbackSwapExecuted(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            configSlippage
-        );
+        emit FallbackSwapExecuted(params.tokenIn, params.tokenOut, params.amountIn, configSlippage);
         emit AssetSwapped(
             params.tokenIn,
             params.tokenOut,
@@ -736,7 +975,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // QUOTER FUNCTIONS ✅ COMPLETELY NEW
+    // QUOTER FUNCTIONS 
     // ============================================================================
 
     /**
@@ -753,15 +992,8 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         uint256 amountIn,
         SwapParams memory params
     ) internal returns (QuoteData memory) {
-        try this._performQuote(tokenIn, tokenOut, amountIn, params) returns (
-            uint256 expectedOutput
-        ) {
-            return
-                QuoteData({
-                    expectedOutput: expectedOutput,
-                    timestamp: block.timestamp,
-                    valid: true
-                });
+        try this._performQuote(tokenIn, tokenOut, amountIn, params) returns (uint256 expectedOutput) {
+            return QuoteData({expectedOutput: expectedOutput, timestamp: block.timestamp, valid: true});
         } catch {
             return QuoteData(0, 0, false);
         }
@@ -782,53 +1014,25 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         SwapParams memory params
     ) external returns (uint256 expectedOutput) {
         if (params.protocol == Protocol.UniswapV3) {
-            UniswapV3Route memory route = abi.decode(
-                params.routeData,
-                (UniswapV3Route)
-            );
+            UniswapV3Route memory route = abi.decode(params.routeData, (UniswapV3Route));
 
             if (route.isMultiHop) {
                 return uniswapQuoter.quoteExactInput(route.path, amountIn);
             } else {
-                address actualTokenIn = tokenIn == ETH_ADDRESS
-                    ? address(WETH)
-                    : tokenIn;
-                address actualTokenOut = tokenOut == ETH_ADDRESS
-                    ? address(WETH)
-                    : tokenOut;
-                return
-                    uniswapQuoter.quoteExactInputSingle(
-                        actualTokenIn,
-                        actualTokenOut,
-                        route.fee,
-                        amountIn,
-                        0
-                    );
+                address actualTokenIn = tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn;
+                address actualTokenOut = tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut;
+                return uniswapQuoter.quoteExactInputSingle(actualTokenIn, actualTokenOut, route.fee, amountIn, 0);
             }
         } else if (params.protocol == Protocol.Curve) {
-            CurveRoute memory route = abi.decode(
-                params.routeData,
-                (CurveRoute)
-            );
-            return
-                ICurvePool(route.pool).get_dy(
-                    route.tokenIndexIn,
-                    route.tokenIndexOut,
-                    amountIn
-                );
+            CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
+            return ICurvePool(route.pool).get_dy(route.tokenIndexIn, route.tokenIndexOut, amountIn);
         } else if (params.protocol == Protocol.DirectMint) {
             // For direct mint, assume 1:1 ratio (this is often the case for ETH→sfrxETH)
             return amountIn;
         } else if (params.protocol == Protocol.MultiHop) {
             // For multi-hop, try to get quote from the underlying route
-            MultiHopRoute memory route = abi.decode(
-                params.routeData,
-                (MultiHopRoute)
-            );
-            UniswapV3Route memory uniRoute = abi.decode(
-                route.routeData,
-                (UniswapV3Route)
-            );
+            MultiHopRoute memory route = abi.decode(params.routeData, (MultiHopRoute));
+            UniswapV3Route memory uniRoute = abi.decode(route.routeData, (UniswapV3Route));
             return uniswapQuoter.quoteExactInput(uniRoute.path, amountIn);
         } else if (params.protocol == Protocol.MultiStep) {
             // For multi-step, return conservative estimate
@@ -853,12 +1057,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         require(msg.sender == address(this), "Internal only");
 
         // Check quote freshness
-        if (block.timestamp - quote.timestamp > QUOTE_MAX_AGE)
-            revert QuoteTooOld();
+        if (block.timestamp - quote.timestamp > QUOTE_MAX_AGE) revert QuoteTooOld();
 
         // Calculate minAmountOut with tight buffer
-        uint256 minAmountOut = (quote.expectedOutput *
-            (10000 - TIGHT_BUFFER_BPS)) / 10000;
+        uint256 minAmountOut = (quote.expectedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
 
         return _executeSwap(actualTokenIn, params, minAmountOut);
     }
@@ -876,27 +1078,17 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         uint256 configSlippage
     ) internal returns (uint256) {
         // Try to get a fresh quote for better accuracy
-        QuoteData memory fallbackQuote = _getQuote(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            params
-        );
+        QuoteData memory fallbackQuote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
 
         uint256 expectedOutput;
         if (fallbackQuote.valid) {
             expectedOutput = fallbackQuote.expectedOutput;
         } else {
             // Use simple estimate if quote fails
-            expectedOutput = _getSimpleEstimate(
-                params.amountIn,
-                params.tokenIn,
-                params.tokenOut
-            );
+            expectedOutput = _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
         }
 
-        uint256 minAmountOut = (expectedOutput * (10000 - configSlippage)) /
-            10000;
+        uint256 minAmountOut = (expectedOutput * (10000 - configSlippage)) / 10000;
 
         return _executeSwap(actualTokenIn, params, minAmountOut);
     }
@@ -915,11 +1107,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     ) internal returns (uint256 amountOut) {
         // Execute protocol-specific swap
         if (params.protocol == Protocol.UniswapV3) {
-            amountOut = _performUniswapV3Swap(
-                actualTokenIn,
-                params,
-                minAmountOut
-            );
+            amountOut = _performUniswapV3Swap(actualTokenIn, params, minAmountOut);
         } else if (params.protocol == Protocol.Curve) {
             amountOut = _performCurveSwap(actualTokenIn, params, minAmountOut);
         } else if (params.protocol == Protocol.DirectMint) {
@@ -942,17 +1130,13 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @param tokenOut Output token (for future price logic)
      * @return Estimated output amount
      */
-    function _getSimpleEstimate(
-        uint256 amountIn,
-        address tokenIn,
-        address tokenOut
-    ) internal pure returns (uint256) {
+    function _getSimpleEstimate(uint256 amountIn, address tokenIn, address tokenOut) internal pure returns (uint256) {
         // Simple 1:1 estimate with 5% price impact assumption
         return (amountIn * 95) / 100;
     }
 
     // ============================================================================
-    // MODIFIED PROTOCOL IMPLEMENTATIONS ✅ Updated to accept minAmountOut
+    // MODIFIED PROTOCOL IMPLEMENTATIONS  Updated to accept minAmountOut
     // ============================================================================
 
     /**
@@ -963,10 +1147,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         SwapParams memory params,
         uint256 minAmountOut
     ) private returns (uint256 amountOut) {
-        UniswapV3Route memory route = abi.decode(
-            params.routeData,
-            (UniswapV3Route)
-        );
+        UniswapV3Route memory route = abi.decode(params.routeData, (UniswapV3Route));
 
         // Pool validation for single-hop swaps
         if (!route.isMultiHop) {
@@ -995,9 +1176,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 amountOut = _amountOut;
                 if (amountOut == 0) revert InvalidReturnData();
             } catch Error(string memory reason) {
-                revert SwapFailed(
-                    string(abi.encodePacked("UniswapV3 multi-hop: ", reason))
-                );
+                revert SwapFailed(string(abi.encodePacked("UniswapV3 multi-hop: ", reason)));
             } catch (bytes memory lowLevelData) {
                 revert SwapFailed(_parseRevertReason(lowLevelData));
             }
@@ -1006,9 +1185,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 uniswapRouter.exactInputSingle(
                     IUniswapV3Router.ExactInputSingleParams({
                         tokenIn: tokenIn,
-                        tokenOut: params.tokenOut == ETH_ADDRESS
-                            ? address(WETH)
-                            : params.tokenOut,
+                        tokenOut: params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
                         fee: route.fee,
                         recipient: address(this),
                         deadline: block.timestamp + 300,
@@ -1021,9 +1198,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 amountOut = _amountOut;
                 if (amountOut == 0) revert InvalidReturnData();
             } catch Error(string memory reason) {
-                revert SwapFailed(
-                    string(abi.encodePacked("UniswapV3 single-hop: ", reason))
-                );
+                revert SwapFailed(string(abi.encodePacked("UniswapV3 single-hop: ", reason)));
             } catch (bytes memory lowLevelData) {
                 revert SwapFailed(_parseRevertReason(lowLevelData));
             }
@@ -1048,11 +1223,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             if (poolPaused[route.pool]) revert PoolIsPaused();
         }
 
-        _validateCurveTokenIndices(
-            route.pool,
-            route.tokenIndexIn,
-            route.tokenIndexOut
-        );
+        _validateCurveTokenIndices(route.pool, route.tokenIndexIn, route.tokenIndexOut);
 
         // Handle ETH/WETH conversion for Curve
         uint256 amountIn = params.amountIn;
@@ -1077,53 +1248,33 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
 
         if (
             route.useUnderlying &&
-            (interfaceType == CurveInterface.ExchangeUnderlying ||
-                interfaceType == CurveInterface.Both)
+            (interfaceType == CurveInterface.ExchangeUnderlying || interfaceType == CurveInterface.Both)
         ) {
             try
                 ICurvePool(route.pool).exchange_underlying{
                     gas: EXTERNAL_CALL_GAS_LIMIT,
                     value: params.tokenIn == ETH_ADDRESS ? amountIn : 0
-                }(
-                    route.tokenIndexIn,
-                    route.tokenIndexOut,
-                    amountIn,
-                    minAmountOut
-                )
+                }(route.tokenIndexIn, route.tokenIndexOut, amountIn, minAmountOut)
             {
                 // Success
             } catch Error(string memory reason) {
                 _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(
-                    string(
-                        abi.encodePacked("Curve exchange_underlying: ", reason)
-                    )
-                );
+                revert SwapFailed(string(abi.encodePacked("Curve exchange_underlying: ", reason)));
             } catch (bytes memory lowLevelData) {
                 _resetApproval(tokenIn, route.pool);
                 revert SwapFailed(_parseRevertReason(lowLevelData));
             }
-        } else if (
-            interfaceType == CurveInterface.Exchange ||
-            interfaceType == CurveInterface.Both
-        ) {
+        } else if (interfaceType == CurveInterface.Exchange || interfaceType == CurveInterface.Both) {
             try
                 ICurvePool(route.pool).exchange{
                     gas: EXTERNAL_CALL_GAS_LIMIT,
                     value: params.tokenIn == ETH_ADDRESS ? amountIn : 0
-                }(
-                    route.tokenIndexIn,
-                    route.tokenIndexOut,
-                    amountIn,
-                    minAmountOut
-                )
+                }(route.tokenIndexIn, route.tokenIndexOut, amountIn, minAmountOut)
             {
                 // Success
             } catch Error(string memory reason) {
                 _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(
-                    string(abi.encodePacked("Curve exchange: ", reason))
-                );
+                revert SwapFailed(string(abi.encodePacked("Curve exchange: ", reason)));
             } catch (bytes memory lowLevelData) {
                 _resetApproval(tokenIn, route.pool);
                 revert SwapFailed(_parseRevertReason(lowLevelData));
@@ -1149,27 +1300,21 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     /**
      * @notice Handle direct minting operations (FIXED to use route data)
      */
-    function _performDirectMint(
-        SwapParams memory params
-    ) private returns (uint256 amountOut) {
+    function _performDirectMint(SwapParams memory params) private returns (uint256 amountOut) {
         address minterContract = address(frxETHMinter);
         if (params.routeData.length > 0) {
             minterContract = abi.decode(params.routeData, (address));
         }
 
         if (params.tokenIn == ETH_ADDRESS && params.tokenOut == SFRXETH) {
-            // ✅ The minter DOES support ETH->sfrxETH directly!
-            try
-                IFrxETHMinter(minterContract).submitAndDeposit{
-                    value: params.amountIn
-                }(address(this))
-            returns (uint256 shares) {
-                amountOut = shares; // ✅ Make sure we're capturing the return value
+            //  The minter DOES support ETH->sfrxETH directly!
+            try IFrxETHMinter(minterContract).submitAndDeposit{value: params.amountIn}(address(this)) returns (
+                uint256 shares
+            ) {
+                amountOut = shares; //  Make sure we're capturing the return value
                 require(amountOut > 0, "No sfrxETH received");
             } catch Error(string memory reason) {
-                revert SwapFailed(
-                    string(abi.encodePacked("DirectMint: ", reason))
-                );
+                revert SwapFailed(string(abi.encodePacked("DirectMint: ", reason)));
             } catch (bytes memory lowLevelData) {
                 revert SwapFailed(_parseRevertReason(lowLevelData));
             }
@@ -1180,48 +1325,31 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     /**
      * @notice Execute multi-hop swap (modified to accept minAmountOut)
      */
-    function _performMultiHopSwap(
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) private returns (uint256 amountOut) {
+    function _performMultiHopSwap(SwapParams memory params, uint256 minAmountOut) private returns (uint256 amountOut) {
         if (params.tokenIn == address(WETH) && params.tokenOut == OSETH) {
             return _performWETHToOsETHSwap(params, minAmountOut);
         }
 
         // Generic multi-hop logic
-        MultiHopRoute memory route = abi.decode(
-            params.routeData,
-            (MultiHopRoute)
-        );
-        UniswapV3Route memory uniRoute = abi.decode(
-            route.routeData,
-            (UniswapV3Route)
-        );
+        MultiHopRoute memory route = abi.decode(params.routeData, (MultiHopRoute));
+        UniswapV3Route memory uniRoute = abi.decode(route.routeData, (UniswapV3Route));
         uniRoute.isMultiHop = true;
 
         SwapParams memory modifiedParams = params;
         modifiedParams.routeData = abi.encode(uniRoute);
 
         address actualTokenIn = _handleTokenInput(params);
-        return
-            _performUniswapV3Swap(actualTokenIn, modifiedParams, minAmountOut);
+        return _performUniswapV3Swap(actualTokenIn, modifiedParams, minAmountOut);
     }
 
     /**
      * @notice Execute multi-step operations (modified to accept minAmountOut)
      */
-    function _performMultiStepSwap(
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) private returns (uint256 amountOut) {
-        MultiStepRoute memory route = abi.decode(
-            params.routeData,
-            (MultiStepRoute)
-        );
+    function _performMultiStepSwap(SwapParams memory params, uint256 minAmountOut) private returns (uint256 amountOut) {
+        MultiStepRoute memory route = abi.decode(params.routeData, (MultiStepRoute));
 
         if (route.steps.length == 0) revert InvalidParameter("emptySteps");
-        if (route.steps.length > MAX_MULTI_STEP_OPERATIONS)
-            revert TooManySteps();
+        if (route.steps.length > MAX_MULTI_STEP_OPERATIONS) revert TooManySteps();
 
         uint256 currentAmount = params.amountIn;
         address currentToken = params.tokenIn;
@@ -1241,19 +1369,11 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 if (currentToken != ETH_ADDRESS) revert InvalidStep();
                 if (step.tokenOut != SFRXETH) revert InvalidStep();
 
-                try
-                    frxETHMinter.submitAndDeposit{value: currentAmount}(
-                        address(this)
-                    )
-                returns (uint256 _amountOut) {
+                try frxETHMinter.submitAndDeposit{value: currentAmount}(address(this)) returns (uint256 _amountOut) {
                     currentAmount = _amountOut;
                     if (currentAmount == 0) revert InvalidReturnData();
                 } catch Error(string memory reason) {
-                    revert SwapFailed(
-                        string(
-                            abi.encodePacked("MultiStep DirectMint: ", reason)
-                        )
-                    );
+                    revert SwapFailed(string(abi.encodePacked("MultiStep DirectMint: ", reason)));
                 } catch (bytes memory lowLevelData) {
                     revert SwapFailed(_parseRevertReason(lowLevelData));
                 }
@@ -1277,17 +1397,9 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 );
 
                 if (step.protocol == Protocol.UniswapV3) {
-                    currentAmount = _performUniswapV3Swap(
-                        currentToken,
-                        stepParams,
-                        intermediateMin
-                    );
+                    currentAmount = _performUniswapV3Swap(currentToken, stepParams, intermediateMin);
                 } else if (step.protocol == Protocol.Curve) {
-                    currentAmount = _performCurveSwap(
-                        currentToken,
-                        stepParams,
-                        intermediateMin
-                    );
+                    currentAmount = _performCurveSwap(currentToken, stepParams, intermediateMin);
                 } else {
                     revert InvalidProtocol();
                 }
@@ -1296,8 +1408,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        if (currentToken != params.tokenOut)
-            revert InvalidParameter("wrongFinalToken");
+        if (currentToken != params.tokenOut) revert InvalidParameter("wrongFinalToken");
         if (currentAmount < minAmountOut) revert InsufficientOutput();
 
         amountOut = currentAmount;
@@ -1326,24 +1437,12 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         if (poolPaused[uniswapPoolAddr]) revert PoolIsPaused();
         if (poolPaused[curvePoolAddr]) revert PoolIsPaused();
 
-        IERC20(address(WETH)).safeTransferFrom(
-            msg.sender,
-            address(this),
-            params.amountIn
-        );
+        IERC20(address(WETH)).safeTransferFrom(msg.sender, address(this), params.amountIn);
 
         // Step 1: WETH → rETH
-        IERC20(address(WETH)).safeApprove(
-            address(uniswapRouter),
-            params.amountIn
-        );
+        IERC20(address(WETH)).safeApprove(address(uniswapRouter), params.amountIn);
 
-        uint256 minRETHOut = _calculateIntermediateMinOut(
-            address(WETH),
-            RETH,
-            params.amountIn,
-            minAmountOut
-        );
+        uint256 minRETHOut = _calculateIntermediateMinOut(address(WETH), RETH, params.amountIn, minAmountOut);
 
         uint256 rETHReceived;
         try
@@ -1363,9 +1462,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             rETHReceived = _rETHReceived;
             if (rETHReceived == 0) revert InvalidReturnData();
         } catch Error(string memory reason) {
-            revert SwapFailed(
-                string(abi.encodePacked("WETH to rETH: ", reason))
-            );
+            revert SwapFailed(string(abi.encodePacked("WETH to rETH: ", reason)));
         } catch (bytes memory lowLevelData) {
             revert SwapFailed(_parseRevertReason(lowLevelData));
         }
@@ -1375,20 +1472,13 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         // Step 2: rETH → osETH
         IERC20(RETH).safeApprove(curvePoolAddr, rETHReceived);
 
-        try
-            ICurvePool(curvePoolAddr).exchange{gas: EXTERNAL_CALL_GAS_LIMIT}(
-                1,
-                0,
-                rETHReceived,
-                minAmountOut
-            )
-        returns (uint256 _amountOut) {
+        try ICurvePool(curvePoolAddr).exchange{gas: EXTERNAL_CALL_GAS_LIMIT}(1, 0, rETHReceived, minAmountOut) returns (
+            uint256 _amountOut
+        ) {
             amountOut = _amountOut;
             if (amountOut == 0) revert InvalidReturnData();
         } catch Error(string memory reason) {
-            revert SwapFailed(
-                string(abi.encodePacked("rETH to osETH: ", reason))
-            );
+            revert SwapFailed(string(abi.encodePacked("rETH to osETH: ", reason)));
         } catch (bytes memory lowLevelData) {
             revert SwapFailed(_parseRevertReason(lowLevelData));
         }
@@ -1400,12 +1490,9 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // TOKEN HANDLING (changed to handle direct mint )
     // ============================================================================
 
-    function _handleTokenInput(
-        SwapParams memory params
-    ) private returns (address) {
+    function _handleTokenInput(SwapParams memory params) private returns (address) {
         if (params.tokenIn == ETH_ADDRESS) {
-            if (msg.value < params.amountIn)
-                revert InvalidParameter("insufficientETH");
+            if (msg.value < params.amountIn) revert InvalidParameter("insufficientETH");
             WETH.deposit{value: params.amountIn}();
             if (msg.value > params.amountIn) {
                 uint256 refundAmount = msg.value - params.amountIn;
@@ -1413,11 +1500,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             }
             return address(WETH);
         } else {
-            IERC20(params.tokenIn).safeTransferFrom(
-                msg.sender,
-                address(this),
-                params.amountIn
-            );
+            IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
             return params.tokenIn;
         }
     }
@@ -1460,23 +1543,16 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // VALIDATION FUNCTIONS (unchanged)
     // ============================================================================
 
-    function _validateTokenSupport(
-        address tokenIn,
-        address tokenOut
-    ) private view {
-        if (!supportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
-            revert TokenNotSupported();
+    function _validateTokenSupport(address tokenIn, address tokenOut) private view {
+        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
+            revert TokenNotSupportedByFAR();
         }
-        if (!supportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
-            revert TokenNotSupported();
+        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
+            revert TokenNotSupportedByFAR();
         }
     }
 
-    function _validateCurveTokenIndices(
-        address pool,
-        int128 tokenIndexIn,
-        int128 tokenIndexOut
-    ) private view {
+    function _validateCurveTokenIndices(address pool, int128 tokenIndexIn, int128 tokenIndexOut) private view {
         uint256 tokenCount = curvePoolTokenCounts[pool];
         if (tokenCount == 0) revert InvalidParameter("poolNotConfigured");
 
@@ -1495,11 +1571,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // HELPER FUNCTIONS (keeping essential ones, removing redundant slippage validation)
     // ============================================================================
 
-    function normalizeAmount(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    ) public view returns (uint256) {
+    function normalizeAmount(address tokenIn, address tokenOut, uint256 amountIn) public view returns (uint256) {
         uint8 decimalsIn = tokenDecimals[tokenIn];
         uint8 decimalsOut = tokenDecimals[tokenOut];
 
@@ -1539,25 +1611,17 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         return (normalizedAmount * (10000 - slippageBps)) / 10000;
     }
 
-    function _getDefaultSlippage(
-        address tokenIn,
-        address tokenOut
-    ) private view returns (uint256) {
+    function _getDefaultSlippage(address tokenIn, address tokenOut) private view returns (uint256) {
         AssetType typeIn = assetTypes[tokenIn];
         AssetType typeOut = assetTypes[tokenOut];
 
-        if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE)
-            return 30; // 0.3%
-        if (typeIn == AssetType.ETH_LST || typeOut == AssetType.ETH_LST)
-            return 200; // 2%
-        if (typeIn == AssetType.BTC_WRAPPED || typeOut == AssetType.BTC_WRAPPED)
-            return 300; // 3%
+        if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE) return 30; // 0.3%
+        if (typeIn == AssetType.ETH_LST || typeOut == AssetType.ETH_LST) return 200; // 2%
+        if (typeIn == AssetType.BTC_WRAPPED || typeOut == AssetType.BTC_WRAPPED) return 300; // 3%
         return 500; // 5% for volatile assets
     }
 
-    function _parseRevertReason(
-        bytes memory data
-    ) private pure returns (string memory) {
+    function _parseRevertReason(bytes memory data) private pure returns (string memory) {
         if (data.length < 68) return "Low-level call failed";
 
         assembly {
@@ -1566,29 +1630,21 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         return abi.decode(data, (string));
     }
 
-    function _applyProductionSlippageConfig() private {
+    function _applyProductionSlippageConfig() internal {
         OptimalSlippageConfig[] memory configs = _getOptimalSlippageConfigs();
 
         for (uint256 i = 0; i < configs.length; i++) {
-            slippageTolerance[configs[i].tokenIn][
-                configs[i].tokenOut
-            ] = configs[i].slippageBps;
+            slippageTolerance[configs[i].tokenIn][configs[i].tokenOut] = configs[i].slippageBps;
         }
     }
     /**
      * @notice Get optimal slippage configurations from testing results
      * @return Array of optimal slippage configurations
      */
-    function _getOptimalSlippageConfigs()
-        private
-        view
-        returns (OptimalSlippageConfig[] memory)
-    {
-        OptimalSlippageConfig[] memory configs = new OptimalSlippageConfig[](
-            17
-        );
+    function _getOptimalSlippageConfigs() private view returns (OptimalSlippageConfig[] memory) {
+        OptimalSlippageConfig[] memory configs = new OptimalSlippageConfig[](17);
 
-        // 🎯 WETH Direct Swaps (Uniswap V3) - Optimized
+        //  WETH Direct Swaps (Uniswap V3) - Optimized
         configs[0] = OptimalSlippageConfig({
             tokenIn: address(WETH),
             tokenOut: 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704, // cbETH
@@ -1645,7 +1701,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             routeType: "WETH->ankrETH Direct Uniswap"
         });
 
-        // 🎯 ETH Direct Swaps (Curve) - Super Efficient
+        //  ETH Direct Swaps (Curve) - Super Efficient
         configs[8] = OptimalSlippageConfig({
             tokenIn: ETH_ADDRESS,
             tokenOut: 0xE95A203B1a91a908F9B9CE46459d101078c2c3cb, // ankrETH
@@ -1681,7 +1737,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             routeType: "ETH->sfrxETH Direct Mint"
         });
 
-        // 🎯 Complex Routes - Keep Buffers for Safety
+        //  Complex Routes - Keep Buffers for Safety
         configs[13] = OptimalSlippageConfig({
             tokenIn: address(WETH),
             tokenOut: OSETH,
@@ -1696,7 +1752,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             routeType: "WETH->sfrxETH Multi-step"
         });
 
-        // 🎯 Reverse Routes (for autoSwapAssets bidirectional support)
+        //  Reverse Routes (for autoSwapAssets bidirectional support)
         configs[15] = OptimalSlippageConfig({
             tokenIn: 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704, // cbETH
             tokenOut: address(WETH),
@@ -1723,14 +1779,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address tokenOut,
         uint256 amountIn,
         uint256 minAmountOut
-    )
-        external
-        payable
-        onlyAuthorizedCaller
-        nonReentrant
-        whenNotPaused
-        returns (uint256 amountOut)
-    {
+    ) public payable onlyAuthorizedCaller nonReentrant whenNotPaused returns (uint256 amountOut) {
         require(tokenIn != tokenOut, "Same token");
         require(amountIn > 0, "Zero amount");
         require(initialized, "Not initialized");
@@ -1739,12 +1788,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
 
         // 1) Direct route A→B
         if (_routeExists(tokenIn, tokenOut)) {
-            SwapParams memory params = _makeSwapParams(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minAmountOut
-            );
+            SwapParams memory params = _makeSwapParams(tokenIn, tokenOut, amountIn, minAmountOut);
             amountOut = _executeInternalSwap(params);
             _handleTokenOutput(tokenOut, amountOut);
             return amountOut;
@@ -1752,12 +1796,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
 
         // 2) Reverse route B→A
         if (_routeExists(tokenOut, tokenIn)) {
-            SwapParams memory params = _makeReverseSwapParams(
-                tokenOut,
-                tokenIn,
-                amountIn,
-                minAmountOut
-            );
+            SwapParams memory params = _makeReverseSwapParams(tokenOut, tokenIn, amountIn, minAmountOut);
             amountOut = _executeInternalSwap(params);
             _handleTokenOutput(tokenOut, amountOut);
             return amountOut;
@@ -1766,61 +1805,23 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         // 3) Bridge route
         address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
         if (bridgeAsset != address(0)) {
-            if (
-                _routeExists(tokenIn, bridgeAsset) &&
-                _routeExists(bridgeAsset, tokenOut)
-            ) {
-                uint256 intermediateMin = _calculateIntermediateMinOut(
-                    tokenIn,
-                    bridgeAsset,
-                    amountIn,
-                    minAmountOut
-                );
+            if (_routeExists(tokenIn, bridgeAsset) && _routeExists(bridgeAsset, tokenOut)) {
+                uint256 intermediateMin = _calculateIntermediateMinOut(tokenIn, bridgeAsset, amountIn, minAmountOut);
                 uint256 bridgeAmount = _executeInternalSwap(
-                    _makeSwapParams(
-                        tokenIn,
-                        bridgeAsset,
-                        amountIn,
-                        intermediateMin
-                    )
+                    _makeSwapParams(tokenIn, bridgeAsset, amountIn, intermediateMin)
                 );
-                amountOut = _executeInternalSwap(
-                    _makeSwapParams(
-                        bridgeAsset,
-                        tokenOut,
-                        bridgeAmount,
-                        minAmountOut
-                    )
-                );
+                amountOut = _executeInternalSwap(_makeSwapParams(bridgeAsset, tokenOut, bridgeAmount, minAmountOut));
                 _handleTokenOutput(tokenOut, amountOut);
                 return amountOut;
             }
 
-            if (
-                _routeExists(bridgeAsset, tokenIn) &&
-                _routeExists(tokenOut, bridgeAsset)
-            ) {
-                uint256 intermediateMin = _calculateIntermediateMinOut(
-                    bridgeAsset,
-                    tokenIn,
-                    amountIn,
-                    minAmountOut
-                );
+            if (_routeExists(bridgeAsset, tokenIn) && _routeExists(tokenOut, bridgeAsset)) {
+                uint256 intermediateMin = _calculateIntermediateMinOut(bridgeAsset, tokenIn, amountIn, minAmountOut);
                 uint256 bridgeAmount = _executeInternalSwap(
-                    _makeReverseSwapParams(
-                        bridgeAsset,
-                        tokenIn,
-                        amountIn,
-                        intermediateMin
-                    )
+                    _makeReverseSwapParams(bridgeAsset, tokenIn, amountIn, intermediateMin)
                 );
                 amountOut = _executeInternalSwap(
-                    _makeReverseSwapParams(
-                        tokenOut,
-                        bridgeAsset,
-                        bridgeAmount,
-                        minAmountOut
-                    )
+                    _makeReverseSwapParams(tokenOut, bridgeAsset, bridgeAmount, minAmountOut)
                 );
                 _handleTokenOutput(tokenOut, amountOut);
                 return amountOut;
@@ -1830,18 +1831,15 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         revert("No route found");
     }
 
-    function _executeInternalSwap(
-        SwapParams memory params
-    ) internal returns (uint256 amountOut) {
+    function _executeInternalSwap(SwapParams memory params) internal returns (uint256 amountOut) {
         uint256 gasStart = gasleft();
 
         if (params.amountIn == 0) revert ZeroAmount();
-        if (params.tokenIn == params.tokenOut)
-            revert InvalidParameter("sameToken");
+        if (params.tokenIn == params.tokenOut) revert InvalidParameter("sameToken");
 
         _validateTokenSupport(params.tokenIn, params.tokenOut);
 
-        // ✅ SPECIAL-CASE DIRECTMINT - BYPASS QUOTER LOGIC
+        //  SPECIAL-CASE DIRECTMINT - BYPASS QUOTER LOGIC
         if (params.protocol == Protocol.DirectMint) {
             // Call directly so msg.value flows into submitAndDeposit
             amountOut = _performDirectMint(params);
@@ -1849,13 +1847,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
 
             // Emit event for tracking
             bytes32 routeHash = keccak256(
-                abi.encode(
-                    params.tokenIn,
-                    params.tokenOut,
-                    params.protocol,
-                    params.routeData,
-                    block.timestamp
-                )
+                abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
             );
             uint256 gasUsed = gasStart > gasleft() ? gasStart - gasleft() : 0;
             emit AssetSwapped(
@@ -1872,70 +1864,39 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             return amountOut;
         }
 
-        // ✅ REGULAR FLOW FOR ALL OTHER PROTOCOLS
+        //  REGULAR FLOW FOR ALL OTHER PROTOCOLS
         bytes32 routeHash = keccak256(
-            abi.encode(
-                params.tokenIn,
-                params.tokenOut,
-                params.protocol,
-                params.routeData,
-                block.timestamp
-            )
+            abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
         );
 
         // Handle token input for internal swaps (ETH→WETH conversion)
         address actualTokenIn = _handleInternalTokenInput(params);
 
         // Use quoter-first approach for internal swaps too
-        QuoteData memory quote = _getQuote(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            params
-        );
+        QuoteData memory quote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
 
         if (quote.valid) {
-            try
-                this._executeSwapWithQuote(actualTokenIn, params, quote)
-            returns (uint256 result) {
+            try this._executeSwapWithQuote(actualTokenIn, params, quote) returns (uint256 result) {
                 amountOut = result;
             } catch {
                 // Fallback to config slippage
-                uint256 configSlippage = slippageTolerance[params.tokenIn][
-                    params.tokenOut
-                ];
+                uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
                 if (configSlippage == 0) {
-                    configSlippage = _getDefaultSlippage(
-                        params.tokenIn,
-                        params.tokenOut
-                    );
+                    configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
                 }
                 if (configSlippage == 0) revert NoConfigSlippage();
 
-                amountOut = _executeSwapWithConfig(
-                    actualTokenIn,
-                    params,
-                    configSlippage
-                );
+                amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
             }
         } else {
             // Direct fallback if quote fails
-            uint256 configSlippage = slippageTolerance[params.tokenIn][
-                params.tokenOut
-            ];
+            uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
             if (configSlippage == 0) {
-                configSlippage = _getDefaultSlippage(
-                    params.tokenIn,
-                    params.tokenOut
-                );
+                configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
             }
             if (configSlippage == 0) revert NoConfigSlippage();
 
-            amountOut = _executeSwapWithConfig(
-                actualTokenIn,
-                params,
-                configSlippage
-            );
+            amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
         }
 
         if (amountOut < params.minAmountOut) revert InsufficientOutput();
@@ -1955,9 +1916,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         );
     }
 
-    function _handleInternalTokenInput(
-        SwapParams memory params
-    ) internal returns (address) {
+    function _handleInternalTokenInput(SwapParams memory params) internal returns (address) {
         if (params.tokenIn == ETH_ADDRESS) {
             if (address(this).balance >= params.amountIn) {
                 WETH.deposit{value: params.amountIn}();
@@ -1966,24 +1925,15 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 revert InvalidParameter("insufficientETH");
             }
         } else {
-            uint256 currentBalance = IERC20(params.tokenIn).balanceOf(
-                address(this)
-            );
+            uint256 currentBalance = IERC20(params.tokenIn).balanceOf(address(this));
             if (currentBalance < params.amountIn) {
-                IERC20(params.tokenIn).safeTransferFrom(
-                    msg.sender,
-                    address(this),
-                    params.amountIn
-                );
+                IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
             }
             return params.tokenIn;
         }
     }
 
-    function _validateAssetCategory(
-        address tokenIn,
-        address tokenOut
-    ) internal view {
+    function _validateAssetCategory(address tokenIn, address tokenOut) internal view {
         AssetType typeIn = assetTypes[tokenIn];
         AssetType typeOut = assetTypes[tokenOut];
 
@@ -1991,16 +1941,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         if (tokenOut == ETH_ADDRESS) typeOut = AssetType.ETH_LST;
 
         require(typeIn == typeOut, "Cross-category swaps not supported");
-        require(
-            typeIn == AssetType.ETH_LST || typeIn == AssetType.BTC_WRAPPED,
-            "Unsupported asset category"
-        );
+        require(typeIn == AssetType.ETH_LST || typeIn == AssetType.BTC_WRAPPED, "Unsupported asset category");
     }
 
-    function _getBridgeAsset(
-        address tokenIn,
-        address tokenOut
-    ) internal view returns (address) {
+    function _getBridgeAsset(address tokenIn, address tokenOut) internal view returns (address) {
         AssetType assetType = assetTypes[tokenIn];
 
         if (tokenIn == ETH_ADDRESS || tokenOut == ETH_ADDRESS) {
@@ -2038,12 +1982,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 });
                 routeData = abi.encode(route);
             } else {
-                UniswapV3Route memory route = UniswapV3Route({
-                    pool: rc.pool,
-                    fee: rc.fee,
-                    isMultiHop: false,
-                    path: ""
-                });
+                UniswapV3Route memory route = UniswapV3Route({pool: rc.pool, fee: rc.fee, isMultiHop: false, path: ""});
                 routeData = abi.encode(route);
             }
         } else if (protocol == Protocol.Curve) {
@@ -2055,14 +1994,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             });
             routeData = abi.encode(route);
         } else if (protocol == Protocol.DirectMint) {
-            // ✅ FIX: Use specialContract from route, fallback to frxETHMinter
-            address minter = rc.specialContract != address(0)
-                ? rc.specialContract
-                : address(frxETHMinter);
+            //  FIX: Use specialContract from route, fallback to frxETHMinter
+            address minter = rc.specialContract != address(0) ? rc.specialContract : address(frxETHMinter);
             routeData = abi.encode(minter);
-        } else if (
-            protocol == Protocol.MultiHop || protocol == Protocol.MultiStep
-        ) {
+        } else if (protocol == Protocol.MultiHop || protocol == Protocol.MultiStep) {
             routeData = rc.path;
         }
 
@@ -2076,21 +2011,13 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         });
     }
 
-    function _reverseUniswapPath(
-        bytes memory path
-    ) internal pure returns (bytes memory) {
+    function _reverseUniswapPath(bytes memory path) internal pure returns (bytes memory) {
         return path; // For now, return original path
     }
 
-    function _routeExists(
-        address tokenA,
-        address tokenB
-    ) internal view returns (bool) {
+    function _routeExists(address tokenA, address tokenB) internal view returns (bool) {
         RouteConfig storage rc = routes[tokenA][tokenB];
-        return (rc.pool != address(0) ||
-            rc.path.length > 0 ||
-            rc.directSwap ||
-            rc.specialContract != address(0));
+        return (rc.pool != address(0) || rc.path.length > 0 || rc.directSwap || rc.specialContract != address(0));
     }
 
     function _makeSwapParams(
@@ -2115,12 +2042,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
                 });
                 routeData = abi.encode(route);
             } else {
-                UniswapV3Route memory route = UniswapV3Route({
-                    pool: rc.pool,
-                    fee: rc.fee,
-                    isMultiHop: false,
-                    path: ""
-                });
+                UniswapV3Route memory route = UniswapV3Route({pool: rc.pool, fee: rc.fee, isMultiHop: false, path: ""});
                 routeData = abi.encode(route);
             }
         } else if (protocol == Protocol.Curve) {
@@ -2132,14 +2054,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             });
             routeData = abi.encode(route);
         } else if (protocol == Protocol.DirectMint) {
-            // ✅ FIX: Use specialContract from route, fallback to frxETHMinter
-            address minter = rc.specialContract != address(0)
-                ? rc.specialContract
-                : address(frxETHMinter);
+            //  FIX: Use specialContract from route, fallback to frxETHMinter
+            address minter = rc.specialContract != address(0) ? rc.specialContract : address(frxETHMinter);
             routeData = abi.encode(minter);
-        } else if (
-            protocol == Protocol.MultiHop || protocol == Protocol.MultiStep
-        ) {
+        } else if (protocol == Protocol.MultiHop || protocol == Protocol.MultiStep) {
             routeData = rc.path;
         }
 
@@ -2163,11 +2081,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         int128 tokenIndexOut,
         string calldata password
     ) public {
-        require(
-            keccak256(abi.encode(password, address(this))) ==
-                ROUTE_PASSWORD_HASH,
-            "Unauthorized"
-        );
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Unauthorized");
 
         routes[tokenIn][tokenOut] = RouteConfig({
             protocol: protocol,
@@ -2192,11 +2106,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address minterContract,
         string calldata password
     ) external {
-        require(
-            keccak256(abi.encode(password, address(this))) ==
-                ROUTE_PASSWORD_HASH,
-            "Unauthorized"
-        );
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Unauthorized");
 
         routes[tokenIn][tokenOut] = RouteConfig({
             protocol: Protocol.DirectMint,
@@ -2207,15 +2117,10 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             tokenIndexIn: 0,
             tokenIndexOut: 0,
             useUnderlying: false,
-            specialContract: minterContract // ✅ Store minter here
+            specialContract: minterContract //  Store minter here
         });
 
-        emit RouteConfigured(
-            tokenIn,
-            tokenOut,
-            Protocol.DirectMint,
-            minterContract
-        );
+        emit RouteConfigured(tokenIn, tokenOut, Protocol.DirectMint, minterContract);
     }
 
     // ============================================================================
@@ -2225,39 +2130,20 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     function setAuthorizedCaller(
         address caller,
         bool authorized
-    )
-        external
-        onlyOwner
-        configNotLocked(keccak256(abi.encode("authorizedCaller", caller)))
-    {
+    ) external onlyOwner configNotLocked(keccak256(abi.encode("authorizedCaller", caller))) {
         if (caller == address(0)) revert InvalidAddress();
         authorizedCallers[caller] = authorized;
-        emit AuthorizedCallerUpdated(
-            caller,
-            authorized,
-            msg.sender,
-            block.timestamp
-        );
+        emit AuthorizedCallerUpdated(caller, authorized, msg.sender, block.timestamp);
     }
 
     function setSlippageTolerance(
         address tokenIn,
         address tokenOut,
         uint256 slippageBps
-    )
-        external
-        onlyOwner
-        configNotLocked(keccak256(abi.encode("slippage", tokenIn, tokenOut)))
-    {
+    ) external onlyOwner configNotLocked(keccak256(abi.encode("slippage", tokenIn, tokenOut))) {
         if (slippageBps > MAX_SLIPPAGE) revert InvalidParameter("slippage");
         slippageTolerance[tokenIn][tokenOut] = slippageBps;
-        emit SlippageConfigured(
-            tokenIn,
-            tokenOut,
-            slippageBps,
-            msg.sender,
-            block.timestamp
-        );
+        emit SlippageConfigured(tokenIn, tokenOut, slippageBps, msg.sender, block.timestamp);
     }
 
     function enableCustomRoute(
@@ -2270,63 +2156,30 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
 
         customRouteEnabled[tokenIn][tokenOut] = enabled;
-        emit CustomRouteEnabled(
-            tokenIn,
-            tokenOut,
-            enabled,
-            msg.sender,
-            block.timestamp
-        );
+        emit CustomRouteEnabled(tokenIn, tokenOut, enabled, msg.sender, block.timestamp);
     }
 
-    function whitelistPool(
-        address pool,
-        bool status,
-        CurveInterface curveInterface
-    ) external onlyOwner {
+    function whitelistPool(address pool, bool status, CurveInterface curveInterface) external onlyOwner {
         whitelistedPools[pool] = status;
         if (status) {
             curvePoolInterfaces[pool] = curveInterface;
         }
-        emit PoolWhitelisted(
-            pool,
-            status,
-            curveInterface,
-            msg.sender,
-            block.timestamp
-        );
+        emit PoolWhitelisted(pool, status, curveInterface, msg.sender, block.timestamp);
     }
 
-    function supportToken(
-        address token,
-        bool status,
-        AssetType assetType,
-        uint8 decimals
-    ) external onlyOwner {
-        if (status && (decimals == 0 || decimals > 77))
-            revert InvalidDecimals();
+    function supportToken(address token, bool status, AssetType assetType, uint8 decimals) external onlyOwner {
+        if (status && (decimals == 0 || decimals > 77)) revert InvalidDecimals();
 
-        supportedTokens[token] = status;
+        farSupportedTokens[token] = status;
         if (status) {
             assetTypes[token] = assetType;
             tokenDecimals[token] = decimals;
         }
-        emit TokenSupported(
-            token,
-            status,
-            assetType,
-            decimals,
-            block.timestamp
-        );
+        emit TokenSupported(token, status, assetType, decimals, block.timestamp);
     }
 
-    function setCurvePoolConfig(
-        address pool,
-        uint256 tokenCount,
-        CurveInterface curveInterface
-    ) external onlyOwner {
-        if (tokenCount == 0 || tokenCount > MAX_CURVE_TOKENS)
-            revert InvalidParameter("tokenCount");
+    function setCurvePoolConfig(address pool, uint256 tokenCount, CurveInterface curveInterface) external onlyOwner {
+        if (tokenCount == 0 || tokenCount > MAX_CURVE_TOKENS) revert InvalidParameter("tokenCount");
         curvePoolTokenCounts[pool] = tokenCount;
         curvePoolInterfaces[pool] = curveInterface;
     }
@@ -2338,10 +2191,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         emit RouteManagerUpdated(oldManager, _routeManager, block.timestamp);
     }
 
-    function setTokenDecimals(
-        address token,
-        uint8 decimals
-    ) external onlyOwner {
+    function setTokenDecimals(address token, uint8 decimals) external onlyOwner {
         if (decimals == 0 || decimals > 77) revert InvalidDecimals();
         tokenDecimals[token] = decimals;
     }
@@ -2356,16 +2206,9 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
 
         for (uint256 i = 0; i < configs.length; i++) {
             OptimalSlippageConfig memory config = configs[i];
-            slippageTolerance[config.tokenIn][config.tokenOut] = config
-                .slippageBps;
+            slippageTolerance[config.tokenIn][config.tokenOut] = config.slippageBps;
 
-            emit SlippageConfigured(
-                config.tokenIn,
-                config.tokenOut,
-                config.slippageBps,
-                msg.sender,
-                block.timestamp
-            );
+            emit SlippageConfigured(config.tokenIn, config.tokenOut, config.slippageBps, msg.sender, block.timestamp);
         }
     }
 
@@ -2380,24 +2223,14 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         address[] calldata tokenOuts,
         uint256[] calldata slippages
     ) external onlyOwner {
-        require(
-            tokenIns.length == tokenOuts.length &&
-                tokenOuts.length == slippages.length,
-            "Array length mismatch"
-        );
+        require(tokenIns.length == tokenOuts.length && tokenOuts.length == slippages.length, "Array length mismatch");
 
         for (uint256 i = 0; i < tokenIns.length; i++) {
             require(slippages[i] <= MAX_SLIPPAGE, "Slippage too high");
 
             slippageTolerance[tokenIns[i]][tokenOuts[i]] = slippages[i];
 
-            emit SlippageConfigured(
-                tokenIns[i],
-                tokenOuts[i],
-                slippages[i],
-                msg.sender,
-                block.timestamp
-            );
+            emit SlippageConfigured(tokenIns[i], tokenOuts[i], slippages[i], msg.sender, block.timestamp);
         }
     }
 
@@ -2405,38 +2238,19 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     // EMERGENCY CONTROLS (keeping all existing emergency functions unchanged)
     // ============================================================================
 
-    function emergencyPausePool(
-        address pool,
-        string calldata reason
-    ) external onlyOwner {
+    function emergencyPausePool(address pool, string calldata reason) external onlyOwner {
         poolPaused[pool] = true;
         emit PoolEmergencyPaused(pool, msg.sender, reason, block.timestamp);
     }
 
-    function emergencyPauseProtocol(
-        Protocol protocol,
-        string calldata reason
-    ) external onlyOwner {
+    function emergencyPauseProtocol(Protocol protocol, string calldata reason) external onlyOwner {
         protocolPaused[protocol] = true;
-        emit ProtocolEmergencyPaused(
-            protocol,
-            msg.sender,
-            reason,
-            block.timestamp
-        );
+        emit ProtocolEmergencyPaused(protocol, msg.sender, reason, block.timestamp);
     }
 
-    function emergencyRevokeApproval(
-        address token,
-        address spender
-    ) external onlyOwner {
+    function emergencyRevokeApproval(address token, address spender) external onlyOwner {
         IERC20(token).safeApprove(spender, 0);
-        emit EmergencyApprovalRevoked(
-            token,
-            spender,
-            msg.sender,
-            block.timestamp
-        );
+        emit EmergencyApprovalRevoked(token, spender, msg.sender, block.timestamp);
     }
 
     function unpausePool(address pool) external onlyOwner {
@@ -2447,11 +2261,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         protocolPaused[protocol] = false;
     }
 
-    function emergencyWithdraw(
-        address token,
-        uint256 amount,
-        address recipient
-    ) external onlyOwner {
+    function emergencyWithdraw(address token, uint256 amount, address recipient) external onlyOwner {
         if (!paused()) revert InvalidParameter("notPaused");
         if (recipient == address(0)) revert InvalidAddress();
 
@@ -2479,49 +2289,19 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         return authorizedCallers[caller];
     }
 
-    function getSlippageTolerance(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (uint256) {
+    function getSlippageTolerance(address tokenIn, address tokenOut) external view returns (uint256) {
         uint256 configured = slippageTolerance[tokenIn][tokenOut];
-        return
-            configured == 0
-                ? _getDefaultSlippage(tokenIn, tokenOut)
-                : configured;
+        return configured == 0 ? _getDefaultSlippage(tokenIn, tokenOut) : configured;
     }
 
-    function getTokenInfo(
-        address token
-    )
-        external
-        view
-        returns (bool supported, AssetType assetType, uint8 decimals)
-    {
-        return (
-            supportedTokens[token],
-            assetTypes[token],
-            tokenDecimals[token]
-        );
+    function getFARTokenInfo(address token) external view returns (bool supported, AssetType assetType, uint8 decimals) {
+        return (farSupportedTokens[token], assetTypes[token], tokenDecimals[token]);
     }
 
     function getPoolInfo(
         address pool
-    )
-        external
-        view
-        returns (
-            bool whitelisted,
-            bool paused,
-            uint256 tokenCount,
-            CurveInterface curveInterface
-        )
-    {
-        return (
-            whitelistedPools[pool],
-            poolPaused[pool],
-            curvePoolTokenCounts[pool],
-            curvePoolInterfaces[pool]
-        );
+    ) external view returns (bool whitelisted, bool paused, uint256 tokenCount, CurveInterface curveInterface) {
+        return (whitelistedPools[pool], poolPaused[pool], curvePoolTokenCounts[pool], curvePoolInterfaces[pool]);
     }
 
     function calculateSwapOutput(
@@ -2537,21 +2317,15 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         minOut = (normalizedOut * (10000 - slippageBps)) / 10000;
     }
 
-    function isCustomRouteEnabled(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (bool) {
+    function isCustomRouteEnabled(address tokenIn, address tokenOut) external view returns (bool) {
         return customRouteEnabled[tokenIn][tokenOut];
     }
 
-    function getDefaultSlippage(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (uint256) {
+    function getDefaultSlippage(address tokenIn, address tokenOut) external view returns (uint256) {
         return _getDefaultSlippage(tokenIn, tokenOut);
     }
     // ============================================================================
-    // DYNAMIC DEX REGISTRY FUNCTIONS (NEW FEATURE)
+    // DYNAMIC DEX REGISTRY FUNCTIONS 
     // ============================================================================
 
     /**
@@ -2560,11 +2334,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @param name DEX name for identification
      * @param password safe password
      */
-    function registerDEX(
-        address dex,
-        string calldata name,
-        string calldata password
-    ) external onlyOwner {
+    function registerDEX(address dex, string calldata name, string calldata password) external onlyOwner {
         bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
         if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
         if (dex == address(0)) revert InvalidAddress();
@@ -2598,9 +2368,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         // Remove from array (optional - can skip for gas efficiency)
         for (uint256 i = 0; i < allRegisteredDEXes.length; i++) {
             if (allRegisteredDEXes[i] == dex) {
-                allRegisteredDEXes[i] = allRegisteredDEXes[
-                    allRegisteredDEXes.length - 1
-                ];
+                allRegisteredDEXes[i] = allRegisteredDEXes[allRegisteredDEXes.length - 1];
                 allRegisteredDEXes.pop();
                 break;
             }
@@ -2626,20 +2394,13 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         uint256 amountIn,
         bytes calldata callData,
         string calldata password
-    )
-        external
-        payable
-        onlyRouteManager
-        nonReentrant
-        whenNotPaused
-        returns (uint256 amountOut)
-    {
+    ) external payable onlyRouteManager nonReentrant whenNotPaused returns (uint256 amountOut) {
         bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
         if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
         if (!registeredDEXes[dex]) revert DEXNotRegistered();
         if (amountIn == 0) revert ZeroAmount();
 
-        // ✅ NEW: VALIDATE FUNCTION SELECTOR SECURITY
+        //  VALIDATE FUNCTION SELECTOR SECURITY
         if (callData.length >= 4) {
             bytes4 selector;
             assembly {
@@ -2657,11 +2418,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         if (tokenIn == ETH_ADDRESS) {
             if (msg.value != amountIn) revert InvalidParameter("ethAmount");
         } else {
-            IERC20(tokenIn).safeTransferFrom(
-                msg.sender,
-                address(this),
-                amountIn
-            );
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
             if (tokenIn != address(WETH)) {
                 IERC20(tokenIn).safeApprove(dex, amountIn);
             }
@@ -2675,16 +2432,14 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             balanceBefore = IERC20(tokenOut).balanceOf(address(this));
         }
 
-        // ✅ MODIFIED: Use constant for gas limit
+        //  MODIFIED: Use constant for gas limit
         (bool success, bytes memory result) = dex.call{
             value: tokenIn == ETH_ADDRESS ? amountIn : 0,
             gas: MAX_DEX_GAS_LIMIT
         }(callData);
 
         if (!success) {
-            string memory reason = result.length > 0
-                ? abi.decode(result, (string))
-                : "Unknown error";
+            string memory reason = result.length > 0 ? abi.decode(result, (string)) : "Unknown error";
             revert BackendSwapFailed(reason);
         }
 
@@ -2707,14 +2462,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
             IERC20(tokenIn).safeApprove(dex, 0);
         }
 
-        emit BackendSwapExecuted(
-            dex,
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            block.timestamp
-        );
+        emit BackendSwapExecuted(dex, tokenIn, tokenOut, amountIn, amountOut, block.timestamp);
     }
 
     /**
@@ -2735,7 +2483,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // SECURITY FUNCTIONS (NEW)
+    // SECURITY FUNCTIONS 
     // ============================================================================
 
     /**
@@ -2757,12 +2505,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         dangerousSelectors[selector] = true;
         allDangerousSelectors.push(selector);
 
-        emit DangerousSelectorAdded(
-            selector,
-            reason,
-            msg.sender,
-            block.timestamp
-        );
+        emit DangerousSelectorAdded(selector, reason, msg.sender, block.timestamp);
     }
 
     /**
@@ -2770,10 +2513,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @param selector Function selector to remove
      * @param password Security password
      */
-    function removeDangerousSelector(
-        bytes4 selector,
-        string calldata password
-    ) external onlyOwner {
+    function removeDangerousSelector(bytes4 selector, string calldata password) external onlyOwner {
         bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
         if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
 
@@ -2784,9 +2524,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         // Remove from array (optional for gas efficiency)
         for (uint256 i = 0; i < allDangerousSelectors.length; i++) {
             if (allDangerousSelectors[i] == selector) {
-                allDangerousSelectors[i] = allDangerousSelectors[
-                    allDangerousSelectors.length - 1
-                ];
+                allDangerousSelectors[i] = allDangerousSelectors[allDangerousSelectors.length - 1];
                 allDangerousSelectors.pop();
                 break;
             }
@@ -2810,9 +2548,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @param selector Function selector to check
      * @return isDangerous Whether selector is blacklisted
      */
-    function isSelectorDangerous(
-        bytes4 selector
-    ) external view returns (bool isDangerous) {
+    function isSelectorDangerous(bytes4 selector) external view returns (bool isDangerous) {
         return dangerousSelectors[selector];
     }
 
@@ -2820,11 +2556,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @notice Get all dangerous selectors
      * @return selectors Array of blacklisted selectors
      */
-    function getAllDangerousSelectors()
-        external
-        view
-        returns (bytes4[] memory)
-    {
+    function getAllDangerousSelectors() external view returns (bytes4[] memory) {
         return allDangerousSelectors;
     }
 
@@ -2857,11 +2589,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
      * @notice Get standard dangerous selectors
      * @return selectors Array of dangerous function selectors
      */
-    function _getStandardDangerousSelectors()
-        internal
-        pure
-        returns (bytes4[] memory selectors)
-    {
+    function _getStandardDangerousSelectors() internal pure returns (bytes4[] memory selectors) {
         selectors = new bytes4[](15);
         selectors[0] = bytes4(keccak256("selfdestruct(address)"));
         selectors[1] = bytes4(keccak256("delegatecall(address,bytes)"));
@@ -2870,9 +2598,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         selectors[4] = bytes4(keccak256("create2(uint256,bytes32,bytes)"));
         selectors[5] = bytes4(keccak256("staticcall(address,bytes)"));
         selectors[6] = bytes4(keccak256("callcode(address,bytes)"));
-        selectors[7] = bytes4(
-            keccak256("extcodecopy(address,uint256,uint256,uint256)")
-        );
+        selectors[7] = bytes4(keccak256("extcodecopy(address,uint256,uint256,uint256)"));
         selectors[8] = bytes4(keccak256("setOwner(address)"));
         selectors[9] = bytes4(keccak256("transferOwnership(address)"));
         selectors[10] = bytes4(keccak256("changeOwner(address)"));
@@ -2884,7 +2610,7 @@ contract FinalAutoRouting is Ownable, ReentrancyGuard, Pausable {
         return selectors;
     }
     // ============================================================================
-    // DYNAMIC DEX REGISTRY FUNCTIONS (NEW FEATURE)
+    // DYNAMIC DEX REGISTRY FUNCTIONS 
     // ============================================================================
 
     receive() external payable {}
