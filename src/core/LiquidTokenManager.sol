@@ -8,11 +8,13 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Upgradeable} from "@openzeppelin-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import {FinalAutoRoutingLib} from "../FinalAutoRoutingLib.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-
+import {IWETH} from "../interfaces/IWETH.sol";
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -21,6 +23,7 @@ import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
+/// @dev Implements ILiquidTokenManager and uses OpenZeppelin's upgradeable contracts
 contract LiquidTokenManager is
     ILiquidTokenManager,
     Initializable,
@@ -29,27 +32,34 @@ contract LiquidTokenManager is
 {
     using SafeERC20 for IERC20;
     using Math for uint256;
+    /// @notice Role identifier for price update operations
+    bytes32 public constant STRATEGY_CONTROLLER_ROLE =
+        keccak256("STRATEGY_CONTROLLER_ROLE");
 
-    // ------------------------------------------------------------------------------
-    // State
-    // ------------------------------------------------------------------------------
+    /// @notice Role identifier for price update operations
+    bytes32 public constant PRICE_UPDATER_ROLE =
+        keccak256("PRICE_UPDATER_ROLE");
+    address private constant ETH_ADDRESS =
+        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    /// @notice Role identifier for staking operations
-    bytes32 public constant STRATEGY_CONTROLLER_ROLE = keccak256("STRATEGY_CONTROLLER_ROLE");
+    // ✅ ADDED: Library constants
+    address private constant UNISWAP_ROUTER =
+        0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address private constant FRXETH_MINTER =
+        0xbAFA44EFE7901E04E39Dad13167D089C559c1138;
+    address private constant STETH_CURVE_POOL =
+        0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
 
-    /// @notice Role identifier for asset price update operations
-    bytes32 public constant PRICE_UPDATER_ROLE = keccak256("PRICE_UPDATER_ROLE");
-
-    /// @notice Number of decimal places used for price representation
-    uint256 public constant PRICE_DECIMALS = 18;
-
-    /// @notice EigenLayer contracts
+    /// @notice The EigenLayer StrategyManager contract
     IStrategyManager public strategyManager;
+    /// @notice The EigenLayer DelegationManager contract
     IDelegationManager public delegationManager;
-
-    /// @notice LAT contracts
-    ILiquidToken public liquidToken;
+    /// @notice The StakerNodeCoordinator contract
     IStakerNodeCoordinator public stakerNodeCoordinator;
+    /// @notice The LiquidToken contract
+    ILiquidToken public liquidToken;
+    /// @notice The TokenRegistryOracle contract
     ITokenRegistryOracle public tokenRegistryOracle;
 
     /// @notice Mapping of tokens to their corresponding token info
@@ -58,22 +68,26 @@ contract LiquidTokenManager is
     /// @notice Mapping of tokens to their corresponding strategies
     mapping(IERC20 => IStrategy) public tokenStrategies;
 
-    /// @notice Mapping of strategies to their corresponding tokens (reverse of `tokenStrategies`)
-    mapping(IStrategy => IERC20) public strategyTokens;
+    FinalAutoRoutingLib.FullConfig private autoRoutingConfig;
 
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
 
-    // ------------------------------------------------------------------------------
-    // Init functions
-    // ------------------------------------------------------------------------------
+    /// @notice Number of decimal places used for price representation
+    uint256 public constant PRICE_DECIMALS = 18;
+
+    // ✅ ADDED: Events
+    event AutoRoutingInitialized(address indexed initializer);
+    event PoolConfigured(address indexed pool, bool whitelisted);
+    event SecurityConfigUpdated(address indexed updater);
 
     /// @dev Disables initializers for the implementation contract
     constructor() {
         _disableInitializers();
     }
 
-    /// @inheritdoc ILiquidTokenManager
+    /// @notice Initializes the contract
+    /// @param init Initialization parameters
     function initialize(Init memory init) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -98,13 +112,109 @@ contract LiquidTokenManager is
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
+
+        // No token population allowed here!
     }
 
-    // ------------------------------------------------------------------------------
-    // Core functions
-    // ------------------------------------------------------------------------------
+    // ✅ ADDED: Auto routing initialization function
+    /// @notice Initializes the auto routing configuration with essential pools and security settings
+    function initializeAutoRouting() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // Initialize critical Curve pools
+        autoRoutingConfig.pools[STETH_CURVE_POOL] = FinalAutoRoutingLib
+            .PoolConfig({
+                whitelisted: true,
+                paused: false,
+                curveInterface: FinalAutoRoutingLib.CurveInterface.Exchange,
+                tokenCount: 2
+            });
 
-    /// @inheritdoc ILiquidTokenManager
+        autoRoutingConfig.pools[
+            0xA96A65c051bF88B4095Ee1f2451C2A9d43F53Ae2
+        ] = FinalAutoRoutingLib.PoolConfig({
+            whitelisted: true,
+            paused: false,
+            curveInterface: FinalAutoRoutingLib.CurveInterface.Exchange,
+            tokenCount: 2
+        });
+
+        autoRoutingConfig.pools[
+            0x59Ab5a5b5d617E478a2479B0cAD80DA7e2831492
+        ] = FinalAutoRoutingLib.PoolConfig({
+            whitelisted: true,
+            paused: false,
+            curveInterface: FinalAutoRoutingLib.CurveInterface.Exchange,
+            tokenCount: 2
+        });
+
+        autoRoutingConfig.pools[
+            0xa1F8A6807c402E4A15ef4EBa36528A3FED24E577
+        ] = FinalAutoRoutingLib.PoolConfig({
+            whitelisted: true,
+            paused: false,
+            curveInterface: FinalAutoRoutingLib.CurveInterface.Exchange,
+            tokenCount: 2
+        });
+
+        autoRoutingConfig.pools[
+            0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d
+        ] = FinalAutoRoutingLib.PoolConfig({
+            whitelisted: true,
+            paused: false,
+            curveInterface: FinalAutoRoutingLib.CurveInterface.Exchange,
+            tokenCount: 2
+        });
+
+        // Initialize security settings
+        autoRoutingConfig.security.registeredDEXes = new address[](4);
+        autoRoutingConfig.security.registeredDEXes[0] = UNISWAP_ROUTER;
+        autoRoutingConfig.security.registeredDEXes[1] = FRXETH_MINTER;
+        autoRoutingConfig.security.registeredDEXes[2] = STETH_CURVE_POOL;
+        autoRoutingConfig.security.registeredDEXes[3] = WETH;
+
+        // Initialize protocol pause settings (all false = enabled)
+        autoRoutingConfig.protocolPause = FinalAutoRoutingLib.ProtocolPause({
+            uniswapV3Paused: false,
+            curvePaused: false,
+            directMintPaused: false,
+            multiHopPaused: false,
+            multiStepPaused: false
+        });
+
+        emit AutoRoutingInitialized(msg.sender);
+    }
+
+    // ✅ ADDED: Pool configuration function
+    /// @notice Configures a pool for auto routing
+    /// @param pool Pool address
+    /// @param whitelisted Whether the pool is whitelisted
+    /// @param curveInterface Curve interface type
+    /// @param tokenCount Number of tokens in the pool
+    function configurePool(
+        address pool,
+        bool whitelisted,
+        FinalAutoRoutingLib.CurveInterface curveInterface,
+        uint256 tokenCount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        autoRoutingConfig.pools[pool] = FinalAutoRoutingLib.PoolConfig({
+            whitelisted: whitelisted,
+            paused: false,
+            curveInterface: curveInterface,
+            tokenCount: tokenCount
+        });
+
+        emit PoolConfigured(pool, whitelisted);
+    }
+
+    /// @notice Adds a new token to the registry and configures its price sources
+    /// @param token Address of the token to add
+    /// @param decimals Number of decimals for the token
+    /// @param volatilityThreshold Volatility threshold for price updates
+    /// @param strategy Strategy corresponding to the token
+    /// @param primaryType Source type (1=Chainlink, 2=Curve, 3=Protocol , primarysource0 related to native tokens that get handle differently)
+    /// @param primarySource Primary source address
+    /// @param needsArg Whether fallback fn needs args
+    /// @param fallbackSource Address of the fallback source contract
+    /// @param fallbackFn Function selector for fallback
     function addToken(
         IERC20 token,
         uint8 decimals,
@@ -116,20 +226,22 @@ contract LiquidTokenManager is
         address fallbackSource,
         bytes4 fallbackFn
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (address(tokenStrategies[token]) != address(0)) revert TokenExists(address(token));
+        if (address(tokenStrategies[token]) != address(0))
+            revert TokenExists(address(token));
         if (address(token) == address(0)) revert ZeroAddress();
         if (decimals == 0) revert InvalidDecimals();
-        if (volatilityThreshold != 0 && (volatilityThreshold < 1e16 || volatilityThreshold > 1e18))
-            revert InvalidThreshold();
+        if (
+            volatilityThreshold != 0 &&
+            (volatilityThreshold < 1e16 || volatilityThreshold > 1e18)
+        ) revert InvalidThreshold();
         if (address(strategy) == address(0)) revert ZeroAddress();
-        if (address(strategyTokens[strategy]) != address(0)) {
-            revert StrategyAlreadyAssigned(address(strategy), address(strategyTokens[strategy]));
-        }
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
-        if (!isNative && (primaryType < 1 || primaryType > 3)) revert InvalidPriceSource();
-        if (!isNative && primarySource == address(0)) revert InvalidPriceSource();
+        if (!isNative && (primaryType < 1 || primaryType > 3))
+            revert InvalidPriceSource();
+        if (!isNative && primarySource == address(0))
+            revert InvalidPriceSource();
         if (!isNative) {
             tokenRegistryOracle.configureToken(
                 address(token),
@@ -141,13 +253,17 @@ contract LiquidTokenManager is
             );
         }
 
-        try IERC20Metadata(address(token)).decimals() returns (uint8 decimalsFromContract) {
+        try IERC20Metadata(address(token)).decimals() returns (
+            uint8 decimalsFromContract
+        ) {
             if (decimalsFromContract == 0) revert InvalidDecimals();
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
+
         uint256 fetchedPrice;
         if (!isNative) {
-            (uint256 price, bool ok) = tokenRegistryOracle._getTokenPrice_getter(address(token));
+            (uint256 price, bool ok) = tokenRegistryOracle
+                ._getTokenPrice_getter(address(token));
             if (!ok || price == 0) revert TokenPriceFetchFailed();
             fetchedPrice = price;
         } else {
@@ -160,13 +276,20 @@ contract LiquidTokenManager is
             volatilityThreshold: volatilityThreshold
         });
         tokenStrategies[token] = strategy;
-        strategyTokens[strategy] = token;
         supportedTokens.push(token);
 
-        emit TokenAdded(token, decimals, fetchedPrice, volatilityThreshold, address(strategy), msg.sender);
+        emit TokenAdded(
+            token,
+            decimals,
+            fetchedPrice,
+            volatilityThreshold,
+            address(strategy),
+            msg.sender
+        );
     }
 
-    /// @inheritdoc ILiquidTokenManager
+    /// @notice Removes a token from the registry
+    /// @param token Address of the token to remove
     function removeToken(IERC20 token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         TokenInfo memory info = tokens[token];
         if (info.decimals == 0) revert TokenNotSupported(token);
@@ -174,63 +297,83 @@ contract LiquidTokenManager is
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = token;
 
+        // Convert to IERC20Upgradeable array for interface calls
+        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
+            1
+        );
+        upgradeableAssets[0] = IERC20Upgradeable(address(token));
+
         // Check for unstaked balances
-        if (liquidToken.balanceAssets(assets)[0] > 0) revert TokenInUse(token);
+        if (liquidToken.balanceAssets(upgradeableAssets)[0] > 0)
+            revert TokenInUse(token);
 
         // Check for pending withdrawal balances
-        if (liquidToken.balanceQueuedAssets(assets)[0] > 0) revert TokenInUse(token);
+        if (liquidToken.balanceQueuedAssets(upgradeableAssets)[0] > 0)
+            revert TokenInUse(token);
 
-        // Check for staked withdrawable balances
+        // Cache nodes array and length
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         uint256 len = nodes.length;
 
+        // Use unchecked for counter increment since i < len
         unchecked {
             for (uint256 i = 0; i < len; i++) {
-                uint256 stakedWithdrawableBalance = getWithdrawableAssetBalanceNode(token, nodes[i].getId());
-                if (stakedWithdrawableBalance > 0) {
+                uint256 stakedBalance = getStakedAssetBalanceNode(
+                    token,
+                    nodes[i].getId()
+                );
+                if (stakedBalance > 0) {
                     revert TokenInUse(token);
                 }
             }
         }
 
+        // Cache supportedTokens length
         uint256 tokenCount = supportedTokens.length;
         for (uint256 i = 0; i < tokenCount; i++) {
             if (supportedTokens[i] == token) {
+                // Move the last element to the position being removed
                 supportedTokens[i] = supportedTokens[tokenCount - 1];
                 supportedTokens.pop();
                 break;
             }
         }
 
-        // Remove token from TRO
+        // Call tokenRegistryOracle's removeToken function
         tokenRegistryOracle.removeToken(address(token));
 
-        // Delete token strategy mapping and its reverse mapping
-        IStrategy strategy = tokenStrategies[token];
-        if (address(strategy) != address(0)) {
-            delete strategyTokens[strategy];
-        }
-        delete tokenStrategies[token];
         delete tokens[token];
+        delete tokenStrategies[token];
 
         emit TokenRemoved(token, msg.sender);
     }
 
-    /// @inheritdoc ILiquidTokenManager
-    function updatePrice(IERC20 token, uint256 newPrice) external onlyRole(PRICE_UPDATER_ROLE) {
+    /// @notice Updates the price of a token
+    /// @param token Address of the token to update
+    /// @param newPrice New price for the token
+    function updatePrice(
+        IERC20 token,
+        uint256 newPrice
+    ) external onlyRole(PRICE_UPDATER_ROLE) {
         if (tokens[token].decimals == 0) revert TokenNotSupported(token);
         if (newPrice == 0) revert InvalidPrice();
 
         uint256 oldPrice = tokens[token].pricePerUnit;
         if (oldPrice == 0) revert InvalidPrice();
 
-        // Find the ratio of price change and compare it against the asset's volatility threshold
         if (tokens[token].volatilityThreshold != 0) {
-            uint256 absPriceDiff = (newPrice > oldPrice) ? newPrice - oldPrice : oldPrice - newPrice;
+            uint256 absPriceDiff = (newPrice > oldPrice)
+                ? newPrice - oldPrice
+                : oldPrice - newPrice;
             uint256 changeRatio = (absPriceDiff * 1e18) / oldPrice;
 
             if (changeRatio > tokens[token].volatilityThreshold) {
-                emit VolatilityCheckFailed(token, oldPrice, newPrice, changeRatio);
+                emit VolatilityCheckFailed(
+                    token,
+                    oldPrice,
+                    newPrice,
+                    changeRatio
+                );
                 revert VolatilityThresholdHit(token, changeRatio);
             }
         }
@@ -239,40 +382,83 @@ contract LiquidTokenManager is
         emit TokenPriceUpdated(token, oldPrice, newPrice, msg.sender);
     }
 
-    /// @inheritdoc ILiquidTokenManager
-    function setVolatilityThreshold(IERC20 asset, uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (address(asset) == address(0)) revert ZeroAddress();
-        if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
-        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18)) revert InvalidThreshold();
-
-        emit VolatilityThresholdUpdated(asset, tokens[asset].volatilityThreshold, newThreshold, msg.sender);
-
-        tokens[asset].volatilityThreshold = newThreshold;
+    /// @notice Checks if a token is supported
+    /// @param token Address of the token to check
+    /// @return bool indicating whether the token is supported
+    function tokenIsSupported(IERC20 token) external view returns (bool) {
+        return tokens[token].decimals != 0;
     }
 
-    /// @inheritdoc ILiquidTokenManager
-    function delegateNodes(
-        uint256[] calldata nodeIds,
-        address[] calldata operators,
-        ISignatureUtilsMixinTypes.SignatureWithExpiry[] calldata approverSignatureAndExpiries,
-        bytes32[] calldata approverSalts
-    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
-        uint256 arrayLength = nodeIds.length;
+    /// @notice Converts a token amount to the unit of account
+    /// @param token Address of the token to convert
+    /// @param amount Amount of tokens to convert
+    /// @return The converted amount in the unit of account
+    function convertToUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
 
-        if (operators.length != arrayLength) revert LengthMismatch(operators.length, arrayLength);
-        if (approverSignatureAndExpiries.length != arrayLength)
-            revert LengthMismatch(approverSignatureAndExpiries.length, arrayLength);
-        if (approverSalts.length != arrayLength) revert LengthMismatch(approverSalts.length, arrayLength);
+        return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
+    }
 
-        // Call for nodes to delegate themselves (on EigenLayer) to corresponding operators
-        for (uint256 i = 0; i < arrayLength; i++) {
-            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
-            node.delegate(operators[i], approverSignatureAndExpiries[i], approverSalts[i]);
-            emit NodeDelegated(nodeIds[i], operators[i]);
+    /// @notice Converts an amount in the unit of account to a token amount
+    /// @param token Address of the token to convert to
+    /// @param amount Amount in the unit of account to convert
+    /// @return The converted amount in the specified token
+    function convertFromUnitOfAccount(
+        IERC20 token,
+        uint256 amount
+    ) external view returns (uint256) {
+        TokenInfo memory info = tokens[token];
+        if (info.decimals == 0) revert TokenNotSupported(token);
+
+        return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
+    }
+
+    /// @notice Retrieves the list of supported tokens
+    /// @return An array of addresses of supported tokens
+    function getSupportedTokens() external view returns (IERC20[] memory) {
+        return supportedTokens;
+    }
+
+    /// @notice Retrieves the information for a specific token
+    /// @param token Address of the token to get information for
+    /// @return TokenInfo struct containing the token's information
+    function getTokenInfo(
+        IERC20 token
+    ) external view returns (TokenInfo memory) {
+        if (address(token) == address(0)) revert ZeroAddress();
+
+        TokenInfo memory tokenInfo = tokens[token];
+
+        if (tokenInfo.decimals == 0) {
+            revert TokenNotSupported(token);
         }
+
+        return tokenInfo;
     }
 
-    /// @inheritdoc ILiquidTokenManager
+    /// @notice Returns the strategy for a given asset
+    /// @param asset Asset to get the strategy for
+    /// @return IStrategy Interface for the corresponding strategy
+    function getTokenStrategy(IERC20 asset) external view returns (IStrategy) {
+        if (address(asset) == address(0)) revert ZeroAddress();
+
+        IStrategy strategy = tokenStrategies[asset];
+
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        return strategy;
+    }
+
+    /// @notice Stakes assets to a specific node
+    /// @param nodeId The ID of the node to stake to
+    /// @param assets Array of asset addresses to stake
+    /// @param amounts Array of amounts to stake for each asset
     function stakeAssetsToNode(
         uint256 nodeId,
         IERC20[] memory assets,
@@ -281,18 +467,30 @@ contract LiquidTokenManager is
         _stakeAssetsToNode(nodeId, assets, amounts);
     }
 
-    /// @inheritdoc ILiquidTokenManager
+    /// @notice Stakes assets to multiple nodes
+    /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(
         NodeAllocation[] calldata allocations
     ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
         for (uint256 i = 0; i < allocations.length; i++) {
             NodeAllocation memory allocation = allocations[i];
-            _stakeAssetsToNode(allocation.nodeId, allocation.assets, allocation.amounts);
+            _stakeAssetsToNode(
+                allocation.nodeId,
+                allocation.assets,
+                allocation.amounts
+            );
         }
     }
 
-    /// @dev Called by `stakeAssetsToNode` and `stakeAssetsToNodes`
-    function _stakeAssetsToNode(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) internal {
+    /// @notice Internal function to stake assets to a node
+    /// @param nodeId The ID of the node to stake to
+    /// @param assets Array of asset addresses to stake
+    /// @param amounts Array of amounts to stake for each asset
+    function _stakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) internal {
         uint256 assetsLength = assets.length;
         uint256 amountsLength = amounts.length;
 
@@ -302,7 +500,6 @@ contract LiquidTokenManager is
 
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
 
-        // Find EigenLayer strategies for the given assets
         IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
         for (uint256 i = 0; i < assetsLength; i++) {
             IERC20 asset = assets[i];
@@ -316,13 +513,19 @@ contract LiquidTokenManager is
             strategiesForNode[i] = strategy;
         }
 
-        // Bring unstaked assets in from `LiquidToken`
-        liquidToken.transferAssets(assets, amounts);
+        // Convert to IERC20Upgradeable array for interface calls
+        IERC20Upgradeable[] memory upgradeableAssets = new IERC20Upgradeable[](
+            assetsLength
+        );
+        for (uint256 i = 0; i < assetsLength; i++) {
+            upgradeableAssets[i] = IERC20Upgradeable(address(assets[i]));
+        }
+
+        liquidToken.transferAssets(upgradeableAssets, amounts);
 
         IERC20[] memory depositAssets = new IERC20[](assetsLength);
         uint256[] memory depositAmounts = new uint256[](amountsLength);
 
-        // Transfer assets to node
         for (uint256 i = 0; i < assetsLength; i++) {
             depositAssets[i] = assets[i];
             depositAmounts[i] = amounts[i];
@@ -331,12 +534,220 @@ contract LiquidTokenManager is
 
         emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
 
-        // Call for node to deposit assets into EigenLayer
         node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
 
-        emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
+        emit AssetsDepositedToEigenlayer(
+            depositAssets,
+            depositAmounts,
+            strategiesForNode,
+            address(node)
+        );
     }
 
+    /// @notice Swaps and stakes assets to a specific node
+    /// @param nodeId The ID of the node to stake to
+    /// @param sourceAssets Array of source asset addresses to swap from
+    /// @param sourceAmounts Array of amounts for each source asset
+    /// @param targetAssets Array of target asset addresses to swap to and stake
+    /// @param minTargetAmounts Array of minimum amounts expected for each target asset
+    function swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory sourceAssets,
+        uint256[] memory sourceAmounts,
+        IERC20[] memory targetAssets,
+        uint256[] memory minTargetAmounts
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+        uint256 sourceLength = sourceAssets.length;
+        uint256 targetLength = targetAssets.length;
+
+        if (sourceLength != sourceAmounts.length) {
+            revert LengthMismatch(sourceLength, sourceAmounts.length);
+        }
+        if (targetLength != minTargetAmounts.length) {
+            revert LengthMismatch(targetLength, minTargetAmounts.length);
+        }
+        if (sourceLength != targetLength) {
+            revert LengthMismatch(sourceLength, targetLength);
+        }
+
+        // Step 1: Transfer source assets from LiquidToken (existing pattern)
+        IERC20Upgradeable[]
+            memory upgradeableSourceAssets = new IERC20Upgradeable[](
+                sourceLength
+            );
+        for (uint256 i = 0; i < sourceLength; i++) {
+            upgradeableSourceAssets[i] = IERC20Upgradeable(
+                address(sourceAssets[i])
+            );
+        }
+        liquidToken.transferAssets(upgradeableSourceAssets, sourceAmounts);
+
+        // Step 2: Perform swaps using our library
+        uint256[] memory swappedAmounts = new uint256[](targetLength);
+        for (uint256 i = 0; i < sourceLength; i++) {
+            if (sourceAssets[i] == targetAssets[i]) {
+                // No swap needed
+                swappedAmounts[i] = sourceAmounts[i];
+            } else {
+                // Perform swap
+                swappedAmounts[i] = _performSwap(
+                    address(sourceAssets[i]),
+                    address(targetAssets[i]),
+                    sourceAmounts[i],
+                    minTargetAmounts[i]
+                );
+            }
+        }
+
+        // Step 3: Proceed with existing staking logic
+        _stakeAssetsToNode(nodeId, targetAssets, swappedAmounts);
+    }
+
+    /// @notice Internal function to perform asset swap using the library
+    /// @param tokenIn Input token address
+    /// @param tokenOut Output token address
+    /// @param amountIn Amount of input tokens
+    /// @param minAmountOut Minimum amount of output tokens
+    /// @return amountOut Actual amount received
+    function _performSwap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal returns (uint256 amountOut) {
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(address(this));
+
+        try
+            FinalAutoRoutingLib.getSwapInstructions(
+                tokenIn,
+                tokenOut,
+                amountIn,
+                minAmountOut,
+                address(this),
+                autoRoutingConfig
+            )
+        returns (FinalAutoRoutingLib.SwapInstructions memory instructions) {
+            _executeSwapInstruction(instructions);
+        } catch {
+            // Try multi-step if direct swap fails
+            FinalAutoRoutingLib.MultiStepInstructions
+                memory multiStepInstructions = FinalAutoRoutingLib
+                    .getMultiStepInstructions(
+                        tokenIn,
+                        tokenOut,
+                        amountIn,
+                        minAmountOut,
+                        address(this),
+                        autoRoutingConfig
+                    );
+            _executeMultiStepInstructions(multiStepInstructions);
+        }
+
+        uint256 balanceAfter = IERC20(tokenOut).balanceOf(address(this));
+        amountOut = balanceAfter - balanceBefore;
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput();
+        }
+    }
+
+    /// @notice Executes a single swap instruction
+    function _executeSwapInstruction(
+        FinalAutoRoutingLib.SwapInstructions memory instruction
+    ) internal {
+        if (instruction.approvalToken != address(0)) {
+            IERC20(instruction.approvalToken).safeApprove(
+                instruction.approvalTarget,
+                0
+            );
+            IERC20(instruction.approvalToken).safeApprove(
+                instruction.approvalTarget,
+                type(uint256).max
+            );
+        }
+
+        (bool success, ) = instruction.target.call{value: instruction.value}(
+            instruction.callData
+        );
+        if (!success) revert SwapFailed();
+
+        if (instruction.approvalToken != address(0)) {
+            IERC20(instruction.approvalToken).safeApprove(
+                instruction.approvalTarget,
+                0
+            );
+        }
+    }
+
+    /// @notice Executes multi-step swap instructions
+    function _executeMultiStepInstructions(
+        FinalAutoRoutingLib.MultiStepInstructions memory instructions
+    ) internal {
+        for (uint256 i = 0; i < instructions.steps.length; i++) {
+            FinalAutoRoutingLib.SwapInstructions memory step = instructions
+                .steps[i];
+
+            // Update amount for subsequent steps
+            if (i > 0 && step.approvalToken != address(0)) {
+                step.callData = _updateAmountInCallData(
+                    step.callData,
+                    step.approvalToken
+                );
+            }
+
+            _executeSwapInstruction(step);
+        }
+    }
+
+    /// @notice Updates calldata with current token balance
+    function _updateAmountInCallData(
+        bytes memory callData,
+        address token
+    ) internal view returns (bytes memory) {
+        uint256 tokenBalance = IERC20(token).balanceOf(address(this));
+        assembly {
+            mstore(add(callData, 0x44), tokenBalance) // Update amountIn parameter
+        }
+        return callData;
+    }
+
+    /// @notice Delegate a set of staker nodes to a corresponding set of operators
+    /// @param nodeIds The IDs of the staker nodes
+    /// @param operators The addresses of the operators
+    /// @param approverSignatureAndExpiries The signatures authorizing the delegations
+    /// @param approverSalts The salts used in the signatures
+    function delegateNodes(
+        uint256[] calldata nodeIds,
+        address[] calldata operators,
+        ISignatureUtilsMixinTypes.SignatureWithExpiry[]
+            calldata approverSignatureAndExpiries,
+        bytes32[] calldata approverSalts
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        uint256 arrayLength = nodeIds.length;
+
+        if (operators.length != arrayLength)
+            revert LengthMismatch(operators.length, arrayLength);
+        if (approverSignatureAndExpiries.length != arrayLength)
+            revert LengthMismatch(
+                approverSignatureAndExpiries.length,
+                arrayLength
+            );
+        if (approverSalts.length != arrayLength)
+            revert LengthMismatch(approverSalts.length, arrayLength);
+
+        for (uint256 i = 0; i < arrayLength; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
+            node.delegate(
+                operators[i],
+                approverSignatureAndExpiries[i],
+                approverSalts[i]
+            );
+            emit NodeDelegated(nodeIds[i], operators[i]);
+        }
+    }
+
+    /// @notice Undelegate a set of staker nodes from their operators
+    /// @param nodeIds The IDs of the staker nodes
     /// @dev OUT OF SCOPE FOR V1
     /**
     function undelegateNodes(
@@ -365,7 +776,64 @@ contract LiquidTokenManager is
             node.undelegate();
         }
     }
+    */
 
+    /// @notice Gets the staked balance of an asset for all nodes
+    /// @param asset The asset token address
+    /// @return The staked balance of the asset for all nodes
+    function getStakedAssetBalance(
+        IERC20 asset
+    ) external view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        uint256 totalBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalBalance += _getStakedAssetBalanceNode(asset, nodes[i]);
+        }
+
+        return totalBalance;
+    }
+
+    /// @notice Gets the staked balance of an asset for a specific node
+    /// @param asset The asset token address
+    /// @param nodeId The ID of the node
+    /// @return The staked balance of the asset for the node
+    function getStakedAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId
+    ) public view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+
+        return _getStakedAssetBalanceNode(asset, node);
+    }
+
+    /// @notice Gets the staked balance of an asset for a specific node
+    /// @param asset The asset token address
+    /// @param node The node to get the staked balance for
+    /// @return The staked balance of the asset for the node
+    function _getStakedAssetBalanceNode(
+        IERC20 asset,
+        IStakerNode node
+    ) internal view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+        return strategy.userUnderlyingView(address(node));
+    }
+
+    /// @notice Gets the staked balance of all assets for a specific node
+    /// @param node The node to get the staked balance for
+    /// @return The staked balances of all assets for the node
     function _getAllStakedAssetBalancesNode(
         IStakerNode node
     ) internal view returns (uint256[] memory) {
@@ -379,178 +847,44 @@ contract LiquidTokenManager is
         }
         return balances;
     }
-    */
 
-    // ------------------------------------------------------------------------------
-    // Getter functions
-    // ------------------------------------------------------------------------------
-
-    /// @inheritdoc ILiquidTokenManager
-    function getSupportedTokens() external view returns (IERC20[] memory) {
-        return supportedTokens;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getTokenInfo(IERC20 token) external view returns (TokenInfo memory) {
-        if (address(token) == address(0)) revert ZeroAddress();
-
-        TokenInfo memory tokenInfo = tokens[token];
-
-        if (tokenInfo.decimals == 0) {
-            revert TokenNotSupported(token);
-        }
-
-        return tokenInfo;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getTokenStrategy(IERC20 asset) external view returns (IStrategy) {
+    /// @notice Sets the volatility threshold for a given asset
+    /// @param asset The asset token address
+    /// @param newThreshold The new volatility threshold value to update to
+    function setVolatilityThreshold(
+        IERC20 asset,
+        uint256 newThreshold
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (address(asset) == address(0)) revert ZeroAddress();
+        if (tokens[asset].decimals == 0) revert TokenNotSupported(asset);
+        if (newThreshold != 0 && (newThreshold < 1e16 || newThreshold > 1e18))
+            revert InvalidThreshold();
 
-        IStrategy strategy = tokenStrategies[asset];
+        emit VolatilityThresholdUpdated(
+            asset,
+            tokens[asset].volatilityThreshold,
+            newThreshold,
+            msg.sender
+        );
 
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        return strategy;
+        tokens[asset].volatilityThreshold = newThreshold;
     }
 
-    /// @inheritdoc ILiquidTokenManager
-    function getStrategyToken(IStrategy strategy) external view returns (IERC20) {
-        if (address(strategy) == address(0)) revert ZeroAddress();
-
-        IERC20 token = strategyTokens[strategy];
-
-        if (address(token) == address(0)) {
-            revert TokenForStrategyNotFound(address(strategy));
-        }
-
-        return token;
+    /// @notice Configures a token for swapping
+    /// @param token Token address
+    /// @param category Asset category
+    /// @param decimals Token decimals
+    function configureSwapToken(
+        address token,
+        FinalAutoRoutingLib.AssetCategory category,
+        uint8 decimals
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        autoRoutingConfig.tokens[token] = FinalAutoRoutingLib.TokenConfig({
+            category: category,
+            decimals: decimals,
+            supported: true
+        });
     }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getDepositAssetBalance(IERC20 asset) external view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
-        uint256 totalBalance = 0;
-        for (uint256 i = 0; i < nodes.length; i++) {
-            totalBalance += _getDepositAssetBalanceNode(asset, nodes[i]);
-        }
-
-        return totalBalance;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-
-        return _getDepositAssetBalanceNode(asset, node);
-    }
-
-    /// @dev Called by `getDepositAssetBalance` and `getDepositAssetBalanceNode`
-    function _getDepositAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-        return strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
-    }
-
-    /// @notice Gets the staked deposits balance (`depositShares`) of all assets for a specific node
-    /// @dev Currently unused
-    function _getAllDepositAssetBalanceNode(IStakerNode node) internal view returns (uint256[] memory) {
-        uint256[] memory balances = new uint256[](supportedTokens.length);
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            IStrategy strategy = tokenStrategies[supportedTokens[i]];
-            if (address(strategy) == address(0)) {
-                revert StrategyNotFound(address(supportedTokens[i]));
-            }
-            balances[i] = strategy.userUnderlyingView(address(node)); // Converts EL shares to underlying asset value
-        }
-        return balances;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
-        uint256 totalBalance = 0;
-        for (uint256 i = 0; i < nodes.length; i++) {
-            totalBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i]);
-        }
-
-        return totalBalance;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) public view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
-
-        return _getWithdrawableAssetBalanceNode(asset, node);
-    }
-
-    /// @dev Called by `getWithdrawableAssetBalance` and `getWithdrawableAssetBalanceNode`
-    function _getWithdrawableAssetBalanceNode(IERC20 asset, IStakerNode node) internal view returns (uint256) {
-        IStrategy strategy = tokenStrategies[asset];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(address(asset));
-        }
-
-        IStrategy[] memory strategies = new IStrategy[](1);
-        strategies[0] = strategy;
-
-        (uint256[] memory withdrawableShares, ) = delegationManager.getWithdrawableShares(address(node), strategies);
-
-        if (withdrawableShares[0] == 0) {
-            return 0;
-        }
-
-        return strategy.sharesToUnderlyingView(withdrawableShares[0]); // Converts EL shares to underlying asset value
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function tokenIsSupported(IERC20 token) external view returns (bool) {
-        return tokens[token].decimals != 0;
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function convertToUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256) {
-        TokenInfo memory info = tokens[token];
-        if (info.decimals == 0) revert TokenNotSupported(token);
-
-        return amount.mulDiv(info.pricePerUnit, 10 ** info.decimals);
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function convertFromUnitOfAccount(IERC20 token, uint256 amount) external view returns (uint256) {
-        TokenInfo memory info = tokens[token];
-        if (info.decimals == 0) revert TokenNotSupported(token);
-
-        return amount.mulDiv(10 ** info.decimals, info.pricePerUnit);
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function isStrategySupported(IStrategy strategy) external view returns (bool) {
-        if (address(strategy) == address(0)) return false;
-        return address(strategyTokens[strategy]) != address(0);
-    }
+    /// @notice Allows contract to receive ETH for WETH operations
+    receive() external payable {}
 }
