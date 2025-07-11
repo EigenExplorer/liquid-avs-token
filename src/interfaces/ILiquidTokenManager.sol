@@ -6,6 +6,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IFinalAutoRouting} from "../interfaces/IFinalAutoRouting.sol";
 
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
@@ -28,6 +29,7 @@ interface ILiquidTokenManager {
         address initialOwner;
         address strategyController;
         address priceUpdater;
+        IFinalAutoRouting autoRouter;
     }
 
     /// @notice Supported token information
@@ -50,13 +52,12 @@ interface ILiquidTokenManager {
     // ============================================================================
     // EVENTS
     // ============================================================================
-    event SwapAndStakeExecuted(
+    event TokensSwappedAndStaked(
+        address indexed user,
         address indexed tokenIn,
-        address indexed tokenOut,
         uint256 amountIn,
-        uint256 amountOut,
-        uint256 nodeId,
-        address indexed caller
+        IERC20[] tokensOut,
+        uint256[] amountsOut
     );
     /// @notice Emitted when a new token is set
     event TokenAdded(
@@ -140,7 +141,7 @@ interface ILiquidTokenManager {
     error InvalidNodeId(uint256 nodeId);
 
     /// @notice Error thrown when an invalid decimals value is provided
-    //error InvalidDecimals();
+    error InvalidDecimals();
 
     /// @notice Error thrown when an address is not a valid contract
     error NotAContract();
@@ -162,29 +163,9 @@ interface ILiquidTokenManager {
     // ============================================================================
 
     /// @notice Initializes the LiquidTokenManager contract
-    function initialize(
-        Init memory init,
-        address wethAddr,
-        address routerAddr,
-        address quoterAddr,
-        address minterAddr,
-        address routeMgrAddr,
-        bytes32 routePasswordHash
-    ) external;
-    /// @notice Swap and stake assets in one transaction
-    /// @param tokenIn Input token address
-    /// @param tokenOut Output token address
-    /// @param amountIn Amount to swap
-    /// @param minAmountOut Minimum output expected
-    /// @param nodeId Node to stake to
-    /// @return amountOut Amount staked
-    function swapAndStake(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 nodeId
-    ) external returns (uint256 amountOut);
+    /// @param init Initialization parameters
+    function initialize(Init memory init) external;
+
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token

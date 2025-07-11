@@ -4,7 +4,6 @@ pragma solidity ^0.8.27;
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
@@ -13,20 +12,22 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {FinalAutoRouting} from "../FinalAutoRouting.sol";
+import {IFinalAutoRouting} from "../interfaces/IFinalAutoRouting.sol";
+
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
-import "../interfaces/IWETH.sol";
-import "../interfaces/IUniswapV3Router.sol";
-import "../interfaces/IUniswapV3Quoter.sol";
-import "../interfaces/IFrxETHMinter.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
-contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessControlUpgradeable {
+contract LiquidTokenManager is
+    ILiquidTokenManager,
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable
+{
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -52,6 +53,8 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
     IStakerNodeCoordinator public stakerNodeCoordinator;
     ITokenRegistryOracle public tokenRegistryOracle;
 
+    /// @notice FinalAutoRouting contract for token swaps
+    IFinalAutoRouting public autoRouter;
     /// @notice Mapping of tokens to their corresponding token info
     mapping(IERC20 => TokenInfo) public tokens;
 
@@ -61,7 +64,7 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
     /// @notice Mapping of strategies to their corresponding tokens (reverse of `tokenStrategies`)
     mapping(IStrategy => IERC20) public strategyTokens;
 
-    /// @notice Array of supported token addresses (LTM specific)
+    /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
 
     // ------------------------------------------------------------------------------
@@ -74,22 +77,10 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
     }
 
     /// @inheritdoc ILiquidTokenManager
-    function initialize(
-        Init memory init,
-        address wethAddr,
-        address routerAddr,
-        address quoterAddr,
-        address minterAddr,
-        address routeMgrAddr,
-        bytes32 routePasswordHash
-    ) public initializer {
-        // ✅ FIXED: Initialize parent contracts properly
-        __Ownable_init();
-        __ReentrancyGuard_init();
-        __Pausable_init();
+    function initialize(Init memory init) public initializer {
         __AccessControl_init();
+        __ReentrancyGuard_init();
 
-        // LTM validations
         if (
             address(init.strategyManager) == address(0) ||
             address(init.delegationManager) == address(0) ||
@@ -101,46 +92,20 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
             revert ZeroAddress();
         }
 
-        // FAR validations
-        if (wethAddr == address(0)) revert InvalidAddress();
-        if (routerAddr == address(0)) revert InvalidAddress();
-        if (quoterAddr == address(0)) revert InvalidAddress();
-        if (minterAddr == address(0)) revert InvalidAddress();
-        if (routeMgrAddr == address(0)) revert InvalidAddress();
-        if (routePasswordHash == bytes32(0)) revert InvalidParameter("routePasswordHash");
-
-        // ✅ FIXED: Initialize FAR state manually
-        WETH = IWETH(wethAddr);
-        uniswapRouter = IUniswapV3Router(routerAddr);
-        uniswapQuoter = IUniswapV3Quoter(quoterAddr);
-        frxETHMinter = IFrxETHMinter(minterAddr);
-        routeManager = routeMgrAddr;
-        ROUTE_PASSWORD_HASH = routePasswordHash;
-
-        // Setup LTM roles
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STRATEGY_CONTROLLER_ROLE, init.strategyController);
         _grantRole(PRICE_UPDATER_ROLE, init.priceUpdater);
 
-        // Initialize LTM state
         liquidToken = init.liquidToken;
         stakerNodeCoordinator = init.stakerNodeCoordinator;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
-
-        // ✅ Authorize LTM to use FAR functions
-        authorizedCallers[address(this)] = true;
-
-        // ✅ Apply production configs
-        _applyProductionSlippageConfig();
-        _applyProductionTokenConfig();
-        _applyProductionPoolConfig();
-        _applyProductionRouteConfig();
+        autoRouter = init.autoRouter;
     }
 
     // ------------------------------------------------------------------------------
-    // Core functions (keep all existing functions unchanged)
+    // Core functions
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidTokenManager
@@ -184,7 +149,6 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
             if (decimalsFromContract == 0) revert InvalidDecimals();
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
-
         uint256 fetchedPrice;
         if (!isNative) {
             (uint256 price, bool ok) = tokenRegistryOracle._getTokenPrice_getter(address(token));
@@ -377,90 +341,128 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
         emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
     }
 
-    // ✅ NEW SWAP AND STAKE FUNCTION
-    /// @notice Swap and stake assets in one transaction
-    /// @param tokenIn Input token address
-    /// @param tokenOut Output token address
-    /// @param amountIn Amount to swap
-    /// @param minAmountOut Minimum output expected
-    /// @param nodeId Node to stake to
-    /// @return amountOut Amount staked
+    /// @notice Swaps input token to supported tokens and stakes them
+    /// @param tokenIn The token to swap from
+    /// @param amountIn The amount of tokenIn to swap
+    /// @param tokensOut Array of tokens to swap to and stake
+    /// @param minAmountsOut Minimum amounts expected for each output token
+    /// @param nodeAllocations How to allocate the swapped tokens to nodes
     function swapAndStake(
         address tokenIn,
-        address tokenOut,
         uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 nodeId
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 amountOut) {
-        if (amountIn == 0) revert ZeroAmount();
-        if (tokenIn == tokenOut) revert InvalidParameter("Same token");
-
-        // ✅ FIXED: Use internal validation function
-        if (!_isLTMTokenSupported(IERC20(tokenIn))) revert TokenNotSupported(IERC20(tokenIn));
-        if (!_isLTMTokenSupported(IERC20(tokenOut))) revert TokenNotSupported(IERC20(tokenOut));
-
-        // Validate strategy exists for output token
-        IStrategy strategy = tokenStrategies[IERC20(tokenOut)];
-        if (address(strategy) == address(0)) {
-            revert StrategyNotFound(tokenOut);
+        IERC20[] calldata tokensOut,
+        uint256[] calldata minAmountsOut,
+        NodeAllocation[] calldata nodeAllocations
+    ) external payable nonReentrant {
+        // Validation
+        if (amountIn == 0) revert InvalidStakingAmount(0);
+        if (tokensOut.length != minAmountsOut.length) {
+            revert LengthMismatch(tokensOut.length, minAmountsOut.length);
         }
 
-        // ✅ LTM: Get assets from LiquidToken
-        IERC20[] memory assetsIn = new IERC20[](1);
-        uint256[] memory amountsIn = new uint256[](1);
-        assetsIn[0] = IERC20(tokenIn);
-        amountsIn[0] = amountIn;
-        liquidToken.transferAssets(assetsIn, amountsIn);
+        // 1. Transfer tokens from user to LTM
+        if (tokenIn == address(0)) {
+            // ETH case
+            if (msg.value != amountIn) revert InvalidStakingAmount(msg.value);
+        } else {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        }
 
-        // ✅ FIXED: Use inherited FAR function directly
-        amountOut = autoSwapAssets(tokenIn, tokenOut, amountIn, minAmountOut);
+        // 2. Process each output token
+        uint256[] memory actualAmountsOut = new uint256[](tokensOut.length);
 
-        // ✅ LTM: Stake swapped tokens directly
-        IERC20[] memory stakingAssets = new IERC20[](1);
-        uint256[] memory stakingAmounts = new uint256[](1);
-        stakingAssets[0] = IERC20(tokenOut);
-        stakingAmounts[0] = amountOut;
+        for (uint256 i = 0; i < tokensOut.length; i++) {
+            IERC20 tokenOut = tokensOut[i];
 
-        _stakeAssetsToNodeDirect(nodeId, stakingAssets, stakingAmounts);
+            // Verify token is supported
+            if (tokens[tokenOut].decimals == 0) {
+                revert TokenNotSupported(tokenOut);
+            }
 
-        emit SwapAndStakeExecuted(tokenIn, tokenOut, amountIn, amountOut, nodeId, msg.sender);
-        return amountOut;
-    }
+            // Calculate proportional input amount (if multiple outputs)
+            uint256 swapAmountIn = amountIn / tokensOut.length;
+            if (i == tokensOut.length - 1) {
+                // Last iteration gets any remainder
+                swapAmountIn = amountIn - (swapAmountIn * (tokensOut.length - 1));
+            }
 
-    /// @notice Internal function to stake directly (bypass LiquidToken)
-    function _stakeAssetsToNodeDirect(uint256 nodeId, IERC20[] memory assets, uint256[] memory amounts) internal {
-        uint256 assetsLength = assets.length;
-        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+            // 3. Approve FAR to spend tokens (if not ETH)
+            if (tokenIn != address(0)) {
+                IERC20(tokenIn).safeApprove(address(autoRouter), swapAmountIn);
+            }
 
-        // Get strategies
-        IStrategy[] memory strategies = new IStrategy[](assetsLength);
-        for (uint256 i = 0; i < assetsLength; i++) {
-            if (amounts[i] == 0) revert InvalidStakingAmount(amounts[i]);
-            strategies[i] = tokenStrategies[assets[i]];
-            if (address(strategies[i]) == address(0)) {
-                revert StrategyNotFound(address(assets[i]));
+            // 4. Execute swap via FAR
+            IFinalAutoRouting.SwapParams memory swapParams = IFinalAutoRouting.SwapParams({
+                tokenIn: tokenIn,
+                tokenOut: address(tokenOut),
+                amountIn: swapAmountIn,
+                minAmountOut: minAmountsOut[i],
+                protocol: IFinalAutoRouting.Protocol.UniswapV3, // FAR will auto-route
+                routeData: "" // FAR will determine route
+            });
+
+            uint256 amountOut = autoRouter.swapAssets{value: tokenIn == address(0) ? swapAmountIn : 0}(swapParams);
+            actualAmountsOut[i] = amountOut;
+
+            // Reset approval if needed
+            if (tokenIn != address(0)) {
+                IERC20(tokenIn).safeApprove(address(autoRouter), 0);
             }
         }
 
-        // Transfer to node
-        for (uint256 i = 0; i < assetsLength; i++) {
-            assets[i].safeTransfer(address(node), amounts[i]);
+        // 5. Now stake the received tokens according to nodeAllocations
+        for (uint256 i = 0; i < nodeAllocations.length; i++) {
+            _stakeAssetsToNode(nodeAllocations[i].nodeId, nodeAllocations[i].assets, nodeAllocations[i].amounts);
         }
 
-        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
+        emit TokensSwappedAndStaked(msg.sender, tokenIn, amountIn, tokensOut, actualAmountsOut);
+    }
+    /// @dev OUT OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        // Fetch and add all asset balances from the node to queued balances
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
 
-        // Deposit to EigenLayer
-        node.depositAssets(assets, amounts, strategies);
-        emit AssetsDepositedToEigenlayer(assets, amounts, strategies, address(node));
+            // Convert supportedTokens to IERC20Upgradeable array
+            IERC20Upgradeable[]
+                memory upgradeableTokens = new IERC20Upgradeable[](
+                    supportedTokens.length
+                );
+            for (uint256 j = 0; j < supportedTokens.length; j++) {
+                upgradeableTokens[j] = IERC20Upgradeable(
+                    address(supportedTokens[j])
+                );
+            }
+
+            liquidToken.creditQueuedAssetBalances(
+                upgradeableTokens,
+                _getAllStakedAssetBalancesNode(node)
+            );
+
+            node.undelegate();
+        }
     }
 
-    /// @notice Internal LTM token validation to avoid conflicts
-    function _isLTMTokenSupported(IERC20 token) internal view returns (bool) {
-        return tokens[token].decimals != 0;
+    function _getAllStakedAssetBalancesNode(
+        IStakerNode node
+    ) internal view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](supportedTokens.length);
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            IStrategy strategy = tokenStrategies[supportedTokens[i]];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(supportedTokens[i]));
+            }
+            balances[i] = strategy.userUnderlyingView(address(node));
+        }
+        return balances;
     }
+    */
 
     // ------------------------------------------------------------------------------
-    // Getter functions (keep all existing functions unchanged)
+    // Getter functions
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidTokenManager
@@ -607,7 +609,7 @@ contract LiquidTokenManager is ILiquidTokenManager, FinalAutoRouting, AccessCont
 
     /// @inheritdoc ILiquidTokenManager
     function tokenIsSupported(IERC20 token) external view returns (bool) {
-        return _isLTMTokenSupported(token);
+        return tokens[token].decimals != 0;
     }
 
     /// @inheritdoc ILiquidTokenManager

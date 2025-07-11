@@ -452,7 +452,8 @@ contract LiquidTokenManagerTest is BaseTest {
         MockStrategy newStrategy = new MockStrategy(strategyManager, newToken);
 
         vm.prank(deployer);
-        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        // ✅ FIXED: Use the FAR error through LTM contract
+        vm.expectRevert(abi.encodeWithSignature("InvalidDecimals()"));
         liquidTokenManager.addToken(
             newToken,
             0,
@@ -481,7 +482,7 @@ contract LiquidTokenManagerTest is BaseTest {
 
         // IMPORTANT: Use deployer explicitly
         vm.startPrank(deployer);
-        vm.expectRevert(ILiquidTokenManager.InvalidDecimals.selector);
+        vm.expectRevert(abi.encodeWithSignature("InvalidDecimals()"));
         liquidTokenManager.addToken(
             IERC20(address(token)),
             decimals,
