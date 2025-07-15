@@ -13,6 +13,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IFinalAutoRouting} from "../interfaces/IFinalAutoRouting.sol";
+import "../interfaces/IWETH.sol";
+import "../interfaces/ICurvePool.sol";
 
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
@@ -34,7 +36,11 @@ contract LiquidTokenManager is
     // ------------------------------------------------------------------------------
     // State
     // ------------------------------------------------------------------------------
+    /// @notice WETH contract address
+    IWETH public constant WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
+    /// @notice ETH placeholder address (matching FAR)
+    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     /// @notice Role identifier for staking operations
     bytes32 public constant STRATEGY_CONTROLLER_ROLE = keccak256("STRATEGY_CONTROLLER_ROLE");
 
@@ -360,57 +366,80 @@ contract LiquidTokenManager is
             revert LengthMismatch(tokensOut.length, minAmountsOut.length);
         }
 
-        // 1. Transfer tokens from user to LTM
-        if (tokenIn == address(0)) {
-            // ETH case
+        // Verify all output tokens are supported
+        for (uint256 i = 0; i < tokensOut.length; i++) {
+            if (tokens[tokensOut[i]].decimals == 0) {
+                revert TokenNotSupported(tokensOut[i]);
+            }
+        }
+
+        // 1. Handle input token and convert ETH to WETH if needed
+        address actualTokenIn = tokenIn;
+        if (tokenIn == ETH_ADDRESS || tokenIn == address(0)) {
+            // ETH case: convert to WETH
             if (msg.value != amountIn) revert InvalidStakingAmount(msg.value);
+            WETH.deposit{value: msg.value}();
+            actualTokenIn = address(WETH);
         } else {
+            // ERC20 case: transfer from user
             IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        // 2. Process each output token
+        // 2. Verify FAR is in direct transfer mode (do this once)
+        if (!autoRouter.directTransferMode()) {
+            revert("FAR direct mode not enabled");
+        }
+
+        // 3. Process each output token
         uint256[] memory actualAmountsOut = new uint256[](tokensOut.length);
 
         for (uint256 i = 0; i < tokensOut.length; i++) {
             IERC20 tokenOut = tokensOut[i];
 
-            // Verify token is supported
-            if (tokens[tokenOut].decimals == 0) {
-                revert TokenNotSupported(tokenOut);
-            }
+            // Check if this route uses Curve
+            (bool isCurve, address pool, int128 indexIn, int128 indexOut, bool useUnderlying) = autoRouter
+                .getCurveRouteData(actualTokenIn, address(tokenOut));
 
-            // Calculate proportional input amount (if multiple outputs)
             uint256 swapAmountIn = amountIn / tokensOut.length;
             if (i == tokensOut.length - 1) {
-                // Last iteration gets any remainder
                 swapAmountIn = amountIn - (swapAmountIn * (tokensOut.length - 1));
             }
 
-            // 3. Approve FAR to spend tokens (if not ETH)
-            if (tokenIn != address(0)) {
-                IERC20(tokenIn).safeApprove(address(autoRouter), swapAmountIn);
-            }
+            if (isCurve) {
+                // CURVE: Direct swap by LTM
+                IERC20(actualTokenIn).safeApprove(pool, swapAmountIn);
 
-            // 4. Execute swap via FAR
-            IFinalAutoRouting.SwapParams memory swapParams = IFinalAutoRouting.SwapParams({
-                tokenIn: tokenIn,
-                tokenOut: address(tokenOut),
-                amountIn: swapAmountIn,
-                minAmountOut: minAmountsOut[i],
-                protocol: IFinalAutoRouting.Protocol.UniswapV3, // FAR will auto-route
-                routeData: "" // FAR will determine route
-            });
+                if (useUnderlying) {
+                    actualAmountsOut[i] = ICurvePool(pool).exchange_underlying(
+                        indexIn,
+                        indexOut,
+                        swapAmountIn,
+                        minAmountsOut[i]
+                    );
+                } else {
+                    actualAmountsOut[i] = ICurvePool(pool).exchange(indexIn, indexOut, swapAmountIn, minAmountsOut[i]);
+                }
 
-            uint256 amountOut = autoRouter.swapAssets{value: tokenIn == address(0) ? swapAmountIn : 0}(swapParams);
-            actualAmountsOut[i] = amountOut;
+                IERC20(actualTokenIn).safeApprove(pool, 0);
+            } else {
+                // EVERYTHING ELSE: Use FAR with direct mode
+                IERC20(actualTokenIn).safeApprove(address(autoRouter), swapAmountIn);
 
-            // Reset approval if needed
-            if (tokenIn != address(0)) {
-                IERC20(tokenIn).safeApprove(address(autoRouter), 0);
+                IFinalAutoRouting.SwapParams memory swapParams = IFinalAutoRouting.SwapParams({
+                    tokenIn: actualTokenIn,
+                    tokenOut: address(tokenOut),
+                    amountIn: swapAmountIn,
+                    minAmountOut: minAmountsOut[i],
+                    protocol: IFinalAutoRouting.Protocol.UniswapV3, // FAR will determine actual protocol
+                    routeData: "" // FAR will use its configured routes
+                });
+
+                actualAmountsOut[i] = autoRouter.swapAssets(swapParams);
+                IERC20(actualTokenIn).safeApprove(address(autoRouter), 0);
             }
         }
 
-        // 5. Now stake the received tokens according to nodeAllocations
+        // 4. Now stake the received tokens according to allocations
         for (uint256 i = 0; i < nodeAllocations.length; i++) {
             _stakeAssetsToNode(nodeAllocations[i].nodeId, nodeAllocations[i].assets, nodeAllocations[i].amounts);
         }

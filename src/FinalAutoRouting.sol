@@ -591,15 +591,17 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         // Handle token input based on mode
         address actualTokenIn;
         if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            // Direct mode: tokens should already be in FAR, just handle ETH/WETH conversion
+            // In direct mode, reject ETH input - LTM should handle ETH->WETH
             if (params.tokenIn == ETH_ADDRESS) {
-                WETH.deposit{value: params.amountIn}();
-                actualTokenIn = address(WETH);
-            } else {
-                actualTokenIn = params.tokenIn;
+                revert InvalidParameter("ETH not allowed in direct mode - convert to WETH first");
             }
+            // Verify caller has approved FAR
+            if (IERC20(params.tokenIn).allowance(msg.sender, address(this)) < params.amountIn) {
+                revert InsufficientAllowance();
+            }
+            actualTokenIn = params.tokenIn;
         } else {
-            // Normal mode: pull tokens from caller
+            // Normal mode: FAR handles transfers
             actualTokenIn = _handleTokenInput(params);
         }
 
@@ -651,7 +653,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // QUOTER FUNCTIONS  COMPLETELY NEW
+    // QUOTER FUNCTIONS
     // ============================================================================
 
     /**
@@ -833,16 +835,25 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             }
         }
 
-        // Set approval
-        IERC20(tokenIn).safeApprove(address(uniswapRouter), 0);
-        IERC20(tokenIn).safeApprove(address(uniswapRouter), params.amountIn);
+        // Determine recipient based on mode
+        address recipient = (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) ? msg.sender : address(this);
+
+        // Set approval from the actual token holder
+        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
+            // In direct mode, FAR uses caller's approval
+            // No need to set approval here, caller should have approved FAR
+        } else {
+            // Normal mode: FAR sets approval
+            IERC20(tokenIn).safeApprove(address(uniswapRouter), 0);
+            IERC20(tokenIn).safeApprove(address(uniswapRouter), params.amountIn);
+        }
 
         if (route.isMultiHop) {
             try
                 uniswapRouter.exactInput(
                     IUniswapV3Router.ExactInputParams({
                         path: route.path,
-                        recipient: address(this),
+                        recipient: recipient,
                         deadline: block.timestamp + 300,
                         amountIn: params.amountIn,
                         amountOutMinimum: minAmountOut
@@ -863,7 +874,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
                         tokenIn: tokenIn,
                         tokenOut: params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
                         fee: route.fee,
-                        recipient: address(this),
+                        recipient: recipient,
                         deadline: block.timestamp + 300,
                         amountIn: params.amountIn,
                         amountOutMinimum: minAmountOut,
@@ -880,7 +891,10 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             }
         }
 
-        _resetApproval(tokenIn, address(uniswapRouter));
+        // Only reset approval in normal mode
+        if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
+            _resetApproval(tokenIn, address(uniswapRouter));
+        }
     }
 
     /**
@@ -1163,7 +1177,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // TOKEN HANDLING (changed to handle direct mint )
+    // TOKEN HANDLING
     // ============================================================================
 
     function _handleTokenInput(SwapParams memory params) private returns (address) {
@@ -1247,6 +1261,31 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     // HELPER FUNCTIONS (keeping essential ones, removing redundant slippage validation)
     // ============================================================================
 
+    function getCurveRouteData(
+        address tokenIn,
+        address tokenOut
+    ) external view returns (bool isCurve, address pool, int128 i, int128 j, bool useUnderlying) {
+        RouteConfig memory config = routes[tokenIn][tokenOut];
+
+        if (config.protocol == Protocol.Curve) {
+            return (true, config.pool, config.tokenIndexIn, config.tokenIndexOut, config.useUnderlying);
+        }
+
+        // Check auto-routing scenarios
+        if (!_routeExists(tokenIn, tokenOut)) {
+            // Check if auto-route would use Curve
+            address bridge = _getBridgeAsset(tokenIn, tokenOut);
+            if (bridge != address(0)) {
+                // Check first hop
+                RouteConfig memory firstHop = routes[tokenIn][bridge];
+                if (firstHop.protocol == Protocol.Curve) {
+                    return (true, firstHop.pool, firstHop.tokenIndexIn, firstHop.tokenIndexOut, firstHop.useUnderlying);
+                }
+            }
+        }
+
+        return (false, address(0), 0, 0, false);
+    }
     function normalizeAmount(address tokenIn, address tokenOut, uint256 amountIn) public view returns (uint256) {
         uint8 decimalsIn = tokenDecimals[tokenIn];
         uint8 decimalsOut = tokenDecimals[tokenOut];
@@ -1983,14 +2022,16 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // ============================================================================
-    // VIEW FUNCTIONS (keeping essential view functions)
+    // VIEW FUNCTIONS
     // ============================================================================
 
     function getSlippageTolerance(address tokenIn, address tokenOut) external view returns (uint256) {
         uint256 configured = slippageTolerance[tokenIn][tokenOut];
         return configured == 0 ? _getDefaultSlippage(tokenIn, tokenOut) : configured;
     }
-
+    function _getRecipient() internal view returns (address) {
+        return (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) ? msg.sender : address(this);
+    }
     function getTokenInfo(address token) external view returns (bool supported, AssetType assetType, uint8 decimals) {
         return (supportedTokens[token], assetTypes[token], tokenDecimals[token]);
     }
