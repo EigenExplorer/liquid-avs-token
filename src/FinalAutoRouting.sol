@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "./interfaces/IUniswapV3Router.sol";
 import "./interfaces/IUniswapV3Quoter.sol";
 import "./interfaces/ICurvePool.sol";
@@ -14,14 +13,15 @@ import "./interfaces/IWETH.sol";
 import "./interfaces/IFrxETHMinter.sol";
 
 /**
- * @title FinalAutoRouting
- * @notice Production-ready asset swapper with quoter-first optimization
+ * @title FinalAutoRouting - Superior Version
+ * @notice Production-ready routing intelligence with delegated execution pattern
  * @author ThinkOutSideTheBlock
- * @dev Features:
- *      - Quoter-first approach: Try tight slippage first, fallback to config
- *      - All protocols: Uniswap V3, Curve, DirectMint, MultiHop, MultiStep
- *      - Gas-optimized execution with minimal redundancy
- *      - Enterprise-grade security and validation
+ * @dev Revolutionary features:
+ * - Stateless execution data generation for LTM→DEX→LTM flow
+ * - Zero token transfers to FAR in operator mode
+ * - Quoter-first optimization with intelligent fallbacks
+ * - Complete protocol support with gas-optimized execution
+ * - Advanced security with role-based access control
  */
 contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -30,112 +30,64 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     // CONSTANTS & IMMUTABLES
     // ============================================================================
 
-    /// @notice WETH contract for protocol interactions
     IWETH public immutable WETH;
-
-    /// @notice Uniswap V3 Router for DEX operations
     IUniswapV3Router public immutable uniswapRouter;
-
-    /// @notice Uniswap V3 Quoter for price discovery  NEW
     IUniswapV3Quoter public immutable uniswapQuoter;
-
-    /// @notice frxETH Minter for direct minting operations
     IFrxETHMinter public immutable frxETHMinter;
-
-    /// @notice Password hash for secure route management
     bytes32 private immutable ROUTE_PASSWORD_HASH;
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 private constant POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 
-    /// @notice Maximum allowed slippage (20%)
     uint256 public constant MAX_SLIPPAGE = 2000;
-
-    /// @notice ETH placeholder address
     address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address public constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
-
-    /// @notice Known token addresses for special routes
     address public constant SFRXETH = 0xac3E018457B222d93114458476f3E3416Abbe38F;
     address public constant FRXETH = 0x5E8422345238F34275888049021821E8E08CAa1f;
     address public constant RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
     address public constant OSETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
+    // Uniswap V3 Factory for pool computation
+    address private constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
-    /// @notice Quoter-first configuration  NEW
-    uint256 public constant TIGHT_BUFFER_BPS = 20; // 0.2% buffer for primary swap
-    uint256 public constant QUOTE_MAX_AGE = 30; // 30 seconds max quote age
+    uint256 public constant TIGHT_BUFFER_BPS = 20;
+    uint256 public constant QUOTE_MAX_AGE = 30;
     uint256 public constant MAX_CURVE_TOKENS = 8;
     uint256 public constant EXTERNAL_CALL_GAS_LIMIT = 300000;
-    uint256 public constant MAX_PRICE_IMPACT_MULTIPLIER = 10;
+    uint256 public constant MAX_DEX_GAS_LIMIT = 500000;
     uint256 public constant MAX_MULTI_STEP_OPERATIONS = 5;
+    uint256 public constant DEX_TIMELOCK = 24 hours;
 
     // ============================================================================
     // STATE VARIABLES
     // ============================================================================
 
-    /// @notice Contract initialization status
     bool private initialized;
-    bool public directTransferMode; // Enable direct transfer mode for trusted contracts
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
-    /// @notice Route manager for advanced operations
+    bool public directTransferMode;
     address public routeManager;
 
-    /// @notice Authorized callers (typically LiquidTokenManager)
-    //mapping(address => bool) public authorizedCallers;
-
-    /// @notice Slippage tolerance per token pair (basis points)  MODIFIED: Now for fallback only
+    // Mappings
     mapping(address => mapping(address => uint256)) public slippageTolerance;
-
-    /// @notice Asset type classification
     mapping(address => AssetType) public assetTypes;
-
-    /// @notice Whitelisted pools for security
-    mapping(address => bool) public whitelistedPools;
-
-    /// @notice Supported tokens registry
-    mapping(address => bool) public supportedTokens;
-
-    /// @notice Emergency pause status per pool
+    mapping(address => bool) public poolWhitelist;
+    mapping(address => bool) public farSupportedTokens;
     mapping(address => bool) public poolPaused;
-
-    /// @notice Emergency pause status per protocol
     mapping(Protocol => bool) public protocolPaused;
-
-    /// @notice Token decimal places for normalization
     mapping(address => uint8) public tokenDecimals;
-
-    /// @notice Custom routes enabled by management
     mapping(address => mapping(address => bool)) public customRouteEnabled;
-
-    /// @notice Curve pool configurations
     mapping(address => uint256) public curvePoolTokenCounts;
     mapping(address => CurveInterface) public curvePoolInterfaces;
-
-    /// @notice Configuration update locks to prevent race conditions
     mapping(bytes32 => uint256) private configUpdateLocks;
-
-    /// @notice Route configurations
-    mapping(address => mapping(address => RouteConfig)) public routes;
-
-    // ============================================================================
-    // DYNAMIC DEX REGISTRY (NEW FEATURE)
-    // ============================================================================
-
-    /// @notice Registered dynamic DEXes for backend integration
+    mapping(bytes32 => RouteConfig) public routes;
     mapping(address => bool) public registeredDEXes;
-
-    /// @notice DEX information for logging/tracking
     mapping(address => string) public dexNames;
-
-    /// @notice Array of all registered DEXes
-    address[] public allRegisteredDEXes;
-
-    /// @notice Blacklisted dangerous function selectors
     mapping(bytes4 => bool) public dangerousSelectors;
-
-    /// @notice Maximum gas limit for DEX calls
-    uint256 public constant MAX_DEX_GAS_LIMIT = 500000;
-
-    /// @notice Array to track blacklisted selectors
+    mapping(bytes4 => bool) public whitelistedSelectors;
+    mapping(bytes4 => string) public selectorDescriptions;
+    mapping(address => uint256) public dexRegistrationTime;
+    mapping(address => address) public dexRegisteredBy;
+    address[] public allRegisteredDEXes;
     bytes4[] public allDangerousSelectors;
+    bytes4[] public allWhitelistedSelectors;
+
     // ============================================================================
     // ENUMS & STRUCTS
     // ============================================================================
@@ -165,8 +117,16 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         UNWRAP,
         DIRECT_MINT
     }
+    enum RouteType {
+        Direct,
+        Reverse,
+        Bridge
+    }
+    enum SlippageType {
+        QUOTE,
+        FALLBACK
+    }
 
-    /// @notice Quoter data structure  NEW
     struct QuoteData {
         uint256 expectedOutput;
         uint256 timestamp;
@@ -191,33 +151,9 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
     struct CurveRoute {
         address pool;
-        int128 tokenIndexIn;
-        int128 tokenIndexOut;
+        int128 indexIn;
+        int128 indexOut;
         bool useUnderlying;
-    }
-
-    struct SlippageConfig {
-        address tokenIn;
-        address tokenOut;
-        uint256 slippageBps;
-    }
-
-    struct MultiHopRoute {
-        bytes32 routeHash;
-        uint256 intermediateMinOut;
-        bytes routeData;
-    }
-
-    struct MultiStepRoute {
-        StepAction[] steps;
-    }
-
-    struct StepAction {
-        ActionType actionType;
-        Protocol protocol;
-        address tokenIn;
-        address tokenOut;
-        bytes routeData;
     }
 
     struct RouteConfig {
@@ -230,39 +166,48 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         int128 tokenIndexOut;
         bool useUnderlying;
         address specialContract;
+        bool isConfigured;
+        bytes routeData;
     }
 
-    //added for our new pattern(qouter first then fallback)
-    struct OptimalSlippageConfig {
+    struct ExecutionStrategy {
+        RouteType routeType;
+        Protocol protocol;
+        address bridgeAsset;
+        bytes primaryRouteData;
+        bytes secondaryRouteData;
+        uint256 expectedGas;
+    }
+
+    struct SlippageConfig {
         address tokenIn;
         address tokenOut;
         uint256 slippageBps;
-        string routeType; // For documentation
     }
 
     // ============================================================================
     // EVENTS
     // ============================================================================
-    event DirectTransferModeUpdated(bool enabled, uint256 timestamp);
 
-    event AssetSwapped(
+    event DirectTransferModeUpdated(bool enabled, uint256 timestamp);
+    event AssetsSwapped(
         address indexed tokenIn,
         address indexed tokenOut,
         uint256 amountIn,
         uint256 amountOut,
         Protocol protocol,
-        address caller,
-        uint256 gasUsed,
-        uint256 timestamp,
-        bytes32 indexed routeHash
-    );
-
-    event AuthorizedCallerUpdated(
         address indexed caller,
-        bool authorized,
-        address indexed updatedBy,
+        uint256 gasUsed,
         uint256 timestamp
     );
+    event ExecutionDataGenerated(
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        Protocol protocol,
+        uint256 timestamp
+    );
+    event RouteConfigured(address indexed tokenIn, address indexed tokenOut, Protocol protocol, address pool);
     event SlippageConfigured(
         address indexed tokenIn,
         address indexed tokenOut,
@@ -278,69 +223,22 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         uint256 timestamp
     );
     event TokenSupported(address indexed token, bool status, AssetType assetType, uint8 decimals, uint256 timestamp);
-    event CustomRouteEnabled(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        bool enabled,
-        address indexed enabledBy,
-        uint256 timestamp
-    );
-    event PoolEmergencyPaused(address indexed pool, address indexed pausedBy, string reason, uint256 timestamp);
-    event ProtocolEmergencyPaused(
-        Protocol indexed protocol,
-        address indexed pausedBy,
-        string reason,
-        uint256 timestamp
-    );
-    event EmergencyApprovalRevoked(
-        address indexed token,
-        address indexed spender,
-        address indexed revokedBy,
-        uint256 timestamp
-    );
-    event MultiStepExecuted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        uint256 stepCount,
-        address indexed caller,
-        uint256 timestamp
-    );
-    event RouteManagerUpdated(address indexed oldManager, address indexed newManager, uint256 timestamp);
-    event RouteConfigured(address indexed tokenIn, address indexed tokenOut, Protocol protocol, address pool);
 
-    /// @notice Quoter-specific events  NEW
-    event QuoterSwapAttempted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 quotedOutput,
-        bool success
-    );
-    event FallbackSwapExecuted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 configSlippage
-    );
-    // DEX Registry Events
-    event DEXRegistered(address indexed dex, string name, uint256 timestamp);
-    event DEXRemoved(address indexed dex, string name, uint256 timestamp);
+    event DexRegistered(address indexed dex, string name, address indexed registeredBy, uint256 timestamp);
+    event DexUnregistered(address indexed dex, address indexed unregisteredBy, uint256 timestamp);
+    event SelectorWhitelisted(bytes4 indexed selector, string description, uint256 timestamp);
+    event SelectorBlacklisted(bytes4 indexed selector, string reason, uint256 timestamp);
     event BackendSwapExecuted(
         address indexed dex,
-        address tokenIn,
-        address tokenOut,
+        address indexed tokenIn,
+        address indexed tokenOut,
         uint256 amountIn,
         uint256 amountOut,
+        address executor,
         uint256 timestamp
     );
-    // Security Events
-    event DangerousSelectorAdded(bytes4 indexed selector, string reason, address indexed addedBy, uint256 timestamp);
+    event CustomDexSwapFailed(address indexed dex, string reason, bytes data);
 
-    event DangerousSelectorRemoved(bytes4 indexed selector, address indexed removedBy, uint256 timestamp);
-
-    event SelectorValidationFailed(bytes4 indexed selector, address indexed dex, uint256 timestamp);
     // ============================================================================
     // ERRORS
     // ============================================================================
@@ -360,32 +258,15 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     error NotInitialized();
     error InvalidAddress();
     error InvalidRoutePassword();
-    error InsufficientAllowance();
-    error InvalidTokenIndex();
-    error UnsupportedInterface();
-    error ExternalCallFailed(string reason);
-    error InvalidReturnData();
-    error ConfigurationLocked();
-    error NormalizationOverflow();
+    error NoRouteFound();
     error InvalidDecimals();
-    error UnsupportedRoute();
     error TransferFailed();
-    error TooManySteps();
-    error InvalidStep();
-    error UnauthorizedRouteManager();
-    error QuoteTooOld(); //  NEW
-    error NoConfigSlippage(); //  NEW
-    // DEX Registry Errors
-    error DEXNotRegistered();
-    error DEXAlreadyRegistered();
-    error UnauthorizedBackendCaller();
-    error BackendSwapFailed(string reason);
-    // Security Errors
-    error DangerousSelector();
-    error SelectorAlreadyBlacklisted();
-    error SelectorNotBlacklisted();
+    error SameTokenSwap();
+    error QuoteTooOld();
+    error NoConfigSlippage();
+    error UnsupportedRoute();
     // ============================================================================
-    // MODIFIERS (unchanged, keeping all security features)
+    // MODIFIERS
     // ============================================================================
 
     modifier onlyAuthorizedCaller() {
@@ -394,67 +275,23 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     modifier onlyRouteManager() {
-        if (msg.sender != routeManager && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
-            revert UnauthorizedRouteManager();
-        }
+        require(msg.sender == routeManager || hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Unauthorized route manager");
         _;
-    }
-
-    modifier poolNotPaused(address pool) {
-        if (poolPaused[pool]) revert PoolIsPaused();
-        _;
-    }
-
-    modifier protocolNotPaused(Protocol protocol) {
-        if (protocolPaused[protocol]) revert ProtocolIsPaused();
-        _;
-    }
-
-    modifier hasApproval(
-        address token,
-        address spender,
-        uint256 amount
-    ) {
-        if (IERC20(token).allowance(msg.sender, spender) < amount) {
-            revert InsufficientAllowance();
-        }
-        _;
-    }
-
-    modifier configNotLocked(bytes32 configHash) {
-        if (configUpdateLocks[configHash] > block.timestamp) {
-            revert ConfigurationLocked();
-        }
-        configUpdateLocks[configHash] = block.timestamp + 300;
-        _;
-        delete configUpdateLocks[configHash];
-    }
-
-    modifier handleTransfers(SwapParams memory params, uint256 amountOut) {
-        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            // Direct mode: no transfers, caller handles everything
-            _;
-        } else {
-            // Normal mode: FAR handles transfers
-            address actualTokenIn = _handleTokenInput(params);
-            _;
-            _handleTokenOutput(params.tokenOut, amountOut);
-        }
     }
 
     // ============================================================================
-    // CONSTRUCTOR & INITIALIZATION
+    // CONSTRUCTOR
     // ============================================================================
 
     constructor(
         address _weth,
         address _uniswapRouter,
-        address _uniswapQuoter, //
+        address _uniswapQuoter,
         address _frxETHMinter,
         address _routeManager,
         bytes32 _routePasswordHash,
         address _liquidTokenManager,
-        bool _initializeProduction //
+        bool _initializeProduction
     ) {
         if (_weth == address(0)) revert InvalidAddress();
         if (_uniswapRouter == address(0)) revert InvalidAddress();
@@ -466,21 +303,23 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
         WETH = IWETH(_weth);
         uniswapRouter = IUniswapV3Router(_uniswapRouter);
-        uniswapQuoter = IUniswapV3Quoter(_uniswapQuoter); //  NEW
+        uniswapQuoter = IUniswapV3Quoter(_uniswapQuoter);
         frxETHMinter = IFrxETHMinter(_frxETHMinter);
         routeManager = _routeManager;
         ROUTE_PASSWORD_HASH = _routePasswordHash;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(OPERATOR_ROLE, _liquidTokenManager);
-        emit AuthorizedCallerUpdated(_liquidTokenManager, true, msg.sender, block.timestamp);
-        //  Auto-apply production slippage configuration
+
         if (_initializeProduction) {
             _applyProductionSlippageConfig();
         }
     }
 
-    /// @notice Initialize contract (unchanged - keeping all validation)
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+
     function initialize(
         address[] calldata tokenAddresses,
         AssetType[] calldata tokenTypes,
@@ -491,186 +330,979 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         SlippageConfig[] calldata slippageConfigs
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (initialized) revert AlreadyInitialized();
+
+        // Validate arrays
         if (tokenAddresses.length != tokenTypes.length) revert InvalidParameter("tokenArrays");
         if (tokenAddresses.length != decimals.length) revert InvalidParameter("decimalsArray");
         if (poolAddresses.length != poolTokenCounts.length) revert InvalidParameter("poolArrays");
         if (poolAddresses.length != curveInterfaces.length) revert InvalidParameter("interfaceArrays");
 
-        // Configure supported tokens
-        unchecked {
-            for (uint256 i = 0; i < tokenAddresses.length; ++i) {
-                address token = tokenAddresses[i];
-                uint8 tokenDecimal = decimals[i];
+        // Configure tokens
+        for (uint256 i = 0; i < tokenAddresses.length; ++i) {
+            address token = tokenAddresses[i];
+            if (token == address(0)) revert InvalidAddress();
 
-                if (token == address(0)) revert InvalidAddress();
-                if (tokenDecimal == 0 || tokenDecimal > 77) revert InvalidDecimals();
+            farSupportedTokens[token] = true;
+            assetTypes[token] = tokenTypes[i];
+            tokenDecimals[token] = decimals[i];
 
-                supportedTokens[token] = true;
-                assetTypes[token] = tokenTypes[i];
-                tokenDecimals[token] = tokenDecimal;
-
-                emit TokenSupported(token, true, tokenTypes[i], tokenDecimal, block.timestamp);
-            }
+            emit TokenSupported(token, true, tokenTypes[i], decimals[i], block.timestamp);
         }
 
-        // Whitelist pools
-        unchecked {
-            for (uint256 i = 0; i < poolAddresses.length; ++i) {
-                address pool = poolAddresses[i];
-                if (pool == address(0)) revert InvalidAddress();
-                if (poolTokenCounts[i] == 0 || poolTokenCounts[i] > MAX_CURVE_TOKENS) {
-                    revert InvalidParameter("tokenCount");
-                }
+        // Configure pools
+        for (uint256 i = 0; i < poolAddresses.length; ++i) {
+            address pool = poolAddresses[i];
+            if (pool == address(0)) revert InvalidAddress();
 
-                whitelistedPools[pool] = true;
-                curvePoolTokenCounts[pool] = poolTokenCounts[i];
-                curvePoolInterfaces[pool] = curveInterfaces[i];
+            poolWhitelist[pool] = true;
+            curvePoolTokenCounts[pool] = poolTokenCounts[i];
+            curvePoolInterfaces[pool] = curveInterfaces[i];
 
-                emit PoolWhitelisted(pool, true, curveInterfaces[i], msg.sender, block.timestamp);
-            }
+            emit PoolWhitelisted(pool, true, curveInterfaces[i], msg.sender, block.timestamp);
         }
 
-        // Configure fallback slippage settings  MODIFIED: Now explicitly for fallback
-        unchecked {
-            for (uint256 i = 0; i < slippageConfigs.length; ++i) {
-                SlippageConfig memory config = slippageConfigs[i];
-                if (config.tokenIn == address(0) || config.tokenOut == address(0)) {
-                    revert InvalidAddress();
-                }
-                if (config.slippageBps > MAX_SLIPPAGE) revert InvalidParameter("slippage");
+        // Configure slippage
+        for (uint256 i = 0; i < slippageConfigs.length; ++i) {
+            SlippageConfig memory config = slippageConfigs[i];
+            slippageTolerance[config.tokenIn][config.tokenOut] = config.slippageBps;
 
-                slippageTolerance[config.tokenIn][config.tokenOut] = config.slippageBps;
-                emit SlippageConfigured(
-                    config.tokenIn,
-                    config.tokenOut,
-                    config.slippageBps,
-                    msg.sender,
-                    block.timestamp
-                );
-            }
+            emit SlippageConfigured(config.tokenIn, config.tokenOut, config.slippageBps, msg.sender, block.timestamp);
         }
 
         initialized = true;
     }
 
     // ============================================================================
-    // MAIN SWAP FUNCTION - QUOTER-FIRST APPROACH  COMPLETELY REWRITTEN
+    // MAIN REVOLUTIONARY FUNCTIONS - DELEGATED EXECUTION PATTERN
     // ============================================================================
 
     /**
-     * @notice Main swap function with quoter-first optimization
-     * @dev Flow: 1) Get quote + tight buffer → 2) Fallback to config slippage
-     * @param params Swap parameters
-     * @return amountOut Amount of output tokens received by caller
-     */
-    function swapAssets(
-        SwapParams memory params
-    )
-        public
-        payable
-        onlyAuthorizedCaller
-        whenNotPaused
-        nonReentrant
-        protocolNotPaused(params.protocol)
-        returns (uint256 amountOut)
-    {
-        uint256 gasStart = gasleft();
-
-        // Basic validations
-        if (params.amountIn == 0) revert ZeroAmount();
-        if (!initialized) revert NotInitialized();
-        if (params.tokenIn == params.tokenOut) revert InvalidParameter("sameToken");
-
-        _validateTokenSupport(params.tokenIn, params.tokenOut);
-
-        // Generate route hash for tracking
-        bytes32 routeHash = keccak256(
-            abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
-        );
-
-        // Handle token input based on mode
-        address actualTokenIn;
-        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            // In direct mode, reject ETH input - LTM should handle ETH->WETH
-            if (params.tokenIn == ETH_ADDRESS) {
-                revert InvalidParameter("ETH not allowed in direct mode - convert to WETH first");
-            }
-            // Verify caller has approved FAR
-            if (IERC20(params.tokenIn).allowance(msg.sender, address(this)) < params.amountIn) {
-                revert InsufficientAllowance();
-            }
-            actualTokenIn = params.tokenIn;
-        } else {
-            // Normal mode: FAR handles transfers
-            actualTokenIn = _handleTokenInput(params);
-        }
-
-        // QUOTER-FIRST APPROACH (same logic as before)
-        QuoteData memory quote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
-
-        if (quote.valid) {
-            try this._executeSwapWithQuote(actualTokenIn, params, quote) returns (uint256 result) {
-                amountOut = result;
-                emit QuoterSwapAttempted(params.tokenIn, params.tokenOut, params.amountIn, quote.expectedOutput, true);
-            } catch {
-                emit QuoterSwapAttempted(params.tokenIn, params.tokenOut, params.amountIn, quote.expectedOutput, false);
-                // Continue to fallback
-                uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
-                if (configSlippage == 0) {
-                    configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-                }
-                if (configSlippage == 0) revert NoConfigSlippage();
-
-                amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
-            }
-        } else {
-            // Direct fallback if quote fails
-            uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
-            if (configSlippage == 0) {
-                configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-            }
-            if (configSlippage == 0) revert NoConfigSlippage();
-
-            amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
-        }
-
-        // Handle output based on mode
-        if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-            _handleTokenOutput(params.tokenOut, amountOut);
-        }
-
-        emit AssetSwapped(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            amountOut,
-            params.protocol,
-            msg.sender,
-            gasStart - gasleft(),
-            block.timestamp,
-            routeHash
-        );
-    }
-
-    // ============================================================================
-    // QUOTER FUNCTIONS
-    // ============================================================================
-
-    /**
-     * @notice Get quote for swap with validation
+     * @notice Generate optimized swap execution data for direct execution by caller
+     * @dev Revolutionary approach that returns executable bytecode for LTM to execute directly
      * @param tokenIn Input token address
      * @param tokenOut Output token address
      * @param amountIn Input amount
-     * @param params Swap parameters for route info
-     * @return QuoteData with expected output and validity
+     * @param minAmountOut Minimum output amount
+     * @return executionData Optimized bytecode for direct execution
+     * @return protocol The protocol to use
+     * @return expectedGas Estimated gas for execution
      */
-    function _getQuote(
+    function generateSwapExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) external returns (bytes memory executionData, Protocol protocol, uint256 expectedGas) {
+        // Find optimal route
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
+
+        protocol = strategy.protocol;
+        expectedGas = strategy.expectedGas;
+
+        // Generate execution data based on route type
+        if (strategy.routeType == RouteType.Bridge) {
+            executionData = _generateBridgeExecutionData(strategy, tokenIn, tokenOut, amountIn, minAmountOut);
+        } else {
+            executionData = _generateSingleExecutionData(strategy, tokenIn, tokenOut, amountIn, minAmountOut);
+        }
+
+        emit ExecutionDataGenerated(tokenIn, tokenOut, amountIn, protocol, block.timestamp);
+    }
+
+    /**
+     * @notice Get quoted swap execution data with live pricing
+     * @param tokenIn Input token address
+     * @param tokenOut Output token address
+     * @param amountIn Input amount
+     * @return executionData Execution bytecode with optimized slippage
+     * @return protocol Protocol to use
+     * @return quotedOutput Expected output from quoter
+     * @return adjustedMinOutput Minimum output with buffer
+     */
+    function getQuotedSwapExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    )
+        external
+        returns (bytes memory executionData, Protocol protocol, uint256 quotedOutput, uint256 adjustedMinOutput)
+    {
+        // Get base execution strategy
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
+
+        // Get quote
+        SwapParams memory params = SwapParams({
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            amountIn: amountIn,
+            minAmountOut: 0,
+            protocol: strategy.protocol,
+            routeData: strategy.primaryRouteData
+        });
+
+        QuoteData memory quote = _performQuote(tokenIn, tokenOut, amountIn, params);
+
+        if (quote.valid) {
+            quotedOutput = quote.expectedOutput;
+            adjustedMinOutput = (quotedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
+        } else {
+            // Fallback estimate
+            quotedOutput = _getSimpleEstimate(amountIn, tokenIn, tokenOut);
+            uint256 slippage = _getSlippage(tokenIn, tokenOut, SlippageType.FALLBACK);
+            adjustedMinOutput = (quotedOutput * (10000 - slippage)) / 10000;
+        }
+
+        // Generate execution data with adjusted minimum
+        protocol = strategy.protocol;
+        if (strategy.routeType == RouteType.Bridge) {
+            executionData = _generateBridgeExecutionData(strategy, tokenIn, tokenOut, amountIn, adjustedMinOutput);
+        } else {
+            executionData = _generateSingleExecutionData(strategy, tokenIn, tokenOut, amountIn, adjustedMinOutput);
+        }
+    }
+
+    /**
+     * @notice Validate swap execution without state changes
+     * @param tokenIn Input token
+     * @param tokenOut Output token
+     * @param amountIn Input amount
+     * @param minAmountOut Minimum output
+     * @param executor Executor address
+     * @return isValid Whether execution is valid
+     * @return reason Validation result message
+     * @return estimatedOutput Expected output amount
+     */
+    function validateSwapExecution(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address executor
+    ) external returns (bool isValid, string memory reason, uint256 estimatedOutput) {
+        // Token validation
+        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
+            return (false, "Input token not supported", 0);
+        }
+        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
+            return (false, "Output token not supported", 0);
+        }
+
+        // Executor validation
+        if (directTransferMode && !hasRole(OPERATOR_ROLE, executor)) {
+            return (false, "Executor not authorized for direct mode", 0);
+        }
+
+        // Find route
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
+
+        // Validate pools
+        if (strategy.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
+            if (!route.isMultiHop && route.pool != address(0) && !poolWhitelist[route.pool]) {
+                return (false, "Uniswap pool not whitelisted", 0);
+            }
+        } else if (strategy.protocol == Protocol.Curve) {
+            CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
+            if (!poolWhitelist[route.pool]) {
+                return (false, "Curve pool not whitelisted", 0);
+            }
+        }
+
+        // Estimate output
+        estimatedOutput = _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
+
+        return (true, "Valid", estimatedOutput);
+    }
+
+    /**
+     * @notice Get comprehensive routing strategy for complex swaps
+     * @param tokenIn Input token
+     * @param tokenOut Output token
+     * @param amountIn Input amount
+     * @param minAmountOut Minimum output
+     * @return strategyData Encoded strategy data
+     * @return expectedOutput Expected output amount
+     * @return totalGas Total gas estimate
+     */
+    function getComplexSwapStrategy(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) external returns (bytes memory strategyData, uint256 expectedOutput, uint256 totalGas) {
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
+
+        strategyData = abi.encode(strategy);
+        totalGas = strategy.expectedGas;
+        expectedOutput = _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
+    }
+
+    // ============================================================================
+    // ORIGINAL SWAP FUNCTIONS WITH ENHANCED DIRECT MODE SUPPORT
+    // ============================================================================
+
+    /**
+     * @notice Execute swap with automatic routing
+     * @param tokenIn Input token
+     * @param tokenOut Output token
+     * @param amountIn Input amount
+     * @param minAmountOut Minimum output amount
+     * @return amountOut Output amount received
+     */
+    function autoSwapAssets(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) external payable onlyAuthorizedCaller nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (amountIn == 0) revert ZeroAmount();
+        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) revert TokenNotSupported();
+        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) revert TokenNotSupported();
+        if (tokenIn == tokenOut) revert SameTokenSwap();
+
+        // In direct transfer mode, execute without moving tokens to FAR
+        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
+            return _autoSwapDirectMode(tokenIn, tokenOut, amountIn, minAmountOut);
+        }
+
+        // Normal mode with transfers
+        return _autoSwapWithTransfers(tokenIn, tokenOut, amountIn, minAmountOut);
+    }
+
+    /**
+     * @notice Execute swap with specific parameters
+     * @param params Swap parameters
+     * @return amountOut Output amount received
+     */
+    function swapAssets(
+        SwapParams calldata params
+    ) external payable onlyAuthorizedCaller whenNotPaused nonReentrant returns (uint256 amountOut) {
+        _validateSwapParams(params);
+
+        // Direct transfer mode for operators
+        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
+            return _executeDirectModeSwap(params);
+        }
+
+        // Normal mode with transfers
+        return _swapAssetsWithTransfer(params);
+    }
+
+    // ============================================================================
+    // INTERNAL EXECUTION FUNCTIONS
+    // ============================================================================
+
+    /**
+     * @notice Execute auto-routing in direct transfer mode
+     */
+    function _autoSwapDirectMode(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal returns (uint256) {
+        // Find optimal strategy
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
+
+        // Validate pools
+        _validateStrategyPools(strategy);
+
+        // For direct mode, we need special handling based on protocol
+        if (strategy.protocol == Protocol.Curve) {
+            // Return expected output for LTM to verify
+            return _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
+        } else if (strategy.protocol == Protocol.UniswapV3) {
+            // Execute via Uniswap with caller as recipient
+            return _executeUniswapV3DirectMode(tokenIn, tokenOut, amountIn, minAmountOut, strategy);
+        } else if (strategy.protocol == Protocol.DirectMint) {
+            // Direct mint requires special handling
+            revert InvalidParameter("DirectMint not supported in direct mode");
+        }
+
+        revert UnsupportedRoute();
+    }
+
+    /**
+     * @notice Execute UniswapV3 swap in direct mode
+     */
+    function _executeUniswapV3DirectMode(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        ExecutionStrategy memory strategy
+    ) internal returns (uint256) {
+        UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
+
+        if (!route.isMultiHop) {
+            // Single hop
+            IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
+                tokenIn: tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
+                tokenOut: tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
+                fee: route.fee,
+                recipient: msg.sender, // Direct to caller
+                deadline: block.timestamp,
+                amountIn: amountIn,
+                amountOutMinimum: minAmountOut,
+                sqrtPriceLimitX96: 0
+            });
+
+            return uniswapRouter.exactInputSingle(params);
+        } else {
+            // Multi-hop
+            IUniswapV3Router.ExactInputParams memory params = IUniswapV3Router.ExactInputParams({
+                path: route.path,
+                recipient: msg.sender, // Direct to caller
+                deadline: block.timestamp,
+                amountIn: amountIn,
+                amountOutMinimum: minAmountOut
+            });
+
+            return uniswapRouter.exactInput(params);
+        }
+    }
+
+    /**
+     * @notice Find optimal execution strategy
+     */
+    function _findOptimalExecutionStrategy(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal view returns (ExecutionStrategy memory strategy) {
+        // Check direct route
+        bytes32 directKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+        RouteConfig memory directRoute = routes[directKey];
+
+        if (directRoute.isConfigured) {
+            strategy.routeType = RouteType.Direct;
+            strategy.protocol = directRoute.protocol;
+            strategy.primaryRouteData = _encodeRouteData(directRoute, tokenIn, tokenOut);
+            strategy.expectedGas = _estimateGasForProtocol(directRoute.protocol);
+            return strategy;
+        }
+
+        // Check reverse route
+        bytes32 reverseKey = keccak256(abi.encodePacked(tokenOut, tokenIn));
+        RouteConfig memory reverseRoute = routes[reverseKey];
+
+        if (reverseRoute.isConfigured) {
+            strategy.routeType = RouteType.Reverse;
+            strategy.protocol = reverseRoute.protocol;
+            strategy.primaryRouteData = _encodeReverseRouteData(reverseRoute, tokenOut, tokenIn);
+            strategy.expectedGas = _estimateGasForProtocol(reverseRoute.protocol);
+            return strategy;
+        }
+
+        // Check bridge route
+        address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
+        if (bridgeAsset != address(0)) {
+            bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, bridgeAsset));
+            bytes32 secondKey = keccak256(abi.encodePacked(bridgeAsset, tokenOut));
+
+            RouteConfig memory firstRoute = routes[firstKey];
+            RouteConfig memory secondRoute = routes[secondKey];
+
+            if (firstRoute.isConfigured && secondRoute.isConfigured) {
+                strategy.routeType = RouteType.Bridge;
+                strategy.bridgeAsset = bridgeAsset;
+                strategy.primaryRouteData = _encodeRouteData(firstRoute, tokenIn, bridgeAsset);
+                strategy.secondaryRouteData = _encodeRouteData(secondRoute, bridgeAsset, tokenOut);
+                strategy.expectedGas =
+                    _estimateGasForProtocol(firstRoute.protocol) +
+                    _estimateGasForProtocol(secondRoute.protocol);
+                return strategy;
+            }
+        }
+
+        revert NoRouteFound();
+    }
+
+    /**
+     * @notice Generate execution data for single route
+     */
+    function _generateSingleExecutionData(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal view returns (bytes memory) {
+        if (strategy.protocol == Protocol.UniswapV3) {
+            return
+                _generateUniswapV3ExecutionData(tokenIn, tokenOut, amountIn, minAmountOut, strategy.primaryRouteData);
+        } else if (strategy.protocol == Protocol.Curve) {
+            return _generateCurveExecutionData(tokenIn, tokenOut, amountIn, minAmountOut, strategy.primaryRouteData);
+        } else if (strategy.protocol == Protocol.DirectMint) {
+            return
+                _generateDirectMintExecutionData(tokenIn, tokenOut, amountIn, minAmountOut, strategy.primaryRouteData);
+        }
+
+        revert UnsupportedRoute();
+    }
+
+    /**
+     * @notice Generate UniswapV3 execution bytecode
+     */
+    function _generateUniswapV3ExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory routeData
+    ) internal view returns (bytes memory) {
+        UniswapV3Route memory route = abi.decode(routeData, (UniswapV3Route));
+
+        if (!route.isMultiHop) {
+            // Calculate pool if needed
+            if (route.pool == address(0)) {
+                route.pool = _computeUniswapV3Pool(
+                    tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
+                    tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
+                    route.fee
+                );
+            }
+
+            return
+                abi.encodeWithSelector(
+                    IUniswapV3Router.exactInputSingle.selector,
+                    IUniswapV3Router.ExactInputSingleParams({
+                        tokenIn: tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
+                        tokenOut: tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
+                        fee: route.fee,
+                        recipient: address(0), // To be replaced by caller
+                        deadline: 0, // To be set by caller
+                        amountIn: amountIn,
+                        amountOutMinimum: minAmountOut,
+                        sqrtPriceLimitX96: 0
+                    })
+                );
+        } else {
+            return
+                abi.encodeWithSelector(
+                    IUniswapV3Router.exactInput.selector,
+                    IUniswapV3Router.ExactInputParams({
+                        path: route.path,
+                        recipient: address(0), // To be replaced by caller
+                        deadline: 0, // To be set by caller
+                        amountIn: amountIn,
+                        amountOutMinimum: minAmountOut
+                    })
+                );
+        }
+    }
+
+    /**
+     * @notice Generate Curve execution bytecode
+     */
+    function _generateCurveExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory routeData
+    ) internal pure returns (bytes memory) {
+        CurveRoute memory route = abi.decode(routeData, (CurveRoute));
+
+        if (route.useUnderlying) {
+            return
+                abi.encodeWithSelector(
+                    ICurvePool.exchange_underlying.selector,
+                    route.indexIn,
+                    route.indexOut,
+                    amountIn,
+                    minAmountOut
+                );
+        } else {
+            return
+                abi.encodeWithSelector(
+                    ICurvePool.exchange.selector,
+                    route.indexIn,
+                    route.indexOut,
+                    amountIn,
+                    minAmountOut
+                );
+        }
+    }
+
+    // ============================================================================
+    // ROUTE CONFIGURATION
+    // ============================================================================
+
+    /**
+     * @notice Configure a multi-hop route
+     * @param tokenIn Starting token
+     * @param tokenOut Final token
+     * @param path The complete path for multi-hop
+     * @param password Security password
+     */
+    function configureMultiHopRoute(
+        address tokenIn,
+        address tokenOut,
+        bytes calldata path,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(path.length >= 43, "Path too short");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        routes[routeKey] = RouteConfig({
+            protocol: Protocol.MultiHop,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: path,
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0),
+            isConfigured: true,
+            routeData: path
+        });
+
+        emit RouteConfigured(tokenIn, tokenOut, Protocol.MultiHop, address(0));
+    }
+
+    /**
+     * @notice Configure a multi-step route across multiple DEXes
+     * @param tokens Array of tokens in the route
+     * @param protocols Array of protocols for each step
+     * @param routeConfigs Array of route configurations
+     * @param password Security password
+     */
+    function configureMultiStepRoute(
+        address[] calldata tokens,
+        Protocol[] calldata protocols,
+        RouteConfig[] calldata routeConfigs,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(tokens.length >= 2, "Need at least 2 tokens");
+        require(tokens.length == protocols.length + 1, "Invalid array lengths");
+        require(protocols.length == routeConfigs.length, "Config length mismatch");
+
+        // Encode route data for each step
+        bytes[] memory routeDatas = new bytes[](protocols.length);
+        uint256[] memory minAmounts = new uint256[](protocols.length);
+
+        for (uint256 i = 0; i < protocols.length; i++) {
+            routeDatas[i] = _encodeRouteData(routeConfigs[i], tokens[i], tokens[i + 1]);
+            minAmounts[i] = 0; // Will be calculated at execution time
+        }
+
+        // Store the complete multi-step route
+        bytes32 routeKey = keccak256(abi.encodePacked(tokens[0], tokens[tokens.length - 1]));
+
+        routes[routeKey] = RouteConfig({
+            protocol: Protocol.MultiStep,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0),
+            isConfigured: true,
+            routeData: abi.encode(tokens, protocols, routeDatas, minAmounts)
+        });
+
+        emit RouteConfigured(tokens[0], tokens[tokens.length - 1], Protocol.MultiStep, address(0));
+    }
+    /**
+     * @notice Configure a swap route
+     */
+    function configureRoute(
+        address tokenIn,
+        address tokenOut,
+        Protocol protocol,
+        address pool,
+        uint24 fee,
+        int128 tokenIndexIn,
+        int128 tokenIndexOut,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        routes[routeKey] = RouteConfig({
+            protocol: protocol,
+            pool: pool,
+            fee: fee,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: tokenIndexIn,
+            tokenIndexOut: tokenIndexOut,
+            useUnderlying: false,
+            specialContract: address(0),
+            isConfigured: true,
+            routeData: ""
+        });
+
+        emit RouteConfigured(tokenIn, tokenOut, protocol, pool);
+    }
+
+    /**
+     * @notice Configure DirectMint route
+     */
+    function configureDirectMintRoute(
+        address tokenIn,
+        address tokenOut,
+        address minterContract,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        routes[routeKey] = RouteConfig({
+            protocol: Protocol.DirectMint,
+            pool: address(0),
+            fee: 0,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: minterContract,
+            isConfigured: true,
+            routeData: ""
+        });
+
+        emit RouteConfigured(tokenIn, tokenOut, Protocol.DirectMint, minterContract);
+    }
+
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+
+    /**
+     * @notice Get Curve route data for external callers
+     */
+    function getCurveRouteData(
+        address tokenIn,
+        address tokenOut
+    ) external view returns (bool isCurve, address pool, int128 indexIn, int128 indexOut, bool useUnderlying) {
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+        RouteConfig memory config = routes[routeKey];
+
+        if (config.isConfigured && config.protocol == Protocol.Curve) {
+            return (true, config.pool, config.tokenIndexIn, config.tokenIndexOut, config.useUnderlying);
+        }
+
+        return (false, address(0), 0, 0, false);
+    }
+
+    /**
+     * @notice Compute UniswapV3 pool address
+     */
+    function _computeUniswapV3Pool(address tokenA, address tokenB, uint24 fee) internal pure returns (address pool) {
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+
+        pool = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            UNISWAP_V3_FACTORY,
+                            keccak256(abi.encode(token0, token1, fee)),
+                            POOL_INIT_CODE_HASH
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    /**
+     * @notice Get bridge asset for routing
+     */
+    function _getBridgeAsset(address tokenIn, address tokenOut) internal view returns (address) {
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
+
+        if (typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST) {
+            return address(WETH);
+        } else if (typeIn == AssetType.BTC_WRAPPED && typeOut == AssetType.BTC_WRAPPED) {
+            return WBTC;
+        }
+
+        return address(0);
+    }
+
+    /**
+     * @notice Get slippage for token pair
+     */
+    function _getSlippage(
+        address tokenIn,
+        address tokenOut,
+        SlippageType slippageType
+    ) internal view returns (uint256) {
+        if (slippageType == SlippageType.QUOTE) {
+            return TIGHT_BUFFER_BPS;
+        }
+
+        uint256 configured = slippageTolerance[tokenIn][tokenOut];
+        if (configured > 0) return configured;
+
+        return _getDefaultSlippage(tokenIn, tokenOut);
+    }
+
+    /**
+     * @notice Get default slippage based on asset types
+     */
+    function _getDefaultSlippage(address tokenIn, address tokenOut) internal view returns (uint256) {
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
+
+        if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE) return 30;
+        if (typeIn == AssetType.ETH_LST || typeOut == AssetType.ETH_LST) return 200;
+        if (typeIn == AssetType.BTC_WRAPPED || typeOut == AssetType.BTC_WRAPPED) return 300;
+
+        return 500;
+    }
+
+    /**
+     * @notice Validate swap parameters
+     */
+    function _validateSwapParams(SwapParams memory params) internal view {
+        if (params.amountIn == 0) revert ZeroAmount();
+        if (params.tokenIn == params.tokenOut) revert SameTokenSwap();
+        if (!initialized) revert NotInitialized();
+
+        _validateTokenSupport(params.tokenIn, params.tokenOut);
+    }
+
+    /**
+     * @notice Validate token support
+     */
+    function _validateTokenSupport(address tokenIn, address tokenOut) internal view {
+        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
+            revert TokenNotSupported();
+        }
+        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
+            revert TokenNotSupported();
+        }
+    }
+
+    /**
+     * @notice Validate strategy pools
+     */
+    function _validateStrategyPools(ExecutionStrategy memory strategy) internal view {
+        if (strategy.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
+            if (!route.isMultiHop && route.pool != address(0) && !poolWhitelist[route.pool]) {
+                revert PoolNotWhitelisted();
+            }
+        } else if (strategy.protocol == Protocol.Curve) {
+            CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
+            if (!poolWhitelist[route.pool]) {
+                revert PoolNotWhitelisted();
+            }
+        }
+    }
+
+    /**
+     * @notice Estimate gas for protocol
+     */
+    function _estimateGasForProtocol(Protocol protocol) internal pure returns (uint256) {
+        if (protocol == Protocol.UniswapV3) return 150000;
+        if (protocol == Protocol.Curve) return 200000;
+        if (protocol == Protocol.DirectMint) return 100000;
+        if (protocol == Protocol.MultiHop) return 250000;
+        if (protocol == Protocol.MultiStep) return 300000;
+        return 200000;
+    }
+
+    /**
+     * @notice Estimate swap output
+     */
+    function _estimateSwapOutput(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        ExecutionStrategy memory strategy
+    ) internal returns (uint256) {
+        if (strategy.routeType == RouteType.Bridge) {
+            // Estimate through bridge
+            uint256 bridgeAmount = _estimateSingleSwap(
+                tokenIn,
+                strategy.bridgeAsset,
+                amountIn,
+                strategy.primaryRouteData
+            );
+            return _estimateSingleSwap(strategy.bridgeAsset, tokenOut, bridgeAmount, strategy.secondaryRouteData);
+        } else {
+            return _estimateSingleSwap(tokenIn, tokenOut, amountIn, strategy.primaryRouteData);
+        }
+    }
+
+    /**
+     * @notice Estimate single swap output
+     */
+    function _estimateSingleSwap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        bytes memory routeData
+    ) internal returns (uint256) {
+        // Use quoter if available
+        try
+            uniswapQuoter.quoteExactInputSingle(
+                tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
+                tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
+                3000, // Default fee
+                amountIn,
+                0
+            )
+        returns (uint256 quotedAmount) {
+            return quotedAmount;
+        } catch {
+            // Fallback to simple estimate
+            return _getSimpleEstimate(amountIn, tokenIn, tokenOut);
+        }
+    }
+
+    /**
+     * @notice Simple estimate for fallback
+     */
+    function _getSimpleEstimate(uint256 amountIn, address tokenIn, address tokenOut) internal view returns (uint256) {
+        // Normalize amounts based on decimals
+        uint8 decimalsIn = tokenDecimals[tokenIn] > 0 ? tokenDecimals[tokenIn] : 18;
+        uint8 decimalsOut = tokenDecimals[tokenOut] > 0 ? tokenDecimals[tokenOut] : 18;
+
+        if (decimalsIn == decimalsOut) {
+            return (amountIn * 98) / 100; // 2% price impact
+        } else if (decimalsIn > decimalsOut) {
+            uint256 factor = 10 ** (decimalsIn - decimalsOut);
+            return ((amountIn / factor) * 98) / 100;
+        } else {
+            uint256 factor = 10 ** (decimalsOut - decimalsIn);
+            return (amountIn * factor * 98) / 100;
+        }
+    }
+
+    /**
+     * @notice Encode route data
+     */
+    function _encodeRouteData(
+        RouteConfig memory config,
+        address tokenIn,
+        address tokenOut
+    ) internal pure returns (bytes memory) {
+        if (config.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = UniswapV3Route({
+                pool: config.pool,
+                fee: config.fee,
+                isMultiHop: config.path.length > 0,
+                path: config.path
+            });
+            return abi.encode(route);
+        } else if (config.protocol == Protocol.Curve) {
+            CurveRoute memory route = CurveRoute({
+                pool: config.pool,
+                indexIn: config.tokenIndexIn,
+                indexOut: config.tokenIndexOut,
+                useUnderlying: config.useUnderlying
+            });
+            return abi.encode(route);
+        } else if (config.protocol == Protocol.DirectMint) {
+            return abi.encode(config.specialContract);
+        }
+
+        return config.routeData;
+    }
+
+    /**
+     * @notice Encode reverse route data
+     */
+    function _encodeReverseRouteData(
+        RouteConfig memory config,
+        address tokenIn,
+        address tokenOut
+    ) internal pure returns (bytes memory) {
+        if (config.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = UniswapV3Route({
+                pool: config.pool,
+                fee: config.fee,
+                isMultiHop: config.path.length > 0,
+                path: config.path // TODO: Reverse path for multi-hop
+            });
+            return abi.encode(route);
+        } else if (config.protocol == Protocol.Curve) {
+            CurveRoute memory route = CurveRoute({
+                pool: config.pool,
+                indexIn: config.tokenIndexOut, // Reversed
+                indexOut: config.tokenIndexIn, // Reversed
+                useUnderlying: config.useUnderlying
+            });
+            return abi.encode(route);
+        }
+
+        return config.routeData;
+    }
+
+    /**
+     * @notice Generate bridge execution data
+     */
+    function _generateBridgeExecutionData(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal view returns (bytes memory) {
+        // For bridge swaps, return encoded strategy for LTM to handle
+        return
+            abi.encode(
+                "BRIDGE_SWAP",
+                tokenIn,
+                strategy.bridgeAsset,
+                tokenOut,
+                amountIn,
+                minAmountOut,
+                strategy.primaryRouteData,
+                strategy.secondaryRouteData
+            );
+    }
+
+    /**
+     * @notice Generate DirectMint execution data
+     */
+    function _generateDirectMintExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory routeData
+    ) internal pure returns (bytes memory) {
+        address minter = abi.decode(routeData, (address));
+
+        if (tokenIn == ETH_ADDRESS && tokenOut == SFRXETH) {
+            return
+                abi.encodeWithSelector(
+                    IFrxETHMinter.submitAndDeposit.selector,
+                    address(0) // Recipient to be set by caller
+                );
+        }
+
+        revert UnsupportedRoute();
+    }
+
+    /**
+     * @notice Perform quote with external call
+     */
+    function _performQuote(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
         SwapParams memory params
     ) internal returns (QuoteData memory) {
-        try this._performQuote(tokenIn, tokenOut, amountIn, params) returns (uint256 expectedOutput) {
+        try this._performQuoteExternal(tokenIn, tokenOut, amountIn, params) returns (uint256 expectedOutput) {
             return QuoteData({expectedOutput: expectedOutput, timestamp: block.timestamp, valid: true});
         } catch {
             return QuoteData(0, 0, false);
@@ -678,14 +1310,9 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Perform actual quote based on protocol
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Input amount
-     * @param params Swap parameters for route data
-     * @return expectedOutput Expected output amount
+     * @notice External quote function for try-catch
      */
-    function _performQuote(
+    function _performQuoteExternal(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
@@ -703,1659 +1330,783 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             }
         } else if (params.protocol == Protocol.Curve) {
             CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
-            return ICurvePool(route.pool).get_dy(route.tokenIndexIn, route.tokenIndexOut, amountIn);
+            if (route.useUnderlying) {
+                return ICurvePool(route.pool).get_dy_underlying(route.indexIn, route.indexOut, amountIn);
+            } else {
+                return ICurvePool(route.pool).get_dy(route.indexIn, route.indexOut, amountIn);
+            }
         } else if (params.protocol == Protocol.DirectMint) {
-            // For direct mint, assume 1:1 ratio (this is often the case for ETH→sfrxETH)
-            return amountIn;
-        } else if (params.protocol == Protocol.MultiHop) {
-            // For multi-hop, try to get quote from the underlying route
-            MultiHopRoute memory route = abi.decode(params.routeData, (MultiHopRoute));
-            UniswapV3Route memory uniRoute = abi.decode(route.routeData, (UniswapV3Route));
-            return uniswapQuoter.quoteExactInput(uniRoute.path, amountIn);
-        } else if (params.protocol == Protocol.MultiStep) {
-            // For multi-step, return conservative estimate
-            return (amountIn * 95) / 100; // Assume 5% price impact
+            return amountIn; // 1:1 for direct mint
         }
 
         revert UnsupportedRoute();
     }
 
     /**
-     * @notice Execute swap with quoter data and tight buffer
-     * @param actualTokenIn Processed token input address
-     * @param params Original swap parameters
-     * @param quote Quote data with expected output
-     * @return amountOut Amount received
+     * @notice Check if route exists
      */
-    function _executeSwapWithQuote(
-        address actualTokenIn,
-        SwapParams memory params,
-        QuoteData memory quote
-    ) external returns (uint256) {
-        require(msg.sender == address(this), "Internal only");
-
-        // Check quote freshness
-        if (block.timestamp - quote.timestamp > QUOTE_MAX_AGE) revert QuoteTooOld();
-
-        // Calculate minAmountOut with tight buffer
-        uint256 minAmountOut = (quote.expectedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
-
-        return _executeSwap(actualTokenIn, params, minAmountOut);
+    function _routeExists(address tokenA, address tokenB) internal view returns (bool) {
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenA, tokenB));
+        return routes[routeKey].isConfigured;
     }
 
     /**
-     * @notice Execute swap with config slippage fallback
-     * @param actualTokenIn Processed token input address
-     * @param params Original swap parameters
-     * @param configSlippage Configured slippage in basis points
-     * @return amountOut Amount received
+     * @notice Apply production slippage configuration
      */
-    function _executeSwapWithConfig(
-        address actualTokenIn,
-        SwapParams memory params,
-        uint256 configSlippage
-    ) internal returns (uint256) {
-        // Try to get a fresh quote for better accuracy
-        QuoteData memory fallbackQuote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
+    function _applyProductionSlippageConfig() internal {
+        // ETH to LST tokens
+        slippageTolerance[ETH_ADDRESS][0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84] = 50; // ETH->stETH
+        slippageTolerance[ETH_ADDRESS][FRXETH] = 50; // ETH->frxETH
+        slippageTolerance[ETH_ADDRESS][SFRXETH] = 50; // ETH->sfrxETH
 
-        uint256 expectedOutput;
-        if (fallbackQuote.valid) {
-            expectedOutput = fallbackQuote.expectedOutput;
-        } else {
-            // Use simple estimate if quote fails
-            expectedOutput = _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
-        }
+        // WETH to LST tokens
+        slippageTolerance[address(WETH)][0xBe9895146f7AF43049ca1c1AE358B0541Ea49704] = 350; // WETH->cbETH
+        slippageTolerance[address(WETH)][RETH] = 750; // WETH->rETH
+        slippageTolerance[address(WETH)][OSETH] = 500; // WETH->osETH
 
-        uint256 minAmountOut = (expectedOutput * (10000 - configSlippage)) / 10000;
-
-        return _executeSwap(actualTokenIn, params, minAmountOut);
+        // Add more production configurations as needed
     }
-
     /**
-     * @notice Low-level swap execution (modified to accept minAmountOut parameter)
-     * @param actualTokenIn Processed token input address
-     * @param params Original swap parameters
-     * @param minAmountOut Minimum acceptable output
-     * @return amountOut Amount received
+     * @notice Execute multi-hop swap (single DEX, multiple pools)
+     * @param actualTokenIn The actual input token (WETH if ETH was provided)
+     * @param params Swap parameters containing the route
+     * @param minAmountOut Minimum output amount
+     * @return amountOut The output amount received
      */
-    function _executeSwap(
+    function _executeMultiHopSwap(
         address actualTokenIn,
         SwapParams memory params,
         uint256 minAmountOut
     ) internal returns (uint256 amountOut) {
-        // Execute protocol-specific swap
-        if (params.protocol == Protocol.UniswapV3) {
-            amountOut = _performUniswapV3Swap(actualTokenIn, params, minAmountOut);
-        } else if (params.protocol == Protocol.Curve) {
-            amountOut = _performCurveSwap(actualTokenIn, params, minAmountOut);
-        } else if (params.protocol == Protocol.DirectMint) {
-            amountOut = _performDirectMint(params);
-        } else if (params.protocol == Protocol.MultiHop) {
-            amountOut = _performMultiHopSwap(params, minAmountOut);
-        } else if (params.protocol == Protocol.MultiStep) {
-            amountOut = _performMultiStepSwap(params, minAmountOut);
+        // Decode the multi-hop route
+        bytes memory path = abi.decode(params.routeData, (bytes));
+        require(path.length >= 43, "Invalid path"); // minimum: 20 + 3 + 20
+
+        // For Uniswap V3 multi-hop
+        if (params.protocol == Protocol.UniswapV3 || params.protocol == Protocol.MultiHop) {
+            // Approve router
+            IERC20(actualTokenIn).safeApprove(address(uniswapRouter), params.amountIn);
+
+            // Execute multi-hop swap
+            amountOut = uniswapRouter.exactInput(
+                IUniswapV3Router.ExactInputParams({
+                    path: path,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: params.amountIn,
+                    amountOutMinimum: minAmountOut
+                })
+            );
+
+            // Reset approval
+            IERC20(actualTokenIn).safeApprove(address(uniswapRouter), 0);
+
+            require(amountOut >= minAmountOut, "Insufficient output");
         } else {
-            revert InvalidProtocol();
+            revert("Unsupported multi-hop protocol");
         }
-
-        if (amountOut < minAmountOut) revert InsufficientOutput();
     }
 
     /**
-     * @notice Simple estimate for fallback when quote fails
-     * @param amountIn Input amount
-     * @param tokenIn Input token (for future price logic)
-     * @param tokenOut Output token (for future price logic)
-     * @return Estimated output amount
+     * @notice Execute multi-step swap (multiple DEXes)
+     * @param actualTokenIn The actual input token
+     * @param params Swap parameters containing the steps
+     * @param minAmountOut Minimum final output amount
+     * @return amountOut The final output amount
      */
-    function _getSimpleEstimate(uint256 amountIn, address tokenIn, address tokenOut) internal pure returns (uint256) {
-        // Simple 1:1 estimate with 5% price impact assumption
-        return (amountIn * 95) / 100;
-    }
-
-    // ============================================================================
-    // MODIFIED PROTOCOL IMPLEMENTATIONS  Updated to accept minAmountOut
-    // ============================================================================
-
-    /**
-     * @notice Execute Uniswap V3 swap (modified to accept minAmountOut)
-     */
-    function _performUniswapV3Swap(
-        address tokenIn,
+    function _executeMultiStepSwap(
+        address actualTokenIn,
         SwapParams memory params,
         uint256 minAmountOut
-    ) private returns (uint256 amountOut) {
-        UniswapV3Route memory route = abi.decode(params.routeData, (UniswapV3Route));
+    ) internal returns (uint256 amountOut) {
+        // Decode multi-step data
+        (
+            address[] memory tokens,
+            Protocol[] memory protocols,
+            bytes[] memory routeDatas,
+            uint256[] memory minAmounts
+        ) = abi.decode(params.routeData, (address[], Protocol[], bytes[], uint256[]));
 
-        // Pool validation for single-hop swaps
-        if (!route.isMultiHop) {
-            if (!customRouteEnabled[params.tokenIn][params.tokenOut]) {
-                if (!whitelistedPools[route.pool]) revert PoolNotWhitelisted();
-                if (poolPaused[route.pool]) revert PoolIsPaused();
-            }
-        }
-
-        // Determine recipient based on mode
-        address recipient = (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) ? msg.sender : address(this);
-
-        // Set approval from the actual token holder
-        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            // In direct mode, FAR uses caller's approval
-            // No need to set approval here, caller should have approved FAR
-        } else {
-            // Normal mode: FAR sets approval
-            IERC20(tokenIn).safeApprove(address(uniswapRouter), 0);
-            IERC20(tokenIn).safeApprove(address(uniswapRouter), params.amountIn);
-        }
-
-        if (route.isMultiHop) {
-            try
-                uniswapRouter.exactInput(
-                    IUniswapV3Router.ExactInputParams({
-                        path: route.path,
-                        recipient: recipient,
-                        deadline: block.timestamp + 300,
-                        amountIn: params.amountIn,
-                        amountOutMinimum: minAmountOut
-                    })
-                )
-            returns (uint256 _amountOut) {
-                amountOut = _amountOut;
-                if (amountOut == 0) revert InvalidReturnData();
-            } catch Error(string memory reason) {
-                revert SwapFailed(string(abi.encodePacked("UniswapV3 multi-hop: ", reason)));
-            } catch (bytes memory lowLevelData) {
-                revert SwapFailed(_parseRevertReason(lowLevelData));
-            }
-        } else {
-            try
-                uniswapRouter.exactInputSingle(
-                    IUniswapV3Router.ExactInputSingleParams({
-                        tokenIn: tokenIn,
-                        tokenOut: params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
-                        fee: route.fee,
-                        recipient: recipient,
-                        deadline: block.timestamp + 300,
-                        amountIn: params.amountIn,
-                        amountOutMinimum: minAmountOut,
-                        sqrtPriceLimitX96: 0
-                    })
-                )
-            returns (uint256 _amountOut) {
-                amountOut = _amountOut;
-                if (amountOut == 0) revert InvalidReturnData();
-            } catch Error(string memory reason) {
-                revert SwapFailed(string(abi.encodePacked("UniswapV3 single-hop: ", reason)));
-            } catch (bytes memory lowLevelData) {
-                revert SwapFailed(_parseRevertReason(lowLevelData));
-            }
-        }
-
-        // Only reset approval in normal mode
-        if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-            _resetApproval(tokenIn, address(uniswapRouter));
-        }
-    }
-
-    /**
-     * @notice Execute Curve swap (modified to accept minAmountOut)
-     */
-    function _performCurveSwap(
-        address tokenIn,
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) private returns (uint256 amountOut) {
-        CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
-
-        // Pool validation
-        if (!customRouteEnabled[params.tokenIn][params.tokenOut]) {
-            if (!whitelistedPools[route.pool]) revert PoolNotWhitelisted();
-            if (poolPaused[route.pool]) revert PoolIsPaused();
-        }
-
-        _validateCurveTokenIndices(route.pool, route.tokenIndexIn, route.tokenIndexOut);
-
-        // Handle ETH/WETH conversion for Curve
-        uint256 amountIn = params.amountIn;
-        if (tokenIn == address(WETH) && params.tokenIn == ETH_ADDRESS) {
-            WETH.withdraw(amountIn);
-        } else if (tokenIn != address(WETH)) {
-            IERC20(tokenIn).safeApprove(route.pool, 0);
-            IERC20(tokenIn).safeApprove(route.pool, amountIn);
-        }
-
-        // Get balance before
-        uint256 balanceBefore;
-        if (params.tokenOut == ETH_ADDRESS) {
-            balanceBefore = address(this).balance;
-        } else {
-            balanceBefore = IERC20(params.tokenOut).balanceOf(address(this));
-        }
-
-        // Execute swap
-        CurveInterface interfaceType = curvePoolInterfaces[route.pool];
-        if (interfaceType == CurveInterface.None) revert UnsupportedInterface();
-
-        if (
-            route.useUnderlying &&
-            (interfaceType == CurveInterface.ExchangeUnderlying || interfaceType == CurveInterface.Both)
-        ) {
-            try
-                ICurvePool(route.pool).exchange_underlying{
-                    gas: EXTERNAL_CALL_GAS_LIMIT,
-                    value: params.tokenIn == ETH_ADDRESS ? amountIn : 0
-                }(route.tokenIndexIn, route.tokenIndexOut, amountIn, minAmountOut)
-            {
-                // Success
-            } catch Error(string memory reason) {
-                _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(string(abi.encodePacked("Curve exchange_underlying: ", reason)));
-            } catch (bytes memory lowLevelData) {
-                _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(_parseRevertReason(lowLevelData));
-            }
-        } else if (interfaceType == CurveInterface.Exchange || interfaceType == CurveInterface.Both) {
-            try
-                ICurvePool(route.pool).exchange{
-                    gas: EXTERNAL_CALL_GAS_LIMIT,
-                    value: params.tokenIn == ETH_ADDRESS ? amountIn : 0
-                }(route.tokenIndexIn, route.tokenIndexOut, amountIn, minAmountOut)
-            {
-                // Success
-            } catch Error(string memory reason) {
-                _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(string(abi.encodePacked("Curve exchange: ", reason)));
-            } catch (bytes memory lowLevelData) {
-                _resetApproval(tokenIn, route.pool);
-                revert SwapFailed(_parseRevertReason(lowLevelData));
-            }
-        } else {
-            revert UnsupportedInterface();
-        }
-
-        // Calculate amount out
-        uint256 balanceAfter;
-        if (params.tokenOut == ETH_ADDRESS) {
-            balanceAfter = address(this).balance;
-        } else {
-            balanceAfter = IERC20(params.tokenOut).balanceOf(address(this));
-        }
-
-        amountOut = balanceAfter - balanceBefore;
-        if (amountOut == 0) revert InvalidReturnData();
-
-        _resetApproval(tokenIn, route.pool);
-    }
-
-    /**
-     * @notice Handle direct minting operations (FIXED to use route data)
-     */
-    function _performDirectMint(SwapParams memory params) private returns (uint256 amountOut) {
-        address minterContract = address(frxETHMinter);
-        if (params.routeData.length > 0) {
-            minterContract = abi.decode(params.routeData, (address));
-        }
-
-        if (params.tokenIn == ETH_ADDRESS && params.tokenOut == SFRXETH) {
-            //  The minter DOES support ETH->sfrxETH directly!
-            try IFrxETHMinter(minterContract).submitAndDeposit{value: params.amountIn}(address(this)) returns (
-                uint256 shares
-            ) {
-                amountOut = shares; //  Make sure we're capturing the return value
-                require(amountOut > 0, "No sfrxETH received");
-            } catch Error(string memory reason) {
-                revert SwapFailed(string(abi.encodePacked("DirectMint: ", reason)));
-            } catch (bytes memory lowLevelData) {
-                revert SwapFailed(_parseRevertReason(lowLevelData));
-            }
-        } else {
-            revert UnsupportedRoute();
-        }
-    }
-    /**
-     * @notice Execute multi-hop swap (modified to accept minAmountOut)
-     */
-    function _performMultiHopSwap(SwapParams memory params, uint256 minAmountOut) private returns (uint256 amountOut) {
-        if (params.tokenIn == address(WETH) && params.tokenOut == OSETH) {
-            return _performWETHToOsETHSwap(params, minAmountOut);
-        }
-
-        // Generic multi-hop logic
-        MultiHopRoute memory route = abi.decode(params.routeData, (MultiHopRoute));
-        UniswapV3Route memory uniRoute = abi.decode(route.routeData, (UniswapV3Route));
-        uniRoute.isMultiHop = true;
-
-        SwapParams memory modifiedParams = params;
-        modifiedParams.routeData = abi.encode(uniRoute);
-
-        address actualTokenIn = _handleTokenInput(params);
-        return _performUniswapV3Swap(actualTokenIn, modifiedParams, minAmountOut);
-    }
-
-    /**
-     * @notice Execute multi-step operations (modified to accept minAmountOut)
-     */
-    function _performMultiStepSwap(SwapParams memory params, uint256 minAmountOut) private returns (uint256 amountOut) {
-        MultiStepRoute memory route = abi.decode(params.routeData, (MultiStepRoute));
-
-        if (route.steps.length == 0) revert InvalidParameter("emptySteps");
-        if (route.steps.length > MAX_MULTI_STEP_OPERATIONS) revert TooManySteps();
+        require(tokens.length >= 2, "Invalid tokens array");
+        require(tokens.length == protocols.length + 1, "Invalid protocols length");
+        require(protocols.length == routeDatas.length, "Invalid route data length");
+        require(protocols.length == minAmounts.length, "Invalid min amounts length");
+        require(tokens[0] == actualTokenIn, "First token mismatch");
+        require(tokens[tokens.length - 1] == params.tokenOut, "Last token mismatch");
 
         uint256 currentAmount = params.amountIn;
-        address currentToken = params.tokenIn;
+        address currentToken = actualTokenIn;
 
-        for (uint256 i = 0; i < route.steps.length; i++) {
-            StepAction memory step = route.steps[i];
+        // Execute each step
+        for (uint256 i = 0; i < protocols.length; i++) {
+            require(protocols.length <= MAX_MULTI_STEP_OPERATIONS, "Too many steps");
 
-            if (step.actionType == ActionType.UNWRAP) {
-                if (currentToken != address(WETH)) revert InvalidStep();
-                WETH.withdraw(currentAmount);
-                currentToken = ETH_ADDRESS;
-            } else if (step.actionType == ActionType.WRAP) {
-                if (currentToken != ETH_ADDRESS) revert InvalidStep();
-                WETH.deposit{value: currentAmount}();
-                currentToken = address(WETH);
-            } else if (step.actionType == ActionType.DIRECT_MINT) {
-                if (currentToken != ETH_ADDRESS) revert InvalidStep();
-                if (step.tokenOut != SFRXETH) revert InvalidStep();
+            address nextToken = tokens[i + 1];
 
-                try frxETHMinter.submitAndDeposit{value: currentAmount}(address(this)) returns (uint256 _amountOut) {
-                    currentAmount = _amountOut;
-                    if (currentAmount == 0) revert InvalidReturnData();
-                } catch Error(string memory reason) {
-                    revert SwapFailed(string(abi.encodePacked("MultiStep DirectMint: ", reason)));
-                } catch (bytes memory lowLevelData) {
-                    revert SwapFailed(_parseRevertReason(lowLevelData));
+            // Create swap params for this step
+            SwapParams memory stepParams = SwapParams({
+                tokenIn: currentToken,
+                tokenOut: nextToken,
+                amountIn: currentAmount,
+                minAmountOut: minAmounts[i],
+                protocol: protocols[i],
+                routeData: routeDatas[i]
+            });
+
+            // Execute based on protocol
+            if (protocols[i] == Protocol.UniswapV3) {
+                currentAmount = _executeUniswapV3Swap(currentToken, stepParams, minAmounts[i]);
+            } else if (protocols[i] == Protocol.Curve) {
+                currentAmount = _executeCurveSwap(currentToken, stepParams, minAmounts[i]);
+            } else if (protocols[i] == Protocol.DirectMint) {
+                currentAmount = _executeDirectMint(stepParams, minAmounts[i]);
+            } else {
+                revert("Unsupported protocol in multi-step");
+            }
+
+            currentToken = nextToken;
+
+            // Handle WETH/ETH conversions between steps if needed
+            if (i < protocols.length - 1) {
+                if (currentToken == address(WETH) && tokens[i + 2] == ETH_ADDRESS) {
+                    WETH.withdraw(currentAmount);
+                    currentToken = ETH_ADDRESS;
+                } else if (currentToken == ETH_ADDRESS && tokens[i + 2] != ETH_ADDRESS) {
+                    WETH.deposit{value: currentAmount}();
+                    currentToken = address(WETH);
                 }
-
-                currentToken = SFRXETH;
-            } else if (step.actionType == ActionType.SWAP) {
-                SwapParams memory stepParams = SwapParams({
-                    tokenIn: currentToken,
-                    tokenOut: step.tokenOut,
-                    amountIn: currentAmount,
-                    minAmountOut: 0, // Intermediate step
-                    protocol: step.protocol,
-                    routeData: step.routeData
-                });
-
-                uint256 intermediateMin = _calculateIntermediateMinOut(
-                    currentToken,
-                    step.tokenOut,
-                    currentAmount,
-                    minAmountOut
-                );
-
-                if (step.protocol == Protocol.UniswapV3) {
-                    currentAmount = _performUniswapV3Swap(currentToken, stepParams, intermediateMin);
-                } else if (step.protocol == Protocol.Curve) {
-                    currentAmount = _performCurveSwap(currentToken, stepParams, intermediateMin);
-                } else {
-                    revert InvalidProtocol();
-                }
-
-                currentToken = step.tokenOut;
             }
         }
 
-        if (currentToken != params.tokenOut) revert InvalidParameter("wrongFinalToken");
-        if (currentAmount < minAmountOut) revert InsufficientOutput();
-
         amountOut = currentAmount;
+        require(amountOut >= minAmountOut, "Insufficient final output");
+    }
+    // ============================================================================
+    // ADMIN FUNCTIONS
+    // ============================================================================
 
-        emit MultiStepExecuted(
+    /**
+     * @notice Set direct transfer mode
+     */
+    function setDirectTransferMode(bool _enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        directTransferMode = _enabled;
+        emit DirectTransferModeUpdated(_enabled, block.timestamp);
+    }
+
+    /**
+     * @notice Grant operator role
+     */
+    function grantOperatorRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(OPERATOR_ROLE, account);
+    }
+
+    /**
+     * @notice Revoke operator role
+     */
+    function revokeOperatorRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        revokeRole(OPERATOR_ROLE, account);
+    }
+
+    /**
+     * @notice Emergency pause
+     */
+    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause
+     */
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause();
+    }
+
+    // ============================================================================
+    // LEGACY SUPPORT FUNCTIONS
+    // ============================================================================
+
+    /**
+     * @notice Legacy swap with transfers (for backward compatibility)
+     */
+    function _swapAssetsWithTransfer(SwapParams memory params) internal returns (uint256 amountOut) {
+        // Transfer tokens to FAR
+        uint256 balanceBefore = IERC20(params.tokenIn).balanceOf(address(this));
+        IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
+        uint256 actualAmountIn = IERC20(params.tokenIn).balanceOf(address(this)) - balanceBefore;
+
+        params.amountIn = actualAmountIn;
+
+        // Execute swap using quoter-first approach
+        amountOut = _executeSwapInternal(params);
+
+        // Transfer output to caller
+        IERC20(params.tokenOut).safeTransfer(msg.sender, amountOut);
+
+        emit AssetsSwapped(
             params.tokenIn,
             params.tokenOut,
-            params.amountIn,
+            actualAmountIn,
             amountOut,
-            route.steps.length,
+            params.protocol,
             msg.sender,
+            0,
             block.timestamp
         );
     }
 
     /**
-     * @notice Execute WETH → rETH → osETH swap (modified to accept minAmountOut)
+     * @notice Execute swap internally with full protocol support
      */
-    function _performWETHToOsETHSwap(
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) private returns (uint256 amountOut) {
-        address uniswapPoolAddr = 0x553e9C493678d8606d6a5ba284643dB2110Df823;
-        address curvePoolAddr = 0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d;
+    function _executeSwapInternal(SwapParams memory params) internal returns (uint256 amountOut) {
+        // Validate protocol is not paused
+        if (protocolPaused[params.protocol]) revert ProtocolIsPaused();
 
-        if (poolPaused[uniswapPoolAddr]) revert PoolIsPaused();
-        if (poolPaused[curvePoolAddr]) revert PoolIsPaused();
-
-        IERC20(address(WETH)).safeTransferFrom(msg.sender, address(this), params.amountIn);
-
-        // Step 1: WETH → rETH
-        IERC20(address(WETH)).safeApprove(address(uniswapRouter), params.amountIn);
-
-        uint256 minRETHOut = _calculateIntermediateMinOut(address(WETH), RETH, params.amountIn, minAmountOut);
-
-        uint256 rETHReceived;
-        try
-            uniswapRouter.exactInputSingle(
-                IUniswapV3Router.ExactInputSingleParams({
-                    tokenIn: address(WETH),
-                    tokenOut: RETH,
-                    fee: 100,
-                    recipient: address(this),
-                    deadline: block.timestamp + 300,
-                    amountIn: params.amountIn,
-                    amountOutMinimum: minRETHOut,
-                    sqrtPriceLimitX96: 0
-                })
-            )
-        returns (uint256 _rETHReceived) {
-            rETHReceived = _rETHReceived;
-            if (rETHReceived == 0) revert InvalidReturnData();
-        } catch Error(string memory reason) {
-            revert SwapFailed(string(abi.encodePacked("WETH to rETH: ", reason)));
-        } catch (bytes memory lowLevelData) {
-            revert SwapFailed(_parseRevertReason(lowLevelData));
-        }
-
-        _resetApproval(address(WETH), address(uniswapRouter));
-
-        // Step 2: rETH → osETH
-        IERC20(RETH).safeApprove(curvePoolAddr, rETHReceived);
-
-        try ICurvePool(curvePoolAddr).exchange{gas: EXTERNAL_CALL_GAS_LIMIT}(1, 0, rETHReceived, minAmountOut) returns (
-            uint256 _amountOut
-        ) {
-            amountOut = _amountOut;
-            if (amountOut == 0) revert InvalidReturnData();
-        } catch Error(string memory reason) {
-            revert SwapFailed(string(abi.encodePacked("rETH to osETH: ", reason)));
-        } catch (bytes memory lowLevelData) {
-            revert SwapFailed(_parseRevertReason(lowLevelData));
-        }
-
-        _resetApproval(RETH, curvePoolAddr);
-    }
-
-    // ============================================================================
-    // TOKEN HANDLING
-    // ============================================================================
-
-    function _handleTokenInput(SwapParams memory params) private returns (address) {
+        // Handle token input (ETH to WETH conversion if needed)
+        address actualTokenIn = params.tokenIn;
         if (params.tokenIn == ETH_ADDRESS) {
-            if (msg.value < params.amountIn) revert InvalidParameter("insufficientETH");
             WETH.deposit{value: params.amountIn}();
-            if (msg.value > params.amountIn) {
-                uint256 refundAmount = msg.value - params.amountIn;
-                _refundExcessETH(refundAmount);
-            }
-            return address(WETH);
+            actualTokenIn = address(WETH);
+        }
+
+        // Use quoter-first approach
+        QuoteData memory quote = _performQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
+
+        uint256 minAmountOut;
+        if (quote.valid && block.timestamp - quote.timestamp <= QUOTE_MAX_AGE) {
+            // Use tight buffer with quote
+            minAmountOut = (quote.expectedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
         } else {
-            IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
-            return params.tokenIn;
-        }
-    }
+            // Fallback to configured slippage
+            uint256 slippage = slippageTolerance[params.tokenIn][params.tokenOut];
+            if (slippage == 0) slippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
 
-    function _handleTokenOutput(address tokenOut, uint256 amount) private {
-        if (tokenOut == ETH_ADDRESS) {
-            WETH.withdraw(amount);
-            _safeTransferETH(msg.sender, amount);
+            uint256 expectedOutput = quote.valid
+                ? quote.expectedOutput
+                : _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
+            minAmountOut = (expectedOutput * (10000 - slippage)) / 10000;
+        }
+
+        // Ensure we meet minimum requirements
+        if (minAmountOut < params.minAmountOut) {
+            minAmountOut = params.minAmountOut;
+        }
+
+        // Execute based on protocol
+        if (params.protocol == Protocol.UniswapV3) {
+            amountOut = _executeUniswapV3Swap(actualTokenIn, params, minAmountOut);
+        } else if (params.protocol == Protocol.Curve) {
+            amountOut = _executeCurveSwap(actualTokenIn, params, minAmountOut);
+        } else if (params.protocol == Protocol.DirectMint) {
+            amountOut = _executeDirectMint(params, minAmountOut);
+        } else if (params.protocol == Protocol.MultiHop) {
+            amountOut = _executeMultiHopSwap(actualTokenIn, params, minAmountOut);
+        } else if (params.protocol == Protocol.MultiStep) {
+            amountOut = _executeMultiStepSwap(actualTokenIn, params, minAmountOut);
         } else {
-            IERC20(tokenOut).safeTransfer(msg.sender, amount);
-        }
-    }
-
-    function _safeTransferETH(address to, uint256 amount) private {
-        (bool success, ) = payable(to).call{value: amount}("");
-        if (!success) {
-            WETH.deposit{value: amount}();
-            IERC20(address(WETH)).safeTransfer(to, amount);
-        }
-    }
-
-    function _refundExcessETH(uint256 amount) private {
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
-        if (!success) {
-            WETH.deposit{value: amount}();
-            IERC20(address(WETH)).safeTransfer(msg.sender, amount);
-        }
-    }
-
-    function _resetApproval(address token, address spender) private {
-        if (token != address(WETH) && token != ETH_ADDRESS) {
-            uint256 remaining = IERC20(token).allowance(address(this), spender);
-            if (remaining > 0) {
-                IERC20(token).safeApprove(spender, 0);
-            }
-        }
-    }
-
-    // ============================================================================
-    // VALIDATION FUNCTIONS (unchanged)
-    // ============================================================================
-
-    function _validateTokenSupport(address tokenIn, address tokenOut) private view {
-        if (!supportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
-            revert TokenNotSupported();
-        }
-        if (!supportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
-            revert TokenNotSupported();
-        }
-    }
-
-    function _validateCurveTokenIndices(address pool, int128 tokenIndexIn, int128 tokenIndexOut) private view {
-        uint256 tokenCount = curvePoolTokenCounts[pool];
-        if (tokenCount == 0) revert InvalidParameter("poolNotConfigured");
-
-        if (tokenIndexIn < 0 || uint128(tokenIndexIn) >= tokenCount) {
-            revert InvalidTokenIndex();
-        }
-        if (tokenIndexOut < 0 || uint128(tokenIndexOut) >= tokenCount) {
-            revert InvalidTokenIndex();
-        }
-        if (tokenIndexIn == tokenIndexOut) {
-            revert InvalidParameter("sameTokenIndex");
-        }
-    }
-
-    // ============================================================================
-    // HELPER FUNCTIONS (keeping essential ones, removing redundant slippage validation)
-    // ============================================================================
-
-    function getCurveRouteData(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (bool isCurve, address pool, int128 i, int128 j, bool useUnderlying) {
-        RouteConfig memory config = routes[tokenIn][tokenOut];
-
-        if (config.protocol == Protocol.Curve) {
-            return (true, config.pool, config.tokenIndexIn, config.tokenIndexOut, config.useUnderlying);
+            revert InvalidProtocol();
         }
 
-        // Check auto-routing scenarios
-        if (!_routeExists(tokenIn, tokenOut)) {
-            // Check if auto-route would use Curve
-            address bridge = _getBridgeAsset(tokenIn, tokenOut);
-            if (bridge != address(0)) {
-                // Check first hop
-                RouteConfig memory firstHop = routes[tokenIn][bridge];
-                if (firstHop.protocol == Protocol.Curve) {
-                    return (true, firstHop.pool, firstHop.tokenIndexIn, firstHop.tokenIndexOut, firstHop.useUnderlying);
-                }
-            }
-        }
-
-        return (false, address(0), 0, 0, false);
-    }
-    function normalizeAmount(address tokenIn, address tokenOut, uint256 amountIn) public view returns (uint256) {
-        uint8 decimalsIn = tokenDecimals[tokenIn];
-        uint8 decimalsOut = tokenDecimals[tokenOut];
-
-        if (decimalsIn == 0) decimalsIn = 18;
-        if (decimalsOut == 0) decimalsOut = 18;
-
-        if (decimalsIn == decimalsOut) {
-            return amountIn;
-        } else if (decimalsIn > decimalsOut) {
-            uint8 decimalDiff = decimalsIn - decimalsOut;
-            uint256 divisor = 10 ** decimalDiff;
-            return amountIn / divisor;
-        } else {
-            uint8 decimalDiff = decimalsOut - decimalsIn;
-            uint256 multiplier = 10 ** decimalDiff;
-
-            if (amountIn > type(uint256).max / multiplier) {
-                revert NormalizationOverflow();
-            }
-
-            return amountIn * multiplier;
-        }
-    }
-
-    function _calculateIntermediateMinOut(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 finalMinOut
-    ) private view returns (uint256) {
-        uint256 slippageBps = slippageTolerance[tokenIn][tokenOut];
-        if (slippageBps == 0) {
-            slippageBps = 200; // Default 2% for intermediate hops
-        }
-
-        uint256 normalizedAmount = normalizeAmount(tokenIn, tokenOut, amountIn);
-        return (normalizedAmount * (10000 - slippageBps)) / 10000;
-    }
-
-    function _getDefaultSlippage(address tokenIn, address tokenOut) private view returns (uint256) {
-        AssetType typeIn = assetTypes[tokenIn];
-        AssetType typeOut = assetTypes[tokenOut];
-
-        if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE) return 30; // 0.3%
-        if (typeIn == AssetType.ETH_LST || typeOut == AssetType.ETH_LST) return 200; // 2%
-        if (typeIn == AssetType.BTC_WRAPPED || typeOut == AssetType.BTC_WRAPPED) return 300; // 3%
-        return 500; // 5% for volatile assets
-    }
-
-    function _parseRevertReason(bytes memory data) private pure returns (string memory) {
-        if (data.length < 68) return "Low-level call failed";
-
-        assembly {
-            data := add(data, 0x04)
-        }
-        return abi.decode(data, (string));
-    }
-
-    function _applyProductionSlippageConfig() private {
-        OptimalSlippageConfig[] memory configs = _getOptimalSlippageConfigs();
-
-        for (uint256 i = 0; i < configs.length; i++) {
-            slippageTolerance[configs[i].tokenIn][configs[i].tokenOut] = configs[i].slippageBps;
-        }
-    }
-    /**
-     * @notice Get optimal slippage configurations from testing results
-     * @return Array of optimal slippage configurations
-     */
-    function _getOptimalSlippageConfigs() private view returns (OptimalSlippageConfig[] memory) {
-        OptimalSlippageConfig[] memory configs = new OptimalSlippageConfig[](17);
-
-        // 🎯 WETH Direct Swaps (Uniswap V3) - Optimized
-        configs[0] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704, // cbETH
-            slippageBps: 350, // Was: 700 → Now: 350 (-50%)
-            routeType: "WETH->cbETH Direct Uniswap"
-        });
-
-        configs[1] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549, // lsETH
-            slippageBps: 150, // Was: 700 → Now: 150 (-78%)
-            routeType: "WETH->lsETH Direct Uniswap"
-        });
-
-        configs[2] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa, // mETH
-            slippageBps: 100, // Was: 800 → Now: 100 (-87%)
-            routeType: "WETH->mETH Direct Uniswap"
-        });
-
-        configs[3] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3, // OETH
-            slippageBps: 100, // Was: 800 → Now: 100 (-87%)
-            routeType: "WETH->OETH Direct Uniswap"
-        });
-
-        configs[4] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: RETH,
-            slippageBps: 750, // Was: 1300 → Now: 750 (-42%)
-            routeType: "WETH->rETH Direct Uniswap"
-        });
-
-        configs[5] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84, // stETH
-            slippageBps: 100, // Was: 700 → Now: 100 (-86%)
-            routeType: "WETH->stETH Direct Uniswap"
-        });
-
-        configs[6] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0xf951E335afb289353dc249e82926178EaC7DEd78, // swETH
-            slippageBps: 250, // Was: 700 → Now: 250 (-64%)
-            routeType: "WETH->swETH Direct Uniswap"
-        });
-
-        configs[7] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: 0xE95A203B1a91a908F9B9CE46459d101078c2c3cb, // ankrETH
-            slippageBps: 1500, // NEW: Allow with 1500 bps (was failing)
-            routeType: "WETH->ankrETH Direct Uniswap"
-        });
-
-        // 🎯 ETH Direct Swaps (Curve) - Super Efficient
-        configs[8] = OptimalSlippageConfig({
-            tokenIn: ETH_ADDRESS,
-            tokenOut: 0xE95A203B1a91a908F9B9CE46459d101078c2c3cb, // ankrETH
-            slippageBps: 50, // Was: 700 → Now: 50 (-93%)
-            routeType: "ETH->ankrETH Direct Curve"
-        });
-
-        configs[9] = OptimalSlippageConfig({
-            tokenIn: ETH_ADDRESS,
-            tokenOut: 0xA35b1B31Ce002FBF2058D22F30f95D405200A15b, // ETHx
-            slippageBps: 50, // Was: 700 → Now: 50 (-93%)
-            routeType: "ETH->ETHx Direct Curve"
-        });
-
-        configs[10] = OptimalSlippageConfig({
-            tokenIn: ETH_ADDRESS,
-            tokenOut: FRXETH,
-            slippageBps: 50, // Was: 700 → Now: 50 (-93%)
-            routeType: "ETH->frxETH Direct Curve"
-        });
-
-        configs[11] = OptimalSlippageConfig({
-            tokenIn: ETH_ADDRESS,
-            tokenOut: 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84, // stETH
-            slippageBps: 50, // Was: 500 → Now: 50 (-90%)
-            routeType: "ETH->stETH Direct Curve"
-        });
-
-        configs[12] = OptimalSlippageConfig({
-            tokenIn: ETH_ADDRESS,
-            tokenOut: SFRXETH,
-            slippageBps: 50, // Was: 500 → Now: 50 (-90%)
-            routeType: "ETH->sfrxETH Direct Mint"
-        });
-
-        // 🎯 Complex Routes - Keep Buffers for Safety
-        configs[13] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: OSETH,
-            slippageBps: 500, // Multi-hop: keep buffer
-            routeType: "WETH->osETH Multi-hop"
-        });
-
-        configs[14] = OptimalSlippageConfig({
-            tokenIn: address(WETH),
-            tokenOut: SFRXETH,
-            slippageBps: 400, // Multi-step: keep buffer
-            routeType: "WETH->sfrxETH Multi-step"
-        });
-
-        // 🎯 Reverse Routes (for autoSwapAssets bidirectional support)
-        configs[15] = OptimalSlippageConfig({
-            tokenIn: 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704, // cbETH
-            tokenOut: address(WETH),
-            slippageBps: 350,
-            routeType: "cbETH->WETH Reverse"
-        });
-
-        configs[16] = OptimalSlippageConfig({
-            tokenIn: RETH,
-            tokenOut: address(WETH),
-            slippageBps: 750,
-            routeType: "rETH->WETH Reverse"
-        });
-
-        return configs;
-    }
-
-    // ============================================================================
-    // AUTO SWAP ASSETS
-    // ============================================================================
-
-    function autoSwapAssets(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) external payable onlyAuthorizedCaller nonReentrant whenNotPaused returns (uint256 amountOut) {
-        require(tokenIn != tokenOut, "Same token");
-        require(amountIn > 0, "Zero amount");
-        require(initialized, "Not initialized");
-
-        _validateAssetCategory(tokenIn, tokenOut);
-
-        // 1) Direct route A→B
-        if (_routeExists(tokenIn, tokenOut)) {
-            SwapParams memory params = _makeSwapParams(tokenIn, tokenOut, amountIn, minAmountOut);
-            amountOut = _executeInternalSwap(params);
-            if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-                _handleTokenOutput(tokenOut, amountOut);
-            }
-            return amountOut;
-        }
-
-        // 2) Reverse route B→A
-        if (_routeExists(tokenOut, tokenIn)) {
-            SwapParams memory params = _makeReverseSwapParams(tokenOut, tokenIn, amountIn, minAmountOut);
-            amountOut = _executeInternalSwap(params);
-            if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-                _handleTokenOutput(tokenOut, amountOut);
-            }
-            return amountOut;
-        }
-
-        // 3) Bridge route
-        address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
-        if (bridgeAsset != address(0)) {
-            if (_routeExists(tokenIn, bridgeAsset) && _routeExists(bridgeAsset, tokenOut)) {
-                uint256 intermediateMin = _calculateIntermediateMinOut(tokenIn, bridgeAsset, amountIn, minAmountOut);
-                uint256 bridgeAmount = _executeInternalSwap(
-                    _makeSwapParams(tokenIn, bridgeAsset, amountIn, intermediateMin)
-                );
-                amountOut = _executeInternalSwap(_makeSwapParams(bridgeAsset, tokenOut, bridgeAmount, minAmountOut));
-                if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-                    _handleTokenOutput(tokenOut, amountOut);
-                }
-                return amountOut;
-            }
-
-            if (_routeExists(bridgeAsset, tokenIn) && _routeExists(tokenOut, bridgeAsset)) {
-                uint256 intermediateMin = _calculateIntermediateMinOut(bridgeAsset, tokenIn, amountIn, minAmountOut);
-                uint256 bridgeAmount = _executeInternalSwap(
-                    _makeReverseSwapParams(bridgeAsset, tokenIn, amountIn, intermediateMin)
-                );
-                amountOut = _executeInternalSwap(
-                    _makeReverseSwapParams(tokenOut, bridgeAsset, bridgeAmount, minAmountOut)
-                );
-                if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-                    _handleTokenOutput(tokenOut, amountOut);
-                }
-                return amountOut;
-            }
-        }
-
-        revert("No route found");
-    }
-
-    function _executeInternalSwap(SwapParams memory params) internal returns (uint256 amountOut) {
-        uint256 gasStart = gasleft();
-
-        if (params.amountIn == 0) revert ZeroAmount();
-        if (params.tokenIn == params.tokenOut) revert InvalidParameter("sameToken");
-
-        _validateTokenSupport(params.tokenIn, params.tokenOut);
-
-        //  SPECIAL-CASE DIRECTMINT - BYPASS QUOTER LOGIC
-        if (params.protocol == Protocol.DirectMint) {
-            // Call directly so msg.value flows into submitAndDeposit
-            amountOut = _performDirectMint(params);
-            if (amountOut < params.minAmountOut) revert InsufficientOutput();
-
-            // Emit event for tracking
-            bytes32 routeHash = keccak256(
-                abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
-            );
-            uint256 gasUsed = gasStart > gasleft() ? gasStart - gasleft() : 0;
-            emit AssetSwapped(
-                params.tokenIn,
-                params.tokenOut,
-                params.amountIn,
-                amountOut,
-                params.protocol,
-                msg.sender,
-                gasUsed,
-                block.timestamp,
-                routeHash
-            );
-            return amountOut;
-        }
-
-        //  REGULAR FLOW FOR ALL OTHER PROTOCOLS
-        bytes32 routeHash = keccak256(
-            abi.encode(params.tokenIn, params.tokenOut, params.protocol, params.routeData, block.timestamp)
-        );
-
-        // Handle token input for internal swaps (ETH→WETH conversion)
-        address actualTokenIn = _handleInternalTokenInput(params);
-
-        // Use quoter-first approach for internal swaps too
-        QuoteData memory quote = _getQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
-
-        if (quote.valid) {
-            try this._executeSwapWithQuote(actualTokenIn, params, quote) returns (uint256 result) {
-                amountOut = result;
-            } catch {
-                // Fallback to config slippage
-                uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
-                if (configSlippage == 0) {
-                    configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-                }
-                if (configSlippage == 0) revert NoConfigSlippage();
-
-                amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
-            }
-        } else {
-            // Direct fallback if quote fails
-            uint256 configSlippage = slippageTolerance[params.tokenIn][params.tokenOut];
-            if (configSlippage == 0) {
-                configSlippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-            }
-            if (configSlippage == 0) revert NoConfigSlippage();
-
-            amountOut = _executeSwapWithConfig(actualTokenIn, params, configSlippage);
+        // Handle WETH to ETH conversion if output is ETH
+        if (params.tokenOut == ETH_ADDRESS && amountOut > 0) {
+            WETH.withdraw(amountOut);
         }
 
         if (amountOut < params.minAmountOut) revert InsufficientOutput();
+    }
 
-        uint256 gasUsed = gasStart > gasleft() ? gasStart - gasleft() : 0;
+    /**
+     * @notice Execute UniswapV3 swap
+     */
+    function _executeUniswapV3Swap(
+        address actualTokenIn,
+        SwapParams memory params,
+        uint256 minAmountOut
+    ) internal returns (uint256 amountOut) {
+        UniswapV3Route memory route = abi.decode(params.routeData, (UniswapV3Route));
 
-        emit AssetSwapped(
+        // Validate pool if single-hop
+        if (!route.isMultiHop && route.pool != address(0)) {
+            if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
+            if (poolPaused[route.pool]) revert PoolIsPaused();
+        }
+
+        // Set approval
+        IERC20(actualTokenIn).safeApprove(address(uniswapRouter), params.amountIn);
+
+        if (route.isMultiHop) {
+            amountOut = uniswapRouter.exactInput(
+                IUniswapV3Router.ExactInputParams({
+                    path: route.path,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: params.amountIn,
+                    amountOutMinimum: minAmountOut
+                })
+            );
+        } else {
+            // For single hop, compute pool if not provided
+            if (route.pool == address(0)) {
+                route.pool = _computeUniswapV3Pool(
+                    actualTokenIn,
+                    params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
+                    route.fee
+                );
+            }
+
+            amountOut = uniswapRouter.exactInputSingle(
+                IUniswapV3Router.ExactInputSingleParams({
+                    tokenIn: actualTokenIn,
+                    tokenOut: params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
+                    fee: route.fee,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: params.amountIn,
+                    amountOutMinimum: minAmountOut,
+                    sqrtPriceLimitX96: 0
+                })
+            );
+        }
+
+        // Reset approval
+        IERC20(actualTokenIn).safeApprove(address(uniswapRouter), 0);
+    }
+
+    /**
+     * @notice Execute Curve swap
+     */
+    function _executeCurveSwap(
+        address actualTokenIn,
+        SwapParams memory params,
+        uint256 minAmountOut
+    ) internal returns (uint256 amountOut) {
+        CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
+
+        // Validate pool
+        if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
+        if (poolPaused[route.pool]) revert PoolIsPaused();
+
+        // Handle ETH/WETH for Curve
+        uint256 valueToSend = 0;
+        if (params.tokenIn == ETH_ADDRESS) {
+            valueToSend = params.amountIn;
+            // WETH was already withdrawn in _executeSwapInternal
+        } else {
+            IERC20(actualTokenIn).safeApprove(route.pool, params.amountIn);
+        }
+
+        // Execute swap
+        if (route.useUnderlying) {
+            amountOut = ICurvePool(route.pool).exchange_underlying{value: valueToSend}(
+                route.indexIn,
+                route.indexOut,
+                params.amountIn,
+                minAmountOut
+            );
+        } else {
+            amountOut = ICurvePool(route.pool).exchange{value: valueToSend}(
+                route.indexIn,
+                route.indexOut,
+                params.amountIn,
+                minAmountOut
+            );
+        }
+
+        // Reset approval if needed
+        if (params.tokenIn != ETH_ADDRESS) {
+            IERC20(actualTokenIn).safeApprove(route.pool, 0);
+        }
+    }
+
+    /**
+     * @notice Execute direct mint
+     */
+    function _executeDirectMint(SwapParams memory params, uint256 minAmountOut) internal returns (uint256 amountOut) {
+        address minter = abi.decode(params.routeData, (address));
+
+        if (params.tokenIn == ETH_ADDRESS && params.tokenOut == SFRXETH) {
+            amountOut = IFrxETHMinter(minter).submitAndDeposit{value: params.amountIn}(address(this));
+            if (amountOut < minAmountOut) revert InsufficientOutput();
+        } else {
+            revert UnsupportedRoute();
+        }
+    }
+
+    /**
+     * @notice Auto swap with transfers (legacy mode)
+     */
+    function _autoSwapWithTransfers(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal returns (uint256 amountOut) {
+        // Find optimal route
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
+
+        // Handle token input
+        if (tokenIn == ETH_ADDRESS) {
+            require(msg.value >= amountIn, "Insufficient ETH");
+            if (msg.value > amountIn) {
+                // Refund excess
+                (bool success, ) = msg.sender.call{value: msg.value - amountIn}("");
+                require(success, "ETH refund failed");
+            }
+        } else {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        }
+
+        // Execute based on route type
+        if (strategy.routeType == RouteType.Direct || strategy.routeType == RouteType.Reverse) {
+            // Single swap
+            SwapParams memory params = SwapParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                amountIn: amountIn,
+                minAmountOut: minAmountOut,
+                protocol: strategy.protocol,
+                routeData: strategy.primaryRouteData
+            });
+
+            amountOut = _executeSwapInternal(params);
+        } else if (strategy.routeType == RouteType.Bridge) {
+            // Bridge swap (two hops)
+            // First swap: tokenIn -> bridgeAsset
+            SwapParams memory firstParams = SwapParams({
+                tokenIn: tokenIn,
+                tokenOut: strategy.bridgeAsset,
+                amountIn: amountIn,
+                minAmountOut: 0, // Will calculate intermediate minimum
+                protocol: _getProtocolFromRouteData(strategy.primaryRouteData),
+                routeData: strategy.primaryRouteData
+            });
+
+            uint256 bridgeAmount = _executeSwapInternal(firstParams);
+
+            // Second swap: bridgeAsset -> tokenOut
+            SwapParams memory secondParams = SwapParams({
+                tokenIn: strategy.bridgeAsset,
+                tokenOut: tokenOut,
+                amountIn: bridgeAmount,
+                minAmountOut: minAmountOut,
+                protocol: _getProtocolFromRouteData(strategy.secondaryRouteData),
+                routeData: strategy.secondaryRouteData
+            });
+
+            amountOut = _executeSwapInternal(secondParams);
+        } else {
+            revert NoRouteFound();
+        }
+
+        // Transfer output to caller
+        if (tokenOut == ETH_ADDRESS) {
+            (bool success, ) = msg.sender.call{value: amountOut}("");
+            if (!success) {
+                // Fallback to WETH
+                WETH.deposit{value: amountOut}();
+                IERC20(address(WETH)).safeTransfer(msg.sender, amountOut);
+            }
+        } else {
+            IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
+        }
+
+        emit AssetsSwapped(tokenIn, tokenOut, amountIn, amountOut, strategy.protocol, msg.sender, 0, block.timestamp);
+    }
+
+    /**
+     * @notice Execute direct mode swap (no token transfers to FAR)
+     */
+    function _executeDirectModeSwap(SwapParams memory params) internal returns (uint256 amountOut) {
+        // Validate caller has approved FAR
+        if (params.tokenIn != ETH_ADDRESS) {
+            uint256 allowance = IERC20(params.tokenIn).allowance(msg.sender, address(this));
+            require(allowance >= params.amountIn, "Insufficient allowance");
+        }
+
+        // Find route
+        bytes32 routeKey = keccak256(abi.encodePacked(params.tokenIn, params.tokenOut));
+        RouteConfig memory config = routes[routeKey];
+
+        if (!config.isConfigured) {
+            // Try reverse route
+            routeKey = keccak256(abi.encodePacked(params.tokenOut, params.tokenIn));
+            config = routes[routeKey];
+            require(config.isConfigured, "No route found");
+
+            // Adjust for reverse
+            params = _makeReverseSwapParams(params);
+        }
+
+        // For direct mode, we return the expected output
+        // The actual swap execution happens in the caller (LTM)
+
+        // Get quote for accurate output
+        QuoteData memory quote = _performQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
+
+        if (quote.valid) {
+            amountOut = quote.expectedOutput;
+        } else {
+            // Estimate based on slippage
+            amountOut = _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
+        }
+
+        // Apply slippage for safety
+        uint256 slippage = slippageTolerance[params.tokenIn][params.tokenOut];
+        if (slippage == 0) slippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
+
+        amountOut = (amountOut * (10000 - slippage)) / 10000;
+
+        require(amountOut >= params.minAmountOut, "Insufficient output");
+
+        emit AssetsSwapped(
             params.tokenIn,
             params.tokenOut,
             params.amountIn,
             amountOut,
             params.protocol,
             msg.sender,
-            gasUsed,
-            block.timestamp,
-            routeHash
+            0,
+            block.timestamp
         );
     }
 
-    function _handleInternalTokenInput(SwapParams memory params) internal returns (address) {
-        if (params.tokenIn == ETH_ADDRESS) {
-            if (address(this).balance >= params.amountIn) {
-                WETH.deposit{value: params.amountIn}();
-                return address(WETH);
-            } else {
-                revert InvalidParameter("insufficientETH");
-            }
-        } else {
-            uint256 currentBalance = IERC20(params.tokenIn).balanceOf(address(this));
-            if (currentBalance < params.amountIn) {
-                IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
-            }
-            return params.tokenIn;
-        }
-    }
-
-    function _validateAssetCategory(address tokenIn, address tokenOut) internal view {
-        AssetType typeIn = assetTypes[tokenIn];
-        AssetType typeOut = assetTypes[tokenOut];
-
-        if (tokenIn == ETH_ADDRESS) typeIn = AssetType.ETH_LST;
-        if (tokenOut == ETH_ADDRESS) typeOut = AssetType.ETH_LST;
-
-        require(typeIn == typeOut, "Cross-category swaps not supported");
-        require(typeIn == AssetType.ETH_LST || typeIn == AssetType.BTC_WRAPPED, "Unsupported asset category");
-    }
-
-    function _getBridgeAsset(address tokenIn, address tokenOut) internal view returns (address) {
-        AssetType assetType = assetTypes[tokenIn];
-
-        if (tokenIn == ETH_ADDRESS || tokenOut == ETH_ADDRESS) {
-            assetType = AssetType.ETH_LST;
-        }
-
-        if (assetType == AssetType.ETH_LST) {
-            return address(WETH);
-        } else if (assetType == AssetType.BTC_WRAPPED) {
-            return WBTC;
-        }
-
-        return address(0);
-    }
-
-    function _makeReverseSwapParams(
-        address tokenA,
-        address tokenB,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) internal view returns (SwapParams memory params) {
-        RouteConfig storage rc = routes[tokenA][tokenB];
-        require(_routeExists(tokenA, tokenB), "Reverse route does not exist");
-
-        bytes memory routeData;
-        Protocol protocol = rc.protocol;
-
-        if (protocol == Protocol.UniswapV3) {
-            if (rc.path.length > 0) {
-                UniswapV3Route memory route = UniswapV3Route({
-                    pool: address(0),
-                    fee: 0,
-                    isMultiHop: true,
-                    path: _reverseUniswapPath(rc.path)
-                });
-                routeData = abi.encode(route);
-            } else {
-                UniswapV3Route memory route = UniswapV3Route({pool: rc.pool, fee: rc.fee, isMultiHop: false, path: ""});
-                routeData = abi.encode(route);
-            }
-        } else if (protocol == Protocol.Curve) {
-            CurveRoute memory route = CurveRoute({
-                pool: rc.pool,
-                tokenIndexIn: rc.tokenIndexOut,
-                tokenIndexOut: rc.tokenIndexIn,
-                useUnderlying: rc.useUnderlying
-            });
-            routeData = abi.encode(route);
-        } else if (protocol == Protocol.DirectMint) {
-            //  FIX: Use specialContract from route, fallback to frxETHMinter
-            address minter = rc.specialContract != address(0) ? rc.specialContract : address(frxETHMinter);
-            routeData = abi.encode(minter);
-        } else if (protocol == Protocol.MultiHop || protocol == Protocol.MultiStep) {
-            routeData = rc.path;
-        }
-
-        params = SwapParams({
-            tokenIn: tokenB,
-            tokenOut: tokenA,
-            amountIn: amountIn,
-            minAmountOut: minAmountOut,
-            protocol: protocol,
-            routeData: routeData
-        });
-    }
-
-    function _reverseUniswapPath(bytes memory path) internal pure returns (bytes memory) {
-        return path; // For now, return original path
-    }
-
-    function _routeExists(address tokenA, address tokenB) internal view returns (bool) {
-        RouteConfig storage rc = routes[tokenA][tokenB];
-        return (rc.pool != address(0) || rc.path.length > 0 || rc.directSwap || rc.specialContract != address(0));
-    }
-
-    function _makeSwapParams(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) internal view returns (SwapParams memory params) {
-        RouteConfig storage rc = routes[tokenIn][tokenOut];
-        require(_routeExists(tokenIn, tokenOut), "Route does not exist");
-
-        bytes memory routeData;
-        Protocol protocol = rc.protocol;
-
-        if (protocol == Protocol.UniswapV3) {
-            if (rc.path.length > 0) {
-                UniswapV3Route memory route = UniswapV3Route({
-                    pool: address(0),
-                    fee: 0,
-                    isMultiHop: true,
-                    path: rc.path
-                });
-                routeData = abi.encode(route);
-            } else {
-                UniswapV3Route memory route = UniswapV3Route({pool: rc.pool, fee: rc.fee, isMultiHop: false, path: ""});
-                routeData = abi.encode(route);
-            }
-        } else if (protocol == Protocol.Curve) {
-            CurveRoute memory route = CurveRoute({
-                pool: rc.pool,
-                tokenIndexIn: rc.tokenIndexIn,
-                tokenIndexOut: rc.tokenIndexOut,
-                useUnderlying: rc.useUnderlying
-            });
-            routeData = abi.encode(route);
-        } else if (protocol == Protocol.DirectMint) {
-            //  FIX: Use specialContract from route, fallback to frxETHMinter
-            address minter = rc.specialContract != address(0) ? rc.specialContract : address(frxETHMinter);
-            routeData = abi.encode(minter);
-        } else if (protocol == Protocol.MultiHop || protocol == Protocol.MultiStep) {
-            routeData = rc.path;
-        }
-
-        params = SwapParams({
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            amountIn: amountIn,
-            minAmountOut: minAmountOut,
-            protocol: protocol,
-            routeData: routeData
-        });
-    }
-
-    function configureRoute(
-        address tokenIn,
-        address tokenOut,
-        Protocol protocol,
-        address pool,
-        uint24 fee,
-        int128 tokenIndexIn,
-        int128 tokenIndexOut,
-        string calldata password
-    ) public {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Unauthorized");
-
-        routes[tokenIn][tokenOut] = RouteConfig({
-            protocol: protocol,
-            pool: pool,
-            fee: fee,
-            directSwap: true,
-            path: "",
-            tokenIndexIn: tokenIndexIn,
-            tokenIndexOut: tokenIndexOut,
-            useUnderlying: false,
-            specialContract: address(0)
-        });
-
-        emit RouteConfigured(tokenIn, tokenOut, protocol, pool);
-    }
     /**
-     * @notice Configure DirectMint route with special contract
+     * @notice Helper to make reverse swap params
      */
-    function configureDirectMintRoute(
-        address tokenIn,
-        address tokenOut,
-        address minterContract,
-        string calldata password
-    ) external {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Unauthorized");
+    function _makeReverseSwapParams(SwapParams memory params) internal pure returns (SwapParams memory) {
+        // Swap tokenIn and tokenOut
+        address tempToken = params.tokenIn;
+        params.tokenIn = params.tokenOut;
+        params.tokenOut = tempToken;
 
-        routes[tokenIn][tokenOut] = RouteConfig({
-            protocol: Protocol.DirectMint,
-            pool: address(0),
-            fee: 0,
-            directSwap: true,
-            path: "",
-            tokenIndexIn: 0,
-            tokenIndexOut: 0,
-            useUnderlying: false,
-            specialContract: minterContract //  Store minter here
-        });
-
-        emit RouteConfigured(tokenIn, tokenOut, Protocol.DirectMint, minterContract);
-    }
-
-    // ============================================================================
-    // CONFIGURATION FUNCTIONS (keeping all existing configuration functions unchanged)
-    // ============================================================================
-
-    function grantOperatorRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        grantRole(OPERATOR_ROLE, account);
-        emit AuthorizedCallerUpdated(account, true, msg.sender, block.timestamp);
-    }
-
-    function revokeOperatorRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        revokeRole(OPERATOR_ROLE, account);
-        emit AuthorizedCallerUpdated(account, false, msg.sender, block.timestamp);
-    }
-    function setDirectTransferMode(bool _enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        directTransferMode = _enabled;
-        emit DirectTransferModeUpdated(_enabled, block.timestamp);
-    }
-    function setSlippageTolerance(
-        address tokenIn,
-        address tokenOut,
-        uint256 slippageBps
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) configNotLocked(keccak256(abi.encode("slippage", tokenIn, tokenOut))) {
-        if (slippageBps > MAX_SLIPPAGE) revert InvalidParameter("slippage");
-        slippageTolerance[tokenIn][tokenOut] = slippageBps;
-        emit SlippageConfigured(tokenIn, tokenOut, slippageBps, msg.sender, block.timestamp);
-    }
-
-    function enableCustomRoute(
-        address tokenIn,
-        address tokenOut,
-        bool enabled,
-        string calldata password
-    ) external onlyRouteManager {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-
-        customRouteEnabled[tokenIn][tokenOut] = enabled;
-        emit CustomRouteEnabled(tokenIn, tokenOut, enabled, msg.sender, block.timestamp);
-    }
-
-    function whitelistPool(
-        address pool,
-        bool status,
-        CurveInterface curveInterface
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        whitelistedPools[pool] = status;
-        if (status) {
-            curvePoolInterfaces[pool] = curveInterface;
+        // Reverse route data indices for Curve
+        if (params.protocol == Protocol.Curve) {
+            CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
+            int128 tempIndex = route.indexIn;
+            route.indexIn = route.indexOut;
+            route.indexOut = tempIndex;
+            params.routeData = abi.encode(route);
         }
-        emit PoolWhitelisted(pool, status, curveInterface, msg.sender, block.timestamp);
+
+        return params;
     }
 
-    function supportToken(
-        address token,
-        bool status,
-        AssetType assetType,
-        uint8 decimals
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (status && (decimals == 0 || decimals > 77)) revert InvalidDecimals();
-
-        supportedTokens[token] = status;
-        if (status) {
-            assetTypes[token] = assetType;
-            tokenDecimals[token] = decimals;
-        }
-        emit TokenSupported(token, status, assetType, decimals, block.timestamp);
-    }
-
-    function setCurvePoolConfig(
-        address pool,
-        uint256 tokenCount,
-        CurveInterface curveInterface
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (tokenCount == 0 || tokenCount > MAX_CURVE_TOKENS) revert InvalidParameter("tokenCount");
-        curvePoolTokenCounts[pool] = tokenCount;
-        curvePoolInterfaces[pool] = curveInterface;
-    }
-
-    function setRouteManager(address _routeManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_routeManager == address(0)) revert InvalidAddress();
-        address oldManager = routeManager;
-        routeManager = _routeManager;
-        emit RouteManagerUpdated(oldManager, _routeManager, block.timestamp);
-    }
-
-    function setTokenDecimals(address token, uint8 decimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (decimals == 0 || decimals > 77) revert InvalidDecimals();
-        tokenDecimals[token] = decimals;
-    }
-
-    //added for new pattern
     /**
-     * @notice Set production-optimized slippage configuration based on testing
-     * @dev Call this after initialization to set optimal slippages from testing
+     * @notice Get protocol from route data
      */
-    function setProductionSlippageConfig() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        OptimalSlippageConfig[] memory configs = _getOptimalSlippageConfigs();
-
-        for (uint256 i = 0; i < configs.length; i++) {
-            OptimalSlippageConfig memory config = configs[i];
-            slippageTolerance[config.tokenIn][config.tokenOut] = config.slippageBps;
-
-            emit SlippageConfigured(config.tokenIn, config.tokenOut, config.slippageBps, msg.sender, block.timestamp);
+    function _getProtocolFromRouteData(bytes memory routeData) internal pure returns (Protocol) {
+        // Decode first byte as protocol identifier
+        if (routeData.length > 0) {
+            uint8 protocolId = uint8(routeData[0]);
+            if (protocolId <= uint8(Protocol.MultiStep)) {
+                return Protocol(protocolId);
+            }
         }
+        return Protocol.UniswapV3; // Default
     }
 
+    // ============================================================================
+    // Custom DEX
+    // ============================================================================
     /**
-     * @notice Batch update slippage configurations
-     * @param tokenIns Array of input token addresses
-     * @param tokenOuts Array of output token addresses
-     * @param slippages Array of slippage values in basis points
-     */
-    function batchSetSlippageTolerances(
-        address[] calldata tokenIns,
-        address[] calldata tokenOuts,
-        uint256[] calldata slippages
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(tokenIns.length == tokenOuts.length && tokenOuts.length == slippages.length, "Array length mismatch");
-
-        for (uint256 i = 0; i < tokenIns.length; i++) {
-            require(slippages[i] <= MAX_SLIPPAGE, "Slippage too high");
-
-            slippageTolerance[tokenIns[i]][tokenOuts[i]] = slippages[i];
-
-            emit SlippageConfigured(tokenIns[i], tokenOuts[i], slippages[i], msg.sender, block.timestamp);
-        }
-    }
-
-    // ============================================================================
-    // EMERGENCY CONTROLS (keeping all existing emergency functions unchanged)
-    // ============================================================================
-
-    function emergencyPausePool(address pool, string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        poolPaused[pool] = true;
-        emit PoolEmergencyPaused(pool, msg.sender, reason, block.timestamp);
-    }
-
-    function emergencyPauseProtocol(Protocol protocol, string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        protocolPaused[protocol] = true;
-        emit ProtocolEmergencyPaused(protocol, msg.sender, reason, block.timestamp);
-    }
-
-    function emergencyRevokeApproval(address token, address spender) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        IERC20(token).safeApprove(spender, 0);
-        emit EmergencyApprovalRevoked(token, spender, msg.sender, block.timestamp);
-    }
-
-    function unpausePool(address pool) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        poolPaused[pool] = false;
-    }
-
-    function unpauseProtocol(Protocol protocol) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        protocolPaused[protocol] = false;
-    }
-
-    function emergencyWithdraw(address token, uint256 amount, address recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!paused()) revert InvalidParameter("notPaused");
-        if (recipient == address(0)) revert InvalidAddress();
-
-        if (token == ETH_ADDRESS) {
-            (bool success, ) = payable(recipient).call{value: amount}("");
-            if (!success) revert TransferFailed();
-        } else {
-            IERC20(token).safeTransfer(recipient, amount);
-        }
-    }
-
-    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pause();
-    }
-
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _unpause();
-    }
-
-    // ============================================================================
-    // VIEW FUNCTIONS
-    // ============================================================================
-
-    function getSlippageTolerance(address tokenIn, address tokenOut) external view returns (uint256) {
-        uint256 configured = slippageTolerance[tokenIn][tokenOut];
-        return configured == 0 ? _getDefaultSlippage(tokenIn, tokenOut) : configured;
-    }
-    function _getRecipient() internal view returns (address) {
-        return (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) ? msg.sender : address(this);
-    }
-    function getTokenInfo(address token) external view returns (bool supported, AssetType assetType, uint8 decimals) {
-        return (supportedTokens[token], assetTypes[token], tokenDecimals[token]);
-    }
-
-    function getPoolInfo(
-        address pool
-    ) external view returns (bool whitelisted, bool paused, uint256 tokenCount, CurveInterface curveInterface) {
-        return (whitelistedPools[pool], poolPaused[pool], curvePoolTokenCounts[pool], curvePoolInterfaces[pool]);
-    }
-
-    function calculateSwapOutput(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    ) external view returns (uint256 normalizedOut, uint256 minOut) {
-        normalizedOut = normalizeAmount(tokenIn, tokenOut, amountIn);
-        uint256 slippageBps = slippageTolerance[tokenIn][tokenOut];
-        if (slippageBps == 0) {
-            slippageBps = _getDefaultSlippage(tokenIn, tokenOut);
-        }
-        minOut = (normalizedOut * (10000 - slippageBps)) / 10000;
-    }
-
-    function isCustomRouteEnabled(address tokenIn, address tokenOut) external view returns (bool) {
-        return customRouteEnabled[tokenIn][tokenOut];
-    }
-
-    function getDefaultSlippage(address tokenIn, address tokenOut) external view returns (uint256) {
-        return _getDefaultSlippage(tokenIn, tokenOut);
-    }
-    // ============================================================================
-    // DYNAMIC DEX REGISTRY FUNCTIONS (NEW FEATURE)
-    // ============================================================================
-
-    /**
-     * @notice Register a new DEX for backend integration
-     * @param dex DEX contract address
-     * @param name DEX name for identification
-     * @param password safe password
+     * @notice Register a new DEX for custom routing
+     * @param dex The DEX contract address
+     * @param name The name of the DEX
+     * @param password Security password for registration
      */
     function registerDEX(
         address dex,
         string calldata name,
         string calldata password
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-        if (dex == address(0)) revert InvalidAddress();
-        if (registeredDEXes[dex]) revert DEXAlreadyRegistered();
+        require(dex != address(0), "Invalid DEX address");
+        require(bytes(name).length > 0 && bytes(name).length <= 32, "Invalid DEX name length");
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(!registeredDEXes[dex], "DEX already registered");
 
-        // Verify DEX has code
+        // Validate DEX is a contract
         uint256 codeSize;
         assembly {
             codeSize := extcodesize(dex)
         }
-        if (codeSize == 0) revert InvalidAddress();
+        require(codeSize > 0, "DEX must be a contract");
 
         registeredDEXes[dex] = true;
         dexNames[dex] = name;
+        dexRegistrationTime[dex] = block.timestamp;
+        dexRegisteredBy[dex] = msg.sender;
         allRegisteredDEXes.push(dex);
 
-        emit DEXRegistered(dex, name, block.timestamp);
+        emit DexRegistered(dex, name, msg.sender, block.timestamp);
     }
 
     /**
-     * @notice Remove DEX from registry
-     * @param dex DEX address to remove
+     * @notice Unregister a DEX
+     * @param dex The DEX to unregister
      */
-    function removeDEX(address dex) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!registeredDEXes[dex]) revert DEXNotRegistered();
+    function unregisterDEX(address dex) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(registeredDEXes[dex], "DEX not registered");
+        require(block.timestamp >= dexRegistrationTime[dex] + DEX_TIMELOCK, "Timelock not expired");
 
-        string memory name = dexNames[dex];
         registeredDEXes[dex] = false;
-        delete dexNames[dex];
+        emit DexUnregistered(dex, msg.sender, block.timestamp);
+    }
 
-        // Remove from array (optional - can skip for gas efficiency)
-        for (uint256 i = 0; i < allRegisteredDEXes.length; i++) {
-            if (allRegisteredDEXes[i] == dex) {
-                allRegisteredDEXes[i] = allRegisteredDEXes[allRegisteredDEXes.length - 1];
-                allRegisteredDEXes.pop();
-                break;
-            }
+    /**
+     * @notice Whitelist a function selector for custom DEX calls
+     * @param selector The function selector to whitelist
+     * @param description Description of what this selector does
+     */
+    function whitelistSelector(bytes4 selector, string calldata description) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!dangerousSelectors[selector], "Selector is blacklisted");
+        require(bytes(description).length > 0, "Description required");
+
+        whitelistedSelectors[selector] = true;
+        selectorDescriptions[selector] = description;
+        allWhitelistedSelectors.push(selector);
+
+        emit SelectorWhitelisted(selector, description, block.timestamp);
+    }
+
+    /**
+     * @notice Blacklist a dangerous function selector
+     * @param selector The function selector to blacklist
+     * @param reason Reason for blacklisting
+     */
+    function blacklistSelector(bytes4 selector, string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(bytes(reason).length > 0, "Reason required");
+
+        dangerousSelectors[selector] = true;
+        whitelistedSelectors[selector] = false;
+
+        // Add common dangerous selectors if not already added
+        if (allDangerousSelectors.length == 0) {
+            _initializeDangerousSelectors();
         }
 
-        emit DEXRemoved(dex, name, block.timestamp);
+        allDangerousSelectors.push(selector);
+        emit SelectorBlacklisted(selector, reason, block.timestamp);
     }
 
     /**
-     * @notice Execute trusted backend(onlyRouteManager) swap through registered DEX
-     * @param dex Target DEX address
+     * @notice Initialize common dangerous selectors
+     */
+    function _initializeDangerousSelectors() internal {
+        // Ownership functions
+        dangerousSelectors[0x13af4035] = true; // setOwner(address)
+        dangerousSelectors[0xf2fde38b] = true; // transferOwnership(address)
+        dangerousSelectors[0x715018a6] = true; // renounceOwnership()
+
+        // Upgrade functions
+        dangerousSelectors[0x3659cfe6] = true; // upgradeTo(address)
+        dangerousSelectors[0x4f1ef286] = true; // upgradeToAndCall(address,bytes)
+
+        // Self-destruct
+        dangerousSelectors[0x83197ef0] = true; // destroy()
+        dangerousSelectors[0x00f55d9d] = true; // destroy(address)
+
+        // Initialization
+        dangerousSelectors[0x8129fc1c] = true; // initialize()
+    }
+
+    /**
+     * @notice Execute a swap through a registered custom DEX
+     * @param targetDEX The DEX to execute swap on
+     * @param swapData The encoded swap function call
      * @param tokenIn Input token address
      * @param tokenOut Output token address
      * @param amountIn Input amount
-     * @param callData Encoded function call data for the DEX
-     * @param password password for safety
-     * @return amountOut Amount of tokens received
+     * @param minAmountOut Minimum output amount
+     * @param password Security password
+     * @return amountOut The actual output amount
      */
     function executeBackendSwap(
-        address dex,
+        address targetDEX,
+        bytes calldata swapData,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        bytes calldata callData,
+        uint256 minAmountOut,
         string calldata password
     ) external payable onlyRouteManager nonReentrant whenNotPaused returns (uint256 amountOut) {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-        if (!registeredDEXes[dex]) revert DEXNotRegistered();
-        if (amountIn == 0) revert ZeroAmount();
+        // Validate password
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
 
-        //  NEW: VALIDATE FUNCTION SELECTOR SECURITY
-        if (callData.length >= 4) {
-            bytes4 selector;
-            assembly {
-                selector := shr(224, calldataload(add(callData.offset, 0)))
-            }
+        // Validate DEX
+        require(registeredDEXes[targetDEX], "DEX not registered");
+        require(block.timestamp >= dexRegistrationTime[targetDEX] + DEX_TIMELOCK, "DEX timelock not expired");
 
-            // Check if selector is dangerous
-            if (dangerousSelectors[selector]) {
-                emit SelectorValidationFailed(selector, dex, block.timestamp);
-                revert DangerousSelector();
-            }
+        // Validate swap data
+        require(swapData.length >= 4, "Invalid swap data");
+        bytes4 selector = bytes4(swapData[:4]);
+
+        // Security checks
+        require(!dangerousSelectors[selector], "Dangerous selector");
+        require(whitelistedSelectors[selector], "Selector not whitelisted");
+
+        // Validate tokens
+        require(tokenIn != address(0) && tokenOut != address(0), "Invalid tokens");
+        require(tokenIn != tokenOut, "Same token swap");
+
+        // Record balances before
+        uint256 balanceBefore = tokenOut == ETH_ADDRESS
+            ? address(this).balance
+            : IERC20(tokenOut).balanceOf(address(this));
+
+        // Handle token approvals
+        if (tokenIn != ETH_ADDRESS) {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+            IERC20(tokenIn).safeApprove(targetDEX, amountIn);
         }
 
-        // Handle token input (reuse existing logic)
-        if (tokenIn == ETH_ADDRESS) {
-            if (msg.value != amountIn) revert InvalidParameter("ethAmount");
-        } else {
-            if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-                IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-            }
-            if (tokenIn != address(WETH)) {
-                IERC20(tokenIn).safeApprove(dex, amountIn);
-            }
-        }
-
-        // Get balance before
-        uint256 balanceBefore;
-        if (tokenOut == ETH_ADDRESS) {
-            balanceBefore = address(this).balance;
-        } else {
-            balanceBefore = IERC20(tokenOut).balanceOf(address(this));
-        }
-
-        //  MODIFIED: Use constant for gas limit
-        (bool success, bytes memory result) = dex.call{
+        // Execute swap with gas limit
+        (bool success, bytes memory result) = targetDEX.call{
             value: tokenIn == ETH_ADDRESS ? amountIn : 0,
             gas: MAX_DEX_GAS_LIMIT
-        }(callData);
+        }(swapData);
 
         if (!success) {
-            string memory reason = result.length > 0 ? abi.decode(result, (string)) : "Unknown error";
-            revert BackendSwapFailed(reason);
+            // Reset approval on failure
+            if (tokenIn != ETH_ADDRESS) {
+                IERC20(tokenIn).safeApprove(targetDEX, 0);
+            }
+
+            // Decode revert reason if possible
+            string memory reason = "Unknown error";
+            if (result.length > 0) {
+                assembly {
+                    reason := mload(add(result, 0x20))
+                }
+            }
+
+            emit CustomDexSwapFailed(targetDEX, reason, result);
+            revert SwapFailed(reason);
         }
 
-        // Calculate amount received
-        uint256 balanceAfter;
-        if (tokenOut == ETH_ADDRESS) {
-            balanceAfter = address(this).balance;
-        } else {
-            balanceAfter = IERC20(tokenOut).balanceOf(address(this));
+        // Reset approval
+        if (tokenIn != ETH_ADDRESS) {
+            IERC20(tokenIn).safeApprove(targetDEX, 0);
         }
+
+        // Calculate output amount
+        uint256 balanceAfter = tokenOut == ETH_ADDRESS
+            ? address(this).balance
+            : IERC20(tokenOut).balanceOf(address(this));
 
         amountOut = balanceAfter - balanceBefore;
-        if (amountOut == 0) revert InvalidReturnData();
+        require(amountOut >= minAmountOut, "Insufficient output");
 
-        // Send tokens to caller (reuse existing logic)
-        if (!directTransferMode || !hasRole(OPERATOR_ROLE, msg.sender)) {
-            _handleTokenOutput(tokenOut, amountOut);
-        }
-        // Reset approvals
-        if (tokenIn != ETH_ADDRESS && tokenIn != address(WETH)) {
-            IERC20(tokenIn).safeApprove(dex, 0);
-        }
-
-        emit BackendSwapExecuted(dex, tokenIn, tokenOut, amountIn, amountOut, block.timestamp);
-    }
-
-    /**
-     * @notice Get all registered DEXes
-     * @return Array of registered DEX addresses
-     */
-    function getRegisteredDEXes() external view returns (address[] memory) {
-        return allRegisteredDEXes;
-    }
-
-    /**
-     * @notice Check if DEX is registered
-     * @param dex DEX address to check
-     * @return Whether DEX is registered
-     */
-    function isDEXRegistered(address dex) external view returns (bool) {
-        return registeredDEXes[dex];
-    }
-
-    // ============================================================================
-    // SECURITY FUNCTIONS (NEW)
-    // ============================================================================
-
-    /**
-     * @notice Add dangerous selector to blacklist
-     * @param selector Function selector to blacklist
-     * @param reason Reason for blacklisting
-     * @param password Security password
-     */
-    function addDangerousSelector(
-        bytes4 selector,
-        string calldata reason,
-        string calldata password
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-
-        if (dangerousSelectors[selector]) revert SelectorAlreadyBlacklisted();
-
-        dangerousSelectors[selector] = true;
-        allDangerousSelectors.push(selector);
-
-        emit DangerousSelectorAdded(selector, reason, msg.sender, block.timestamp);
-    }
-
-    /**
-     * @notice Remove selector from blacklist
-     * @param selector Function selector to remove
-     * @param password Security password
-     */
-    function removeDangerousSelector(bytes4 selector, string calldata password) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-
-        if (!dangerousSelectors[selector]) revert SelectorNotBlacklisted();
-
-        dangerousSelectors[selector] = false;
-
-        // Remove from array (optional for gas efficiency)
-        for (uint256 i = 0; i < allDangerousSelectors.length; i++) {
-            if (allDangerousSelectors[i] == selector) {
-                allDangerousSelectors[i] = allDangerousSelectors[allDangerousSelectors.length - 1];
-                allDangerousSelectors.pop();
-                break;
-            }
+        // Transfer output to caller
+        if (tokenOut == ETH_ADDRESS) {
+            (bool sent, ) = msg.sender.call{value: amountOut}("");
+            require(sent, "ETH transfer failed");
+        } else {
+            IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
         }
 
-        emit DangerousSelectorRemoved(selector, msg.sender, block.timestamp);
-    }
-
-    /**
-     * @notice Validate function selector safety
-     * @param selector Function selector to validate
-     */
-    function validateSelector(bytes4 selector) public view {
-        if (dangerousSelectors[selector]) {
-            revert DangerousSelector();
-        }
-    }
-
-    /**
-     * @notice Check if selector is dangerous
-     * @param selector Function selector to check
-     * @return isDangerous Whether selector is blacklisted
-     */
-    function isSelectorDangerous(bytes4 selector) external view returns (bool isDangerous) {
-        return dangerousSelectors[selector];
-    }
-
-    /**
-     * @notice Get all dangerous selectors
-     * @return selectors Array of blacklisted selectors
-     */
-    function getAllDangerousSelectors() external view returns (bytes4[] memory) {
-        return allDangerousSelectors;
-    }
-
-    /**
-     * @notice Initialize security with standard dangerous selectors
-     * @param password Security password
-     */
-    function initializeSecurity(string calldata password) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        bytes32 passwordHash = keccak256(abi.encode(password, address(this)));
-        if (passwordHash != ROUTE_PASSWORD_HASH) revert InvalidRoutePassword();
-
-        bytes4[] memory standardDangerous = _getStandardDangerousSelectors();
-
-        for (uint256 i = 0; i < standardDangerous.length; i++) {
-            if (!dangerousSelectors[standardDangerous[i]]) {
-                dangerousSelectors[standardDangerous[i]] = true;
-                allDangerousSelectors.push(standardDangerous[i]);
-
-                emit DangerousSelectorAdded(
-                    standardDangerous[i],
-                    "Standard security initialization",
-                    msg.sender,
-                    block.timestamp
-                );
-            }
-        }
-    }
-
-    /**
-     * @notice Get standard dangerous selectors
-     * @return selectors Array of dangerous function selectors
-     */
-    function _getStandardDangerousSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](15);
-        selectors[0] = bytes4(keccak256("selfdestruct(address)"));
-        selectors[1] = bytes4(keccak256("delegatecall(address,bytes)"));
-        selectors[2] = bytes4(keccak256("suicide(address)"));
-        selectors[3] = bytes4(keccak256("create(uint256,bytes)"));
-        selectors[4] = bytes4(keccak256("create2(uint256,bytes32,bytes)"));
-        selectors[5] = bytes4(keccak256("staticcall(address,bytes)"));
-        selectors[6] = bytes4(keccak256("callcode(address,bytes)"));
-        selectors[7] = bytes4(keccak256("extcodecopy(address,uint256,uint256,uint256)"));
-        selectors[8] = bytes4(keccak256("setOwner(address)"));
-        selectors[9] = bytes4(keccak256("transferOwnership(address)"));
-        selectors[10] = bytes4(keccak256("changeOwner(address)"));
-        selectors[11] = bytes4(keccak256("renounceOwnership()"));
-        selectors[12] = bytes4(keccak256("destroy()"));
-        selectors[13] = bytes4(keccak256("kill()"));
-        selectors[14] = bytes4(keccak256("suicide()"));
-
-        return selectors;
+        emit BackendSwapExecuted(targetDEX, tokenIn, tokenOut, amountIn, amountOut, msg.sender, block.timestamp);
     }
     // ============================================================================
-    // DYNAMIC DEX REGISTRY FUNCTIONS (NEW FEATURE)
+    // RECEIVE ETHER
     // ============================================================================
 
     receive() external payable {}
