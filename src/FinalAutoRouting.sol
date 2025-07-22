@@ -1,32 +1,70 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "./interfaces/IUniswapV3Router.sol";
-import "./interfaces/IUniswapV3Quoter.sol";
-import "./interfaces/ICurvePool.sol";
-import "./interfaces/IWETH.sol";
-import "./interfaces/IFrxETHMinter.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+// Interfaces
+interface IWETH {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+    function balanceOf(address) external view returns (uint256);
+    function approve(address, uint256) external returns (bool);
+}
+
+interface IUniswapV3Router {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
+}
+
+interface IUniswapV3Quoter {
+    function quoteExactInputSingle(
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
+        uint256 amountIn,
+        uint160 sqrtPriceLimitX96
+    ) external returns (uint256 amountOut);
+}
+
+interface ICurvePool {
+    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external payable returns (uint256);
+    function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external payable returns (uint256);
+    function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
+    function get_dy_underlying(int128 i, int128 j, uint256 dx) external view returns (uint256);
+}
+
+interface IFrxETHMinter {
+    function submitAndDeposit(address recipient) external payable returns (uint256);
+}
 
 /**
- * @title FinalAutoRouting - Superior Version
- * @notice Production-ready routing intelligence with delegated execution pattern
- * @dev Revolutionary features:
- * - Stateless execution data generation for LTM→DEX→LTM flow
- * - Zero token transfers to FAR in operator mode
- * - Quoter-first optimization with intelligent fallbacks
- * - Complete protocol support with gas-optimized execution
- * - Advanced security with role-based access control
+ * @title FinalAutoRouting
+ * @notice Intelligent routing system that provides execution data without holding assets
+ * @dev FAR acts as a guide for LTM, never touching tokens directly
  */
-
-// ============================================================================
-// MAIN CONTRACT
-// ============================================================================
-
 contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -58,15 +96,12 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     uint256 public constant MAX_DEX_GAS_LIMIT = 500000;
     uint256 public constant MAX_MULTI_STEP_OPERATIONS = 5;
     uint256 public constant DEX_TIMELOCK = 24 hours;
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-    uint256 private _globalReentrancyStatus = _NOT_ENTERED;
+
     // ============================================================================
     // STATE VARIABLES
     // ============================================================================
 
     bool private initialized;
-    bool public directTransferMode;
     address public routeManager;
 
     // Mappings
@@ -77,10 +112,8 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     mapping(address => bool) public poolPaused;
     mapping(Protocol => bool) public protocolPaused;
     mapping(address => uint8) public tokenDecimals;
-    mapping(address => mapping(address => bool)) public customRouteEnabled;
     mapping(address => uint256) public curvePoolTokenCounts;
     mapping(address => CurveInterface) public curvePoolInterfaces;
-    mapping(bytes32 => uint256) private configUpdateLocks;
     mapping(bytes32 => RouteConfig) public routes;
     mapping(address => bool) public registeredDEXes;
     mapping(address => string) public dexNames;
@@ -89,7 +122,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     mapping(bytes4 => string) public selectorDescriptions;
     mapping(address => uint256) public dexRegistrationTime;
     mapping(address => address) public dexRegisteredBy;
-    mapping(address => uint256) private _reentrancyStatus;
 
     address[] public allRegisteredDEXes;
     bytes4[] public allDangerousSelectors;
@@ -106,29 +138,27 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         MultiHop,
         MultiStep
     }
+
     enum AssetType {
         STABLE,
         ETH_LST,
         BTC_WRAPPED,
         VOLATILE
     }
+
     enum CurveInterface {
         None,
         Exchange,
         ExchangeUnderlying,
         Both
     }
-    enum ActionType {
-        SWAP,
-        WRAP,
-        UNWRAP,
-        DIRECT_MINT
-    }
+
     enum RouteType {
         Direct,
         Reverse,
         Bridge
     }
+
     enum SlippageType {
         QUOTE,
         FALLBACK
@@ -186,33 +216,42 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         uint256 expectedGas;
     }
 
+    struct ExecutionStep {
+        address target;
+        uint256 value;
+        bytes data;
+        address tokenIn;
+        address tokenOut;
+        bool requiresApproval;
+        bool isCurvePool;
+    }
+
     struct SlippageConfig {
         address tokenIn;
         address tokenOut;
         uint256 slippageBps;
     }
-    struct RouteCache {
-        bool directConfigured;
-        bool reverseConfigured;
-        RouteConfig directRoute;
-        RouteConfig reverseRoute;
+
+    struct SwapStep {
+        address tokenIn;
+        address tokenOut;
+        uint256 amountIn;
+        uint256 minAmountOut;
+        address target;
+        bytes data;
+        uint256 value;
+        Protocol protocol;
+    }
+
+    struct MultiStepExecutionPlan {
+        SwapStep[] steps;
+        uint256 expectedFinalAmount;
     }
 
     // ============================================================================
     // EVENTS
     // ============================================================================
 
-    event DirectTransferModeUpdated(bool enabled, uint256 timestamp);
-    event AssetsSwapped(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        Protocol protocol,
-        address indexed caller,
-        uint256 gasUsed,
-        uint256 timestamp
-    );
     event ExecutionDataGenerated(
         address indexed tokenIn,
         address indexed tokenOut,
@@ -240,17 +279,12 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     event DexUnregistered(address indexed dex, address indexed unregisteredBy, uint256 timestamp);
     event SelectorWhitelisted(bytes4 indexed selector, string description, uint256 timestamp);
     event SelectorBlacklisted(bytes4 indexed selector, string reason, uint256 timestamp);
-    event BackendSwapExecuted(
-        address indexed dex,
+    event MultiStepPlanGenerated(
         address indexed tokenIn,
         address indexed tokenOut,
         uint256 amountIn,
-        uint256 amountOut,
-        address executor,
-        uint256 timestamp
+        uint256 stepCount
     );
-    event CustomDexSwapFailed(address indexed dex, string reason, bytes data);
-
     // ============================================================================
     // ERRORS
     // ============================================================================
@@ -290,13 +324,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     modifier onlyRouteManager() {
         require(msg.sender == routeManager || hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Unauthorized route manager");
         _;
-    }
-
-    modifier globalNonReentrant() {
-        require(_globalReentrancyStatus != _ENTERED, "ReentrancyGuard: reentrant call");
-        _globalReentrancyStatus = _ENTERED;
-        _;
-        _globalReentrancyStatus = _NOT_ENTERED;
     }
 
     // ============================================================================
@@ -395,20 +422,19 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     // ============================================================================
     // MAIN FUNCTIONS FOR LTM INTEGRATION
     // ============================================================================
-
     /**
      * @notice Get accurate quote and execution data for LTM - THIS IS THE MAIN FUNCTION
-     * @dev This is NOT a view function - LTM should call this normally to get accurate quotes
+     * @dev Returns executable calldata that LTM can use directly without FAR touching assets
      * @param tokenIn Input token address
      * @param tokenOut Output token address
      * @param amountIn Input amount
-     * @return quotedAmount The accurate quoted output from quoter
-     * @return executionData The calldata for swap execution
+     * @param recipient The final recipient of tokens (usually LTM)
+     * @return quotedAmount The accurate quoted output amount
+     * @return executionData The calldata for LTM to execute directly on DEX
      * @return protocol The protocol to use
-     * @return targetContract The contract to call for swap
+     * @return targetContract The DEX contract LTM should call
      * @return value ETH value to send (if ETH swap)
      */
-
     function getQuoteAndExecutionData(
         address tokenIn,
         address tokenOut,
@@ -430,108 +456,62 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) revert TokenNotSupported();
         if (recipient == address(0)) revert InvalidAddress();
 
+        // Validate cross-category early
+        if (_isCrossCategory(tokenIn, tokenOut)) {
+            revert NoRouteFound();
+        }
+
         // Find optimal strategy
         ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
 
-        // Try to get accurate quote with proper fallback
-        bool useQuoterPrice = true;
-
-        // First attempt: Try quoter for accurate pricing
-        try this._performQuoteExternal(tokenIn, tokenOut, amountIn, strategy.primaryRouteData) returns (
-            uint256 quoterOutput
-        ) {
-            quotedAmount = quoterOutput;
-        } catch {
-            // Fallback: Use simple estimate with configured slippage
-            useQuoterPrice = false;
-            quotedAmount = _getSimpleEstimate(amountIn, tokenIn, tokenOut);
-        }
-
-        // Apply appropriate buffer based on quote source
+        // Get quote with proper fallback mechanism
         uint256 minAmountOut;
-        if (useQuoterPrice) {
-            // Quoter succeeded: use tight buffer
-            minAmountOut = (quotedAmount * (10000 - TIGHT_BUFFER_BPS)) / 10000;
+
+        if (strategy.protocol == Protocol.MultiStep) {
+            // Special handling for multi-step
+            (address[] memory tokens, Protocol[] memory protocols, bytes[] memory routeDatas, ) = abi.decode(
+                strategy.primaryRouteData,
+                (address[], Protocol[], bytes[], uint256[])
+            );
+
+            // Calculate dynamic min amounts for all steps
+            uint256[] memory calculatedMinAmounts;
+            (calculatedMinAmounts, quotedAmount) = _calculateMultiStepMinAmounts(
+                tokens,
+                amountIn,
+                protocols,
+                routeDatas
+            );
+
+            // Use the final step's minimum as overall minimum
+            minAmountOut = calculatedMinAmounts[calculatedMinAmounts.length - 1];
+
+            // Update strategy with calculated amounts
+            strategy.primaryRouteData = abi.encode(tokens, protocols, routeDatas, calculatedMinAmounts);
         } else {
-            // Fallback: use configured slippage for safety
-            uint256 slippage = _getSlippage(tokenIn, tokenOut, SlippageType.FALLBACK);
-            minAmountOut = (quotedAmount * (10000 - slippage)) / 10000;
+            // Standard quote for single/bridge routes
+            (quotedAmount, minAmountOut) = _getQuoteWithFallback(tokenIn, tokenOut, amountIn, strategy);
         }
 
         // Generate execution data based on route type
         if (strategy.routeType == RouteType.Bridge) {
-            // For bridge routes, generate sequential execution data
-            executionData = _generateBridgeSequentialData(
-                strategy,
+            // For bridge routes, calculate first leg minimum
+            (uint256 firstLegQuote, uint256 firstLegMin) = _getQuoteWithFallback(
                 tokenIn,
-                tokenOut,
+                strategy.bridgeAsset,
                 amountIn,
-                minAmountOut,
-                recipient
-            );
-            protocol = Protocol.MultiStep; // Treat bridge as multi-step
-            targetContract = address(this); // LTM will handle sequentially
-        } else if (strategy.protocol == Protocol.MultiStep) {
-            // For multi-step, generate first step data
-            executionData = _generateMultiStepFirstStepData(
-                strategy,
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minAmountOut,
-                recipient
-            );
-            protocol = Protocol.MultiStep;
-            targetContract = address(this);
-        } else {
-            // Single step execution
-            executionData = _generateSingleExecutionData(
-                strategy,
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minAmountOut,
-                recipient
+                ExecutionStrategy({
+                    routeType: RouteType.Direct,
+                    protocol: strategy.protocol,
+                    bridgeAsset: address(0),
+                    primaryRouteData: strategy.primaryRouteData,
+                    secondaryRouteData: "",
+                    expectedGas: _estimateGasForProtocol(strategy.protocol)
+                })
             );
 
-            // Determine target contract
-            if (strategy.protocol == Protocol.UniswapV3 || strategy.protocol == Protocol.MultiHop) {
-                targetContract = address(uniswapRouter);
-            } else if (strategy.protocol == Protocol.Curve) {
-                CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
-                targetContract = route.pool;
-            } else if (strategy.protocol == Protocol.DirectMint) {
-                targetContract = abi.decode(strategy.primaryRouteData, (address));
-            }
-
-            protocol = strategy.protocol;
-        }
-
-        value = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
-
-        emit ExecutionDataGenerated(tokenIn, tokenOut, amountIn, protocol, block.timestamp);
-
-        return (quotedAmount, executionData, protocol, targetContract, value);
-    }
-    /**
-     * @notice Generate bridge route execution data
-     */
-    function _generateBridgeSequentialData(
-        ExecutionStrategy memory strategy,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient
-    ) internal view returns (bytes memory) {
-        // Use stack instead of memory array for gas efficiency
-        address token0 = tokenIn;
-        address token1 = strategy.bridgeAsset;
-        address token2 = tokenOut;
-
-        // Generate first step execution directly
-        return
-            _generateSingleExecutionData(
+            // Get first step execution data
+            (executionData, targetContract) = _generateDirectExecutionData(
                 ExecutionStrategy({
                     routeType: RouteType.Direct,
                     protocol: strategy.protocol,
@@ -540,54 +520,320 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
                     secondaryRouteData: "",
                     expectedGas: _estimateGasForProtocol(strategy.protocol)
                 }),
-                token0,
-                token1,
+                tokenIn,
+                strategy.bridgeAsset,
                 amountIn,
-                0, // No minimum for intermediate
+                firstLegMin, // Use calculated minimum for first leg
                 recipient
             );
-    }
 
+            // Wrap with bridge metadata for LTM
+            executionData = abi.encode(
+                uint8(2), // Bridge flag
+                targetContract,
+                executionData,
+                strategy.bridgeAsset,
+                tokenOut,
+                minAmountOut // This is the overall minimum for the entire route
+            );
+
+            protocol = Protocol.MultiStep; // LTM treats bridge as MultiStep
+        } else if (strategy.protocol == Protocol.MultiStep) {
+            // Multi-step: get first execution with calculated minimums
+            (
+                address[] memory tokens,
+                Protocol[] memory protocols,
+                bytes[] memory routeDatas,
+                uint256[] memory minAmounts
+            ) = abi.decode(strategy.primaryRouteData, (address[], Protocol[], bytes[], uint256[]));
+
+            ExecutionStrategy memory firstStep = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: protocols[0],
+                bridgeAsset: address(0),
+                primaryRouteData: routeDatas[0],
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(protocols[0])
+            });
+
+            (bytes memory firstExecution, address firstTarget) = _generateDirectExecutionData(
+                firstStep,
+                tokens[0],
+                tokens[1],
+                amountIn,
+                minAmounts[0], // Use calculated minimum
+                recipient
+            );
+
+            targetContract = firstTarget;
+
+            // Wrap with multi-step metadata
+            executionData = abi.encode(
+                uint8(3), // Multi-step flag
+                firstTarget,
+                firstExecution,
+                tokens,
+                protocols,
+                routeDatas,
+                minAmounts // Pass all calculated minimums
+            );
+
+            protocol = Protocol.MultiStep;
+        } else {
+            // Single step execution - direct DEX call
+            (executionData, targetContract) = _generateDirectExecutionData(
+                strategy,
+                tokenIn,
+                tokenOut,
+                amountIn,
+                minAmountOut,
+                recipient
+            );
+            protocol = strategy.protocol;
+        }
+
+        // Set ETH value if needed
+        value = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
+
+        emit ExecutionDataGenerated(tokenIn, tokenOut, amountIn, protocol, block.timestamp);
+    }
     /**
-     * @notice Generate multi-step execution data
+     * @notice Get complete swap execution plan for LTM
+     * @dev Returns all necessary data for LTM to execute swap(s) blindly
      */
-    function _generateMultiStepFirstStepData(
-        ExecutionStrategy memory strategy,
+    function getCompleteExecutionPlan(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 minAmountOut,
         address recipient
-    ) internal view returns (bytes memory) {
-        // Decode multi-step configuration
+    )
+        external
+        returns (
+            uint256 quotedOutput,
+            uint256 minAmountOut,
+            ExecutionStep[] memory steps,
+            uint256 totalGas,
+            uint256 ethValue
+        )
+    {
+        // Find strategy
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
+
+        // Get quote with fallback
+        (quotedOutput, minAmountOut) = _getQuoteWithFallback(tokenIn, tokenOut, amountIn, strategy);
+
+        // Build execution steps
+        if (strategy.routeType == RouteType.Bridge) {
+            steps = new ExecutionStep[](2);
+
+            // First step: tokenIn -> bridgeAsset
+            (bytes memory data1, address target1) = _generateDirectExecutionData(
+                ExecutionStrategy({
+                    routeType: RouteType.Direct,
+                    protocol: strategy.protocol,
+                    bridgeAsset: address(0),
+                    primaryRouteData: strategy.primaryRouteData,
+                    secondaryRouteData: "",
+                    expectedGas: _estimateGasForProtocol(strategy.protocol)
+                }),
+                tokenIn,
+                strategy.bridgeAsset,
+                amountIn,
+                0, // No min for intermediate
+                recipient
+            );
+
+            steps[0] = ExecutionStep({
+                target: target1,
+                value: tokenIn == ETH_ADDRESS ? amountIn : 0,
+                data: data1,
+                tokenIn: tokenIn,
+                tokenOut: strategy.bridgeAsset,
+                requiresApproval: tokenIn != ETH_ADDRESS,
+                isCurvePool: strategy.protocol == Protocol.Curve
+            });
+
+            // Second step will be determined after first completes
+            steps[1] = ExecutionStep({
+                target: address(0), // To be filled by LTM
+                value: 0,
+                data: "",
+                tokenIn: strategy.bridgeAsset,
+                tokenOut: tokenOut,
+                requiresApproval: true,
+                isCurvePool: false
+            });
+        } else if (strategy.protocol == Protocol.MultiStep) {
+            // Decode multi-step
+            (
+                address[] memory tokens,
+                Protocol[] memory protocols,
+                bytes[] memory routeDatas,
+                uint256[] memory minAmounts
+            ) = abi.decode(strategy.primaryRouteData, (address[], Protocol[], bytes[], uint256[]));
+
+            steps = new ExecutionStep[](protocols.length);
+
+            // Build each step
+            for (uint256 i = 0; i < protocols.length; i++) {
+                ExecutionStrategy memory stepStrategy = ExecutionStrategy({
+                    routeType: RouteType.Direct,
+                    protocol: protocols[i],
+                    bridgeAsset: address(0),
+                    primaryRouteData: routeDatas[i],
+                    secondaryRouteData: "",
+                    expectedGas: _estimateGasForProtocol(protocols[i])
+                });
+
+                (bytes memory data, address target) = _generateDirectExecutionData(
+                    stepStrategy,
+                    tokens[i],
+                    tokens[i + 1],
+                    i == 0 ? amountIn : 0, // Only first step has known input
+                    minAmounts[i],
+                    recipient
+                );
+
+                steps[i] = ExecutionStep({
+                    target: target,
+                    value: (i == 0 && tokens[i] == ETH_ADDRESS) ? amountIn : 0,
+                    data: data,
+                    tokenIn: tokens[i],
+                    tokenOut: tokens[i + 1],
+                    requiresApproval: tokens[i] != ETH_ADDRESS,
+                    isCurvePool: protocols[i] == Protocol.Curve
+                });
+            }
+        } else {
+            // Single step
+            steps = new ExecutionStep[](1);
+
+            (bytes memory data, address target) = _generateDirectExecutionData(
+                strategy,
+                tokenIn,
+                tokenOut,
+                amountIn,
+                minAmountOut,
+                recipient
+            );
+
+            steps[0] = ExecutionStep({
+                target: target,
+                value: tokenIn == ETH_ADDRESS ? amountIn : 0,
+                data: data,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                requiresApproval: tokenIn != ETH_ADDRESS,
+                isCurvePool: strategy.protocol == Protocol.Curve
+            });
+        }
+
+        // Calculate total gas
+        totalGas = strategy.expectedGas;
+        ethValue = tokenIn == ETH_ADDRESS ? amountIn : 0;
+    }
+
+    /**
+     * @notice Get bridge route second leg execution data
+     * @dev Called by LTM after first swap completes - properly calculates second leg minimum
+     */
+    function getBridgeSecondLegData(
+        address bridgeAsset,
+        address finalToken,
+        uint256 bridgeAmount,
+        uint256 originalMinOut,
+        address recipient
+    ) external returns (bytes memory executionData, address targetContract, bool requiresApproval) {
+        // Get the bridge->final route
+        bytes32 routeKey = keccak256(abi.encodePacked(bridgeAsset, finalToken));
+        RouteConfig memory config = routes[routeKey];
+
+        require(config.isConfigured, "Bridge route not found");
+
+        // Generate execution data
+        ExecutionStrategy memory strategy = ExecutionStrategy({
+            routeType: RouteType.Direct,
+            protocol: config.protocol,
+            bridgeAsset: address(0),
+            primaryRouteData: _encodeRouteData(config, bridgeAsset, finalToken),
+            secondaryRouteData: "",
+            expectedGas: _estimateGasForProtocol(config.protocol)
+        });
+
+        // Calculate proper minAmountOut for second leg based on actual bridge amount
+        (uint256 quotedAmount, uint256 secondLegMinOut) = _getQuoteWithFallback(
+            bridgeAsset,
+            finalToken,
+            bridgeAmount,
+            strategy
+        );
+
+        // Use the calculated min for second leg, but ensure it meets original requirement
+        uint256 effectiveMinOut = secondLegMinOut;
+
+        // If the calculated second leg output is less than original, we need to ensure
+        // we still meet the original minimum requirement
+        if (secondLegMinOut < originalMinOut) {
+            effectiveMinOut = originalMinOut;
+        }
+
+        (executionData, targetContract) = _generateDirectExecutionData(
+            strategy,
+            bridgeAsset,
+            finalToken,
+            bridgeAmount,
+            effectiveMinOut,
+            recipient
+        );
+
+        requiresApproval = bridgeAsset != ETH_ADDRESS;
+    }
+    /**
+     * @notice Get next step execution data for multi-step swaps
+     * @dev Called by LTM after completing previous step
+     */
+    function getNextStepExecutionData(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        bytes calldata fullRouteData,
+        uint256 stepIndex,
+        address recipient
+    ) external view returns (bytes memory executionData, address targetContract, bool isFinalStep) {
+        // Decode the full route data
         (
             address[] memory tokens,
             Protocol[] memory protocols,
             bytes[] memory routeDatas,
             uint256[] memory minAmounts
-        ) = abi.decode(strategy.primaryRouteData, (address[], Protocol[], bytes[], uint256[]));
+        ) = abi.decode(fullRouteData, (address[], Protocol[], bytes[], uint256[]));
 
-        require(tokens.length >= 2 && protocols.length > 0, "Invalid multi-step");
+        require(stepIndex < protocols.length, "Invalid step index");
 
-        // Return executable calldata for first step only
-        ExecutionStrategy memory firstStep = ExecutionStrategy({
+        // Check if this is the final step
+        isFinalStep = (stepIndex == protocols.length - 1);
+
+        // Generate execution data for this step
+        ExecutionStrategy memory stepStrategy = ExecutionStrategy({
             routeType: RouteType.Direct,
-            protocol: protocols[0],
+            protocol: protocols[stepIndex],
             bridgeAsset: address(0),
-            primaryRouteData: routeDatas[0],
+            primaryRouteData: routeDatas[stepIndex],
             secondaryRouteData: "",
-            expectedGas: _estimateGasForProtocol(protocols[0])
+            expectedGas: _estimateGasForProtocol(protocols[stepIndex])
         });
 
-        return
-            _generateSingleExecutionData(
-                firstStep,
-                tokens[0],
-                tokens[1],
-                amountIn,
-                minAmounts[0],
-                recipient // Direct to recipient
-            );
+        // Use actual recipient for final step, LTM address for intermediate steps
+        address stepRecipient = isFinalStep ? recipient : msg.sender;
+
+        (executionData, targetContract) = _generateDirectExecutionData(
+            stepStrategy,
+            tokens[stepIndex],
+            tokens[stepIndex + 1],
+            amountIn,
+            minAmounts[stepIndex],
+            stepRecipient
+        );
     }
     /**
      * @notice Validate swap execution (view function for validation)
@@ -608,17 +854,16 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             return (false, "Output token not supported", 0);
         }
 
-        // Executor validation
-        if (directTransferMode && !hasRole(OPERATOR_ROLE, executor)) {
-            return (false, "Executor not authorized for direct mode", 0);
-        }
-
         // Basic validation
         if (amountIn == 0) {
             return (false, "Zero amount", 0);
         }
         if (tokenIn == tokenOut) {
             return (false, "Same token swap", 0);
+        }
+        // Check cross-category
+        if (_isCrossCategory(tokenIn, tokenOut)) {
+            return (false, "Cross-category swap forbidden", 0);
         }
 
         // Find route
@@ -671,21 +916,14 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         if (minAmountOut == 0) {
             uint256 estimate = _estimateSwapOutputView(tokenIn, tokenOut, amountIn, strategy);
             uint256 slippage = slippageTolerance[tokenIn][tokenOut];
-            if (slippage == 0) slippage = _getDefaultSlippage(tokenIn, tokenOut);
+            if (slippage == 0) revert NoConfigSlippage();
             minAmountOut = (estimate * (10000 - slippage)) / 10000;
         }
 
         if (strategy.routeType == RouteType.Bridge) {
-            executionData = _generateBridgeExecutionData(
-                strategy,
-                tokenIn,
-                tokenOut,
-                amountIn,
-                minAmountOut,
-                recipient
-            );
+            executionData = _generateComplexRouteData(strategy, tokenIn, tokenOut, amountIn, minAmountOut, recipient);
         } else {
-            executionData = _generateSingleExecutionData(
+            (executionData, ) = _generateDirectExecutionData(
                 strategy,
                 tokenIn,
                 tokenOut,
@@ -697,136 +935,516 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Get quoted swap execution data with live pricing
-     * @dev This is NOT a view function - uses real quoter for accuracy
+     * @notice Get WETH conversion instructions for LTM
+     * @dev Tells LTM when to wrap/unwrap ETH
      */
-    function getQuotedSwapExecutionData(
+    function getETHConversionData(
         address tokenIn,
         address tokenOut,
-        uint256 amountIn,
-        address recipient // ADD THIS PARAMETER
+        uint256 amount,
+        bool isInput
+    ) external view returns (bool needsConversion, bytes memory conversionData, address conversionTarget) {
+        if (isInput && tokenIn == ETH_ADDRESS) {
+            // Need to wrap ETH to WETH
+            needsConversion = true;
+            conversionTarget = address(WETH);
+            conversionData = abi.encodeWithSelector(IWETH.deposit.selector);
+        } else if (!isInput && tokenOut == ETH_ADDRESS) {
+            // Need to unwrap WETH to ETH
+            needsConversion = true;
+            conversionTarget = address(WETH);
+            conversionData = abi.encodeWithSelector(IWETH.withdraw.selector, amount);
+        } else {
+            needsConversion = false;
+        }
+    }
+
+    /**
+     * @notice Check if swap needs WETH wrapping/unwrapping
+     */
+    function getWETHRequirements(
+        address tokenIn,
+        address tokenOut,
+        Protocol protocol
+    ) external view returns (bool needsWrap, bool needsUnwrap, address wethAddress) {
+        wethAddress = address(WETH);
+
+        // Check if we need to wrap ETH
+        if (tokenIn == ETH_ADDRESS && protocol != Protocol.Curve && protocol != Protocol.DirectMint) {
+            needsWrap = true;
+        }
+
+        // Check if we need to unwrap to ETH
+        if (tokenOut == ETH_ADDRESS && protocol != Protocol.Curve && protocol != Protocol.DirectMint) {
+            needsUnwrap = true;
+        }
+    }
+
+    /**
+     * @notice Get all possible routes for a token pair
+     */
+    function getAllPossibleRoutes(
+        address tokenIn,
+        address tokenOut
     )
         external
-        returns (bytes memory executionData, Protocol protocol, uint256 quotedOutput, uint256 adjustedMinOutput)
+        view
+        returns (
+            bool hasDirect,
+            bool hasReverse,
+            bool hasBridge,
+            address bridgeAsset,
+            uint256 estimatedDirectGas,
+            uint256 estimatedBridgeGas
+        )
     {
-        // Get base execution strategy
-        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
+        bytes32 directKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+        bytes32 reverseKey = keccak256(abi.encodePacked(tokenOut, tokenIn));
 
-        // Get quote
-        SwapParams memory params = SwapParams({
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            amountIn: amountIn,
-            minAmountOut: 0,
-            protocol: strategy.protocol,
-            routeData: strategy.primaryRouteData
-        });
+        RouteConfig memory directRoute = routes[directKey];
+        RouteConfig memory reverseRoute = routes[reverseKey];
 
-        QuoteData memory quote = _performQuote(tokenIn, tokenOut, amountIn, params);
+        hasDirect = directRoute.isConfigured;
+        hasReverse = reverseRoute.isConfigured;
 
-        if (quote.valid) {
-            quotedOutput = quote.expectedOutput;
-            adjustedMinOutput = (quotedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
-        } else {
-            // Fallback estimate
-            quotedOutput = _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
-            uint256 slippage = _getSlippage(tokenIn, tokenOut, SlippageType.FALLBACK);
-            adjustedMinOutput = (quotedOutput * (10000 - slippage)) / 10000;
+        // Check bridge
+        bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
+        if (bridgeAsset != address(0)) {
+            bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, bridgeAsset));
+            bytes32 secondKey = keccak256(abi.encodePacked(bridgeAsset, tokenOut));
+            hasBridge = routes[firstKey].isConfigured && routes[secondKey].isConfigured;
+
+            if (hasBridge) {
+                estimatedBridgeGas =
+                    _estimateGasForProtocol(routes[firstKey].protocol) +
+                    _estimateGasForProtocol(routes[secondKey].protocol);
+            }
         }
 
-        // Generate execution data with adjusted minimum
-        protocol = strategy.protocol;
+        if (hasDirect) {
+            estimatedDirectGas = _estimateGasForProtocol(directRoute.protocol);
+        } else if (hasReverse) {
+            estimatedDirectGas = _estimateGasForProtocol(reverseRoute.protocol);
+        }
+    }
+
+    /**
+     * @notice Validate route configuration before execution
+     */
+    function validateRouteConfiguration(
+        address tokenIn,
+        address tokenOut
+    ) external view returns (bool isValid, string memory error, uint256 configuredSlippage) {
+        // Check token support
+        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
+            return (false, "Input token not supported", 0);
+        }
+
+        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
+            return (false, "Output token not supported", 0);
+        }
+
+        // Check route exists
+        try this._findOptimalExecutionStrategyView(tokenIn, tokenOut, 1e18, 0) returns (ExecutionStrategy memory) {
+            isValid = true;
+            error = "";
+        } catch {
+            return (false, "No route configured", 0);
+        }
+
+        // Get slippage
+        configuredSlippage = slippageTolerance[tokenIn][tokenOut];
+        if (configuredSlippage == 0) revert NoConfigSlippage();
+    }
+
+    /**
+     * @notice Get custom DEX execution data
+     * @dev Returns execution info without executing
+     */
+    function getCustomDEXExecutionData(
+        address targetDEX,
+        bytes calldata proposedCalldata,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    )
+        external
+        view
+        returns (bool isValid, string memory validationError, bytes memory approvalData, uint256 estimatedGas)
+    {
+        // Validate DEX
+        if (!registeredDEXes[targetDEX]) {
+            return (false, "DEX not registered", "", 0);
+        }
+
+        if (block.timestamp < dexRegistrationTime[targetDEX] + DEX_TIMELOCK) {
+            return (false, "DEX timelock not expired", "", 0);
+        }
+
+        // Validate selector
+        if (proposedCalldata.length < 4) {
+            return (false, "Invalid calldata", "", 0);
+        }
+
+        bytes4 selector = bytes4(proposedCalldata[:4]);
+
+        if (dangerousSelectors[selector]) {
+            return (false, "Dangerous selector", "", 0);
+        }
+
+        if (!whitelistedSelectors[selector]) {
+            return (false, "Selector not whitelisted", "", 0);
+        }
+
+        // Generate approval data if needed
+        if (tokenIn != ETH_ADDRESS) {
+            approvalData = abi.encodeWithSelector(IERC20.approve.selector, targetDEX, amountIn);
+        }
+
+        isValid = true;
+        validationError = "";
+        estimatedGas = MAX_DEX_GAS_LIMIT;
+    }
+
+    // ============================================================================
+    // INTERNAL FUNCTIONS
+    // ============================================================================
+
+    /**
+     * @notice Get quote with automatic fallback to configured slippage
+     * @dev Implements try quoter -> use tight buffer, catch -> use raw tested slippage values
+     */
+    function _getQuoteWithFallback(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        ExecutionStrategy memory strategy
+    ) internal returns (uint256 quotedAmount, uint256 minAmountOut) {
+        // Try quoter first
+        try this._performQuoteExternal(tokenIn, tokenOut, amountIn, strategy.primaryRouteData) returns (
+            uint256 quoterOutput
+        ) {
+            if (quoterOutput > 0) {
+                // Quoter succeeded - use tight buffer
+                quotedAmount = quoterOutput;
+                minAmountOut = (quotedAmount * (10000 - TIGHT_BUFFER_BPS)) / 10000;
+                return (quotedAmount, minAmountOut);
+            }
+        } catch {
+            // Quoter failed - continue to fallback
+        }
+
+        // Fallback: Use raw decimal-adjusted amount as quote (no haircuts)
+        quotedAmount = _getRawDecimalAdjustedAmount(amountIn, tokenIn, tokenOut);
+
+        // Get pre-tested slippage for this pair
+        uint256 slippage = slippageTolerance[tokenIn][tokenOut];
+        if (slippage == 0) {
+            // No configured slippage means route not properly tested
+            revert NoConfigSlippage();
+        }
+
+        // For bridge routes, use combined slippage of both legs
         if (strategy.routeType == RouteType.Bridge) {
-            executionData = _generateBridgeExecutionData(
-                strategy,
-                tokenIn,
-                tokenOut,
-                amountIn,
-                adjustedMinOutput,
-                recipient
+            // Get slippage for second leg
+            uint256 secondLegSlippage = slippageTolerance[strategy.bridgeAsset][tokenOut];
+            if (secondLegSlippage == 0) {
+                secondLegSlippage = slippageTolerance[tokenOut][strategy.bridgeAsset]; // Try reverse
+            }
+
+            // Combine slippages (not just double) - more accurate
+            slippage = slippage + secondLegSlippage;
+            if (slippage > MAX_SLIPPAGE) slippage = MAX_SLIPPAGE;
+        }
+
+        // Apply the pre-tested slippage directly
+        minAmountOut = (quotedAmount * (10000 - slippage)) / 10000;
+    }
+
+    /**
+     * @notice Get raw decimal-adjusted amount without any haircuts
+     * @dev Pure decimal conversion with no reductions
+     */
+    function _getRawDecimalAdjustedAmount(
+        uint256 amountIn,
+        address tokenIn,
+        address tokenOut
+    ) internal view returns (uint256) {
+        uint8 decimalsIn = tokenIn == ETH_ADDRESS ? 18 : tokenDecimals[tokenIn];
+        uint8 decimalsOut = tokenOut == ETH_ADDRESS ? 18 : tokenDecimals[tokenOut];
+
+        // MODIFY: Add validation
+        require(decimalsIn > 0 && decimalsOut > 0, "Token decimals not configured");
+
+        if (decimalsIn == decimalsOut) {
+            return amountIn;
+        } else if (decimalsIn > decimalsOut) {
+            return amountIn / (10 ** (decimalsIn - decimalsOut));
+        } else {
+            return amountIn * (10 ** (decimalsOut - decimalsIn));
+        }
+    }
+
+    /**
+     * @notice Calculate minimum amounts for each step in multi-step swap
+     * @dev Each step gets proper slippage based on pre-tested values
+     */
+    function _calculateMultiStepMinAmounts(
+        address[] memory tokens,
+        uint256 amountIn,
+        Protocol[] memory protocols,
+        bytes[] memory routeDatas
+    ) internal returns (uint256[] memory minAmounts, uint256 finalQuotedAmount) {
+        minAmounts = new uint256[](protocols.length);
+        uint256 currentAmount = amountIn;
+
+        for (uint256 i = 0; i < protocols.length; i++) {
+            // Get quote for this step
+            ExecutionStrategy memory stepStrategy = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: protocols[i],
+                bridgeAsset: address(0),
+                primaryRouteData: routeDatas[i],
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(protocols[i])
+            });
+
+            (uint256 stepQuote, uint256 stepMin) = _getQuoteWithFallback(
+                tokens[i],
+                tokens[i + 1],
+                currentAmount,
+                stepStrategy
+            );
+
+            minAmounts[i] = stepMin;
+            currentAmount = stepQuote; // Use quote for next step input
+        }
+
+        finalQuotedAmount = currentAmount;
+    }
+    /**
+     * @notice Generate direct execution data for single-step swaps
+     * @dev Returns calldata that LTM can execute directly on DEX
+     */
+    function _generateDirectExecutionData(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) internal view returns (bytes memory executionData, address targetContract) {
+        if (strategy.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
+            targetContract = address(uniswapRouter);
+
+            if (!route.isMultiHop) {
+                executionData = abi.encodeWithSelector(
+                    IUniswapV3Router.exactInputSingle.selector,
+                    IUniswapV3Router.ExactInputSingleParams({
+                        tokenIn: tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
+                        tokenOut: tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
+                        fee: route.fee,
+                        recipient: recipient,
+                        deadline: block.timestamp + 1800,
+                        amountIn: amountIn,
+                        amountOutMinimum: minAmountOut,
+                        sqrtPriceLimitX96: 0
+                    })
+                );
+            } else {
+                executionData = abi.encodeWithSelector(
+                    IUniswapV3Router.exactInput.selector,
+                    IUniswapV3Router.ExactInputParams({
+                        path: route.path,
+                        recipient: recipient,
+                        deadline: block.timestamp + 1800,
+                        amountIn: amountIn,
+                        amountOutMinimum: minAmountOut
+                    })
+                );
+            }
+        } else if (strategy.protocol == Protocol.Curve) {
+            CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
+            targetContract = route.pool;
+
+            // Generate direct calldata for Curve
+            if (route.useUnderlying) {
+                executionData = abi.encodeWithSelector(
+                    ICurvePool.exchange_underlying.selector,
+                    route.indexIn,
+                    route.indexOut,
+                    amountIn,
+                    minAmountOut
+                );
+            } else {
+                executionData = abi.encodeWithSelector(
+                    ICurvePool.exchange.selector,
+                    route.indexIn,
+                    route.indexOut,
+                    amountIn,
+                    minAmountOut
+                );
+            }
+        } else if (strategy.protocol == Protocol.DirectMint) {
+            address minter = abi.decode(strategy.primaryRouteData, (address));
+            targetContract = minter;
+
+            executionData = abi.encodeWithSelector(IFrxETHMinter.submitAndDeposit.selector, recipient);
+        } else if (strategy.protocol == Protocol.MultiHop) {
+            targetContract = address(uniswapRouter);
+            bytes memory path = strategy.primaryRouteData;
+
+            executionData = abi.encodeWithSelector(
+                IUniswapV3Router.exactInput.selector,
+                IUniswapV3Router.ExactInputParams({
+                    path: path,
+                    recipient: recipient,
+                    deadline: block.timestamp + 1800,
+                    amountIn: amountIn,
+                    amountOutMinimum: minAmountOut
+                })
             );
         } else {
-            executionData = _generateSingleExecutionData(
-                strategy,
+            revert UnsupportedRoute();
+        }
+    }
+    /**
+     * @notice Generate complex route data for multi-step/bridge swaps
+     * @dev Returns structured data for LTM to execute multiple swaps
+     */
+    function _generateComplexRouteData(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) internal view returns (bytes memory) {
+        if (strategy.routeType == RouteType.Bridge) {
+            // Bridge route: two separate swaps
+            ExecutionStrategy memory firstStep = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: strategy.protocol,
+                bridgeAsset: address(0),
+                primaryRouteData: strategy.primaryRouteData,
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(strategy.protocol)
+            });
+
+            // Get execution data for first swap
+            (bytes memory firstExecution, address firstTarget) = _generateDirectExecutionData(
+                firstStep,
                 tokenIn,
-                tokenOut,
+                strategy.bridgeAsset,
                 amountIn,
-                adjustedMinOutput,
+                0, // No minimum for intermediate
+                recipient // Important: bridge asset goes to recipient (LTM)
+            );
+
+            // Decode second route for protocol info
+            RouteConfig memory secondRoute;
+            bytes32 secondKey = keccak256(abi.encodePacked(strategy.bridgeAsset, tokenOut));
+            secondRoute = routes[secondKey];
+
+            // Return structured data for LTM
+            return
+                abi.encode(
+                    uint8(2), // Flag: Bridge swap
+                    tokenIn,
+                    strategy.bridgeAsset,
+                    tokenOut,
+                    amountIn,
+                    minAmountOut,
+                    firstTarget,
+                    firstExecution,
+                    secondRoute.protocol,
+                    strategy.secondaryRouteData
+                );
+        } else if (strategy.protocol == Protocol.MultiStep) {
+            // Multi-step route
+            (
+                address[] memory tokens,
+                Protocol[] memory protocols,
+                bytes[] memory routeDatas,
+                uint256[] memory minAmounts
+            ) = abi.decode(strategy.primaryRouteData, (address[], Protocol[], bytes[], uint256[]));
+
+            // Generate first step data
+            ExecutionStrategy memory firstStep = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: protocols[0],
+                bridgeAsset: address(0),
+                primaryRouteData: routeDatas[0],
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(protocols[0])
+            });
+
+            (bytes memory firstExecution, address firstTarget) = _generateDirectExecutionData(
+                firstStep,
+                tokens[0],
+                tokens[1],
+                amountIn,
+                minAmounts[0],
                 recipient
             );
-        }
-    }
 
-    /**
-     * @notice Get comprehensive routing strategy for complex swaps
-     * @dev Not a view function - uses quoter for accuracy
-     */
-    function getComplexSwapStrategy(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) external returns (bytes memory strategyData, uint256 expectedOutput, uint256 totalGas) {
-        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
-
-        strategyData = abi.encode(strategy);
-        totalGas = strategy.expectedGas;
-        expectedOutput = _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
-    }
-
-    // ============================================================================
-    // ORIGINAL SWAP FUNCTIONS WITH ENHANCED DIRECT MODE SUPPORT
-    // ============================================================================
-
-    /**
-     * @notice Execute swap with automatic routing
-     * @dev For backward compatibility - not recommended for LTM integration
-     */
-    function autoSwapAssets(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) external payable onlyAuthorizedCaller nonReentrant whenNotPaused returns (uint256 amountOut) {
-        if (amountIn == 0) revert ZeroAmount();
-        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) revert TokenNotSupported();
-        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) revert TokenNotSupported();
-        if (tokenIn == tokenOut) revert SameTokenSwap();
-
-        // In direct transfer mode, execute without moving tokens to FAR
-        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            return _autoSwapDirectMode(tokenIn, tokenOut, amountIn, minAmountOut);
+            // Return structured data
+            return
+                abi.encode(
+                    uint8(3), // Flag: Multi-step swap
+                    tokens,
+                    protocols,
+                    routeDatas,
+                    minAmounts,
+                    firstTarget,
+                    firstExecution,
+                    recipient
+                );
         }
 
-        // Normal mode with transfers
-        return _autoSwapWithTransfers(tokenIn, tokenOut, amountIn, minAmountOut);
+        revert UnsupportedRoute();
     }
 
     /**
-     * @notice Execute swap with specific parameters
-     * @dev For backward compatibility - not recommended for LTM integration
+     * @notice Decode complex execution data for LTM
+     * @dev Helper function for LTM to understand complex route data
      */
-    function swapAssets(
-        SwapParams calldata params
-    ) external payable onlyAuthorizedCaller whenNotPaused nonReentrant returns (uint256 amountOut) {
-        _validateSwapParams(params);
+    function decodeComplexExecutionData(
+        bytes calldata complexData
+    )
+        external
+        pure
+        returns (uint8 routeType, address firstTarget, bytes memory firstCalldata, bytes memory additionalData)
+    {
+        routeType = abi.decode(complexData, (uint8));
 
-        // Direct transfer mode for operators
-        if (directTransferMode && hasRole(OPERATOR_ROLE, msg.sender)) {
-            return _executeDirectModeSwap(params);
+        if (routeType == 2) {
+            // Bridge swap
+            (, address target, bytes memory calldata_, address bridgeAsset, address finalToken, uint256 minOut) = abi
+                .decode(complexData, (uint8, address, bytes, address, address, uint256));
+
+            firstTarget = target;
+            firstCalldata = calldata_;
+            additionalData = abi.encode(bridgeAsset, finalToken, minOut);
+        } else if (routeType == 3) {
+            // Multi-step swap
+            (
+                ,
+                address target,
+                bytes memory calldata_,
+                address[] memory tokens,
+                Protocol[] memory protocols,
+                bytes[] memory routeDatas,
+                uint256[] memory minAmounts
+            ) = abi.decode(complexData, (uint8, address, bytes, address[], Protocol[], bytes[], uint256[]));
+
+            firstTarget = target;
+            firstCalldata = calldata_;
+            additionalData = abi.encode(tokens, protocols, routeDatas, minAmounts);
         }
-
-        // Normal mode with transfers
-        return _swapAssetsWithTransfer(params);
     }
-
-    // ============================================================================
-    // INTERNAL EXECUTION FUNCTIONS
-    // ============================================================================
-
-    /**
-     * @notice Find optimal execution strategy
-     */
     /**
      * @notice Find optimal execution strategy
      */
@@ -836,6 +1454,15 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         uint256 amountIn,
         uint256 minAmountOut
     ) internal view returns (ExecutionStrategy memory strategy) {
+        // Validate cross-category early
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
+
+        // Cross-category swaps are forbidden
+        if (typeIn != typeOut && !(typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST)) {
+            revert NoRouteFound();
+        }
+
         // Cache route keys
         bytes32 directKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
         bytes32 reverseKey = keccak256(abi.encodePacked(tokenOut, tokenIn));
@@ -853,7 +1480,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             return strategy;
         }
 
-        // Check reverse route (single SLOAD)
+        // Check reverse route
         if (reverseRoute.isConfigured) {
             strategy.routeType = RouteType.Reverse;
             strategy.protocol = reverseRoute.protocol;
@@ -865,22 +1492,67 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         // Check bridge route
         address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
         if (bridgeAsset != address(0)) {
+            // Try all combinations of forward/reverse routes
             bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, bridgeAsset));
+            bytes32 firstReverseKey = keccak256(abi.encodePacked(bridgeAsset, tokenIn));
             bytes32 secondKey = keccak256(abi.encodePacked(bridgeAsset, tokenOut));
+            bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, bridgeAsset));
 
-            // Cache bridge routes
+            // Cache all possible routes
             RouteConfig storage firstRoute = routes[firstKey];
+            RouteConfig storage firstReverseRoute = routes[firstReverseKey];
             RouteConfig storage secondRoute = routes[secondKey];
+            RouteConfig storage secondReverseRoute = routes[secondReverseKey];
 
+            // Try forward-forward
             if (firstRoute.isConfigured && secondRoute.isConfigured) {
                 strategy.routeType = RouteType.Bridge;
-                strategy.protocol = firstRoute.protocol; // Use first route's protocol as primary
+                strategy.protocol = firstRoute.protocol;
                 strategy.bridgeAsset = bridgeAsset;
                 strategy.primaryRouteData = _encodeRouteData(firstRoute, tokenIn, bridgeAsset);
                 strategy.secondaryRouteData = _encodeRouteData(secondRoute, bridgeAsset, tokenOut);
                 strategy.expectedGas =
                     _estimateGasForProtocol(firstRoute.protocol) +
                     _estimateGasForProtocol(secondRoute.protocol);
+                return strategy;
+            }
+
+            // Try reverse-forward
+            if (firstReverseRoute.isConfigured && secondRoute.isConfigured) {
+                strategy.routeType = RouteType.Bridge;
+                strategy.protocol = firstReverseRoute.protocol;
+                strategy.bridgeAsset = bridgeAsset;
+                strategy.primaryRouteData = _encodeReverseRouteData(firstReverseRoute, bridgeAsset, tokenIn);
+                strategy.secondaryRouteData = _encodeRouteData(secondRoute, bridgeAsset, tokenOut);
+                strategy.expectedGas =
+                    _estimateGasForProtocol(firstReverseRoute.protocol) +
+                    _estimateGasForProtocol(secondRoute.protocol);
+                return strategy;
+            }
+
+            // Try forward-reverse
+            if (firstRoute.isConfigured && secondReverseRoute.isConfigured) {
+                strategy.routeType = RouteType.Bridge;
+                strategy.protocol = firstRoute.protocol;
+                strategy.bridgeAsset = bridgeAsset;
+                strategy.primaryRouteData = _encodeRouteData(firstRoute, tokenIn, bridgeAsset);
+                strategy.secondaryRouteData = _encodeReverseRouteData(secondReverseRoute, tokenOut, bridgeAsset);
+                strategy.expectedGas =
+                    _estimateGasForProtocol(firstRoute.protocol) +
+                    _estimateGasForProtocol(secondReverseRoute.protocol);
+                return strategy;
+            }
+
+            // Try reverse-reverse
+            if (firstReverseRoute.isConfigured && secondReverseRoute.isConfigured) {
+                strategy.routeType = RouteType.Bridge;
+                strategy.protocol = firstReverseRoute.protocol;
+                strategy.bridgeAsset = bridgeAsset;
+                strategy.primaryRouteData = _encodeReverseRouteData(firstReverseRoute, bridgeAsset, tokenIn);
+                strategy.secondaryRouteData = _encodeReverseRouteData(secondReverseRoute, tokenOut, bridgeAsset);
+                strategy.expectedGas =
+                    _estimateGasForProtocol(firstReverseRoute.protocol) +
+                    _estimateGasForProtocol(secondReverseRoute.protocol);
                 return strategy;
             }
         }
@@ -901,304 +1573,8 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Generate execution data for single route
-     */
-    function _generateSingleExecutionData(
-        ExecutionStrategy memory strategy,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient // ADD THIS
-    ) internal view returns (bytes memory) {
-        if (strategy.protocol == Protocol.UniswapV3) {
-            return
-                _generateUniswapV3ExecutionData(
-                    tokenIn,
-                    tokenOut,
-                    amountIn,
-                    minAmountOut,
-                    strategy.primaryRouteData,
-                    recipient
-                );
-        } else if (strategy.protocol == Protocol.Curve) {
-            return _generateCurveExecutionData(tokenIn, tokenOut, amountIn, minAmountOut, strategy.primaryRouteData);
-        } else if (strategy.protocol == Protocol.DirectMint) {
-            return
-                _generateDirectMintExecutionData(
-                    tokenIn,
-                    tokenOut,
-                    amountIn,
-                    minAmountOut,
-                    strategy.primaryRouteData,
-                    recipient
-                );
-        } else if (strategy.protocol == Protocol.MultiHop) {
-            return
-                _generateMultiHopExecutionData(
-                    tokenIn,
-                    tokenOut,
-                    amountIn,
-                    minAmountOut,
-                    strategy.primaryRouteData,
-                    recipient
-                );
-        }
-        revert UnsupportedRoute();
-    }
-    /**
-     * @notice Generate UniswapV3 execution bytecode
-     */
-    function _generateUniswapV3ExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        bytes memory routeData,
-        address recipient // ADD THIS
-    ) internal view returns (bytes memory) {
-        UniswapV3Route memory route = abi.decode(routeData, (UniswapV3Route));
-
-        if (!route.isMultiHop) {
-            // Calculate pool if needed
-            if (route.pool == address(0)) {
-                route.pool = _computeUniswapV3Pool(
-                    tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
-                    tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
-                    route.fee
-                );
-            }
-
-            return
-                abi.encodeWithSelector(
-                    IUniswapV3Router.exactInputSingle.selector,
-                    IUniswapV3Router.ExactInputSingleParams({
-                        tokenIn: tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
-                        tokenOut: tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
-                        fee: route.fee,
-                        recipient: recipient, // USE ACTUAL RECIPIENT
-                        deadline: block.timestamp + 1800,
-                        amountIn: amountIn,
-                        amountOutMinimum: minAmountOut,
-                        sqrtPriceLimitX96: 0
-                    })
-                );
-        } else {
-            return
-                abi.encodeWithSelector(
-                    IUniswapV3Router.exactInput.selector,
-                    IUniswapV3Router.ExactInputParams({
-                        path: route.path,
-                        recipient: recipient, // USE ACTUAL RECIPIENT
-                        deadline: block.timestamp + 1800,
-                        amountIn: amountIn,
-                        amountOutMinimum: minAmountOut
-                    })
-                );
-        }
-    }
-
-    /**
-     * @notice Generate Curve execution bytecode with proper recipient handling
-     */
-    function _generateCurveExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        bytes memory routeData
-    ) internal pure returns (bytes memory) {
-        CurveRoute memory route = abi.decode(routeData, (CurveRoute));
-
-        // Return structured data for LTM to execute directly
-        // Format: [selector][indexIn][indexOut][amountIn][minAmountOut]
-        if (route.useUnderlying) {
-            return
-                abi.encodeWithSelector(
-                    ICurvePool.exchange_underlying.selector,
-                    route.indexIn,
-                    route.indexOut,
-                    amountIn,
-                    minAmountOut
-                );
-        } else {
-            return
-                abi.encodeWithSelector(
-                    ICurvePool.exchange.selector,
-                    route.indexIn,
-                    route.indexOut,
-                    amountIn,
-                    minAmountOut
-                );
-        }
-    }
-    /**
-     * @notice Generate DirectMint execution data with proper ETH handling
-     */
-    function _generateDirectMintExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        bytes memory routeData,
-        address recipient
-    ) internal pure returns (bytes memory) {
-        address minter = abi.decode(routeData, (address));
-
-        if (tokenIn == ETH_ADDRESS && tokenOut == SFRXETH) {
-            // Direct execution data - LTM will send ETH value
-            return abi.encodeWithSelector(IFrxETHMinter.submitAndDeposit.selector, recipient);
-        }
-        revert UnsupportedRoute();
-    }
-
-    /**
-     * @notice Generate multi-hop execution data
-     */
-    /**
-     * @notice Generate multi-hop execution data with validation
-     */
-    function _generateMultiHopExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        bytes memory routeData,
-        address recipient
-    ) internal view returns (bytes memory) {
-        bytes memory path = routeData;
-
-        // Validate path
-        require(path.length >= 43, "Path too short"); // minimum: 20 + 3 + 20
-        require(path.length % 23 == 20, "Invalid path length"); // Must be 20 + n * 23
-
-        // Validate path starts with tokenIn and ends with tokenOut
-        address pathStart;
-        address pathEnd;
-
-        assembly {
-            pathStart := div(mload(add(path, 0x20)), 0x1000000000000000000000000)
-            let lastTokenPos := sub(mload(path), 20)
-            pathEnd := div(mload(add(add(path, 0x20), lastTokenPos)), 0x1000000000000000000000000)
-        }
-
-        // Handle ETH/WETH conversion in validation
-        address expectedIn = tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn;
-        address expectedOut = tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut;
-
-        require(pathStart == expectedIn, "Path doesn't start with input token");
-        require(pathEnd == expectedOut, "Path doesn't end with output token");
-
-        return
-            abi.encodeWithSelector(
-                IUniswapV3Router.exactInput.selector,
-                IUniswapV3Router.ExactInputParams({
-                    path: path,
-                    recipient: recipient,
-                    deadline: block.timestamp + 1800,
-                    amountIn: amountIn,
-                    amountOutMinimum: minAmountOut
-                })
-            );
-    }
-    /**
-     * @notice Generate bridge execution data
-     */
-    function _generateBridgeExecutionData(
-        ExecutionStrategy memory strategy,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient // ADD THIS
-    ) internal view returns (bytes memory) {
-        // Return complete execution strategy for LTM to handle
-        return abi.encode(strategy, recipient, amountIn, minAmountOut);
-    }
-
-    /**
-     * @notice Estimate swap output with quoter calls
-     */
-    /**
-     * @notice Estimate swap output with quoter calls
-     */
-    function _estimateSwapOutput(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        ExecutionStrategy memory strategy
-    ) internal returns (uint256) {
-        if (strategy.routeType == RouteType.Bridge) {
-            // Estimate through bridge
-            uint256 bridgeAmount = _estimateSingleSwap(
-                tokenIn,
-                strategy.bridgeAsset,
-                amountIn,
-                strategy.primaryRouteData
-            );
-            return _estimateSingleSwap(strategy.bridgeAsset, tokenOut, bridgeAmount, strategy.secondaryRouteData);
-        } else {
-            return _estimateSingleSwap(tokenIn, tokenOut, amountIn, strategy.primaryRouteData);
-        }
-    }
-
-    /**
-     * @notice Estimate swap output for view functions
-     */
-    function _estimateSwapOutputView(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        ExecutionStrategy memory strategy
-    ) internal view returns (uint256) {
-        if (strategy.routeType == RouteType.Bridge) {
-            // Estimate through bridge using simple calculation
-            uint256 bridgeAmount = _getSimpleEstimate(amountIn, tokenIn, strategy.bridgeAsset);
-            return _getSimpleEstimate(bridgeAmount, strategy.bridgeAsset, tokenOut);
-        } else {
-            return _getSimpleEstimate(amountIn, tokenIn, tokenOut);
-        }
-    }
-
-    /**
-     * @notice Estimate single swap output
-     */
-    function _estimateSingleSwap(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        bytes memory routeData
-    ) internal returns (uint256) {
-        // Use quoter if available
-        try this._performQuoteExternal(tokenIn, tokenOut, amountIn, routeData) returns (uint256 quotedAmount) {
-            return quotedAmount;
-        } catch {
-            // Fallback to simple estimate
-            return _getSimpleEstimate(amountIn, tokenIn, tokenOut);
-        }
-    }
-
-    /**
-     * @notice Perform quote with external call
-     */
-    function _performQuote(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        SwapParams memory params
-    ) internal returns (QuoteData memory) {
-        try this._performQuoteExternal(tokenIn, tokenOut, amountIn, params.routeData) returns (uint256 expectedOutput) {
-            return QuoteData({expectedOutput: expectedOutput, timestamp: block.timestamp, valid: true});
-        } catch {
-            return QuoteData({expectedOutput: 0, timestamp: 0, valid: false});
-        }
-    }
-
-    /**
-     * @notice External quote function with proper fee tier handling
-     */
-    /**
-     * @notice External quote function with graceful fallback
+     * @notice External quote function with Curve and Uniswap support
+     * @dev Elegantly handles both protocols with proper validation
      */
     function _performQuoteExternal(
         address tokenIn,
@@ -1208,380 +1584,158 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     ) external returns (uint256 expectedOutput) {
         require(msg.sender == address(this), "Internal only");
 
-        // Return 0 for empty route data - let caller handle fallback
         if (routeData.length == 0) return 0;
 
+        // Elegant protocol detection without try-catch overhead
+        bytes4 routeSignature = bytes4(routeData);
+
+        // Curve route signature check
+        if (routeSignature == bytes4(keccak256("CurveRoute"))) {
+            return _performCurveQuote(tokenIn, tokenOut, amountIn, routeData);
+        }
+
+        // Default to Uniswap quoting
+        return _performUniswapQuote(tokenIn, tokenOut, amountIn, routeData);
+    }
+
+    /**
+     * @notice Perform Curve pool quote with elegant fallback
+     * @dev Handles both regular and underlying variants seamlessly
+     */
+    function _performCurveQuote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        bytes memory routeData
+    ) internal returns (uint256) {
+        CurveRoute memory route = abi.decode(routeData, (CurveRoute));
+
+        // Pre-calculate validation bounds for efficiency
+        uint256 rawAmount = _getRawDecimalAdjustedAmount(amountIn, tokenIn, tokenOut);
+        uint256 upperBound = (rawAmount * 11000) / 10000; // 110%
+        uint256 lowerBound = (rawAmount * 9000) / 10000; // 90%
+
+        // Single assembly block for gas-efficient external call
+        uint256 outputAmount;
+        bool success;
+
+        assembly {
+            // Prepare calldata for get_dy or get_dy_underlying
+            let freePtr := mload(0x40)
+
+            // Function selector based on useUnderlying
+            let selector := 0x5e0d443f // get_dy(int128,int128,uint256)
+            if eq(mload(add(routeData, 0x80)), 1) {
+                // Check useUnderlying
+                selector := 0x07211ef7 // get_dy_underlying(int128,int128,uint256)
+            }
+
+            mstore(freePtr, selector)
+            mstore(add(freePtr, 0x04), mload(add(routeData, 0x40))) // indexIn
+            mstore(add(freePtr, 0x24), mload(add(routeData, 0x60))) // indexOut
+            mstore(add(freePtr, 0x44), amountIn)
+
+            success := staticcall(
+                gas(),
+                mload(add(routeData, 0x20)), // pool address
+                freePtr,
+                0x64,
+                freePtr,
+                0x20
+            )
+
+            if success {
+                outputAmount := mload(freePtr)
+            }
+        }
+
+        // Validate output with elegant boundary check
+        if (success && outputAmount >= lowerBound && outputAmount <= upperBound) {
+            return outputAmount;
+        }
+
+        return 0; // Trigger fallback
+    }
+
+    /**
+     * @notice Perform Uniswap V3 quote with multi-fee tier support
+     * @dev Extracted for clarity and reusability
+     */
+    function _performUniswapQuote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        bytes memory routeData
+    ) internal returns (uint256) {
         // Convert ETH to WETH for quoter
         address quoteTokenIn = tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn;
         address quoteTokenOut = tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut;
 
-        // Try to decode and use actual fee tier
-        uint24 actualFee = 3000; // Default
-        try this._tryDecodeUniswapRoute(routeData) returns (uint24 fee) {
-            actualFee = fee;
-        } catch {}
+        // Extract fee tier from route data efficiently
+        uint24 primaryFee = _extractUniswapFee(routeData);
 
-        // Try actual fee first
-        try uniswapQuoter.quoteExactInputSingle(quoteTokenIn, quoteTokenOut, actualFee, amountIn, 0) returns (
-            uint256 amount
-        ) {
-            if (amount > 0) return amount;
-        } catch {}
+        // Try primary fee tier first
+        uint256 quotedAmount = _tryUniswapQuote(quoteTokenIn, quoteTokenOut, primaryFee, amountIn);
+        if (quotedAmount > 0) return quotedAmount;
 
-        // Try common fee tiers if actual fee failed
-        uint24[4] memory commonFees = [uint24(500), uint24(3000), uint24(10000), uint24(100)];
+        // Elegant fee tier fallback array
+        uint24[4] memory feeTiers = [uint24(500), uint24(3000), uint24(10000), uint24(100)];
 
-        for (uint256 i = 0; i < commonFees.length; i++) {
-            if (commonFees[i] == actualFee) continue; // Skip already tried
+        for (uint256 i = 0; i < feeTiers.length; i++) {
+            if (feeTiers[i] == primaryFee) continue; // Skip already tried
 
-            try uniswapQuoter.quoteExactInputSingle(quoteTokenIn, quoteTokenOut, commonFees[i], amountIn, 0) returns (
-                uint256 amount
-            ) {
-                if (amount > 0) return amount;
-            } catch {
-                continue;
-            }
+            quotedAmount = _tryUniswapQuote(quoteTokenIn, quoteTokenOut, feeTiers[i], amountIn);
+            if (quotedAmount > 0) return quotedAmount;
         }
 
-        // Return 0 to indicate quote failure - caller will use fallback
+        return 0; // Trigger fallback
+    }
+
+    /**
+     * @notice Try single Uniswap quote with validation
+     * @dev Isolated for clean error handling
+     */
+    function _tryUniswapQuote(
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
+        uint256 amountIn
+    ) internal returns (uint256) {
+        try uniswapQuoter.quoteExactInputSingle(tokenIn, tokenOut, fee, amountIn, 0) returns (uint256 amount) {
+            // Validate against reasonable bounds
+            uint256 rawAmount = _getRawDecimalAdjustedAmount(amountIn, tokenIn, tokenOut);
+
+            if (amount >= (rawAmount * 5000) / 10000 && amount <= (rawAmount * 11000) / 10000) {
+                return amount;
+            }
+        } catch {
+            // Silent fail - try next option
+        }
+
         return 0;
     }
 
     /**
-     * @notice Helper to decode fee tier from route data
+     * @notice Extract Uniswap fee from route data
+     * @dev Pure function for gas efficiency
      */
-    function _decodeFeeTier(bytes memory routeData) external view returns (uint24) {
-        if (routeData.length >= 32) {
-            // Try to decode as UniswapV3Route
-            try this._tryDecodeUniswapRoute(routeData) returns (uint24 fee) {
-                return fee;
-            } catch {
-                // Not a Uniswap route
-            }
-        }
-        return 3000; // Default
-    }
+    function _extractUniswapFee(bytes memory routeData) internal pure returns (uint24) {
+        if (routeData.length < 32) return 3000; // Default
 
+        // UniswapV3Route struct has fee at second position
+        uint24 fee;
+        assembly {
+            fee := mload(add(routeData, 0x40))
+        }
+
+        return fee == 0 ? 3000 : fee;
+    }
     /**
      * @notice Try to decode Uniswap route
      */
     function _tryDecodeUniswapRoute(bytes memory routeData) external pure returns (uint24) {
         UniswapV3Route memory route = abi.decode(routeData, (UniswapV3Route));
         return route.fee;
-    }
-    // ============================================================================
-    // ROUTE CONFIGURATION
-    // ============================================================================
-
-    /**
-     * @notice Configure a multi-hop route
-     */
-    function configureMultiHopRoute(
-        address tokenIn,
-        address tokenOut,
-        bytes calldata path,
-        string calldata password
-    ) external onlyRouteManager {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
-        require(path.length >= 43, "Path too short");
-
-        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
-
-        routes[routeKey] = RouteConfig({
-            protocol: Protocol.MultiHop,
-            pool: address(0),
-            fee: 0,
-            directSwap: false,
-            path: path,
-            tokenIndexIn: 0,
-            tokenIndexOut: 0,
-            useUnderlying: false,
-            specialContract: address(0),
-            isConfigured: true,
-            routeData: path
-        });
-
-        emit RouteConfigured(tokenIn, tokenOut, Protocol.MultiHop, address(0));
-    }
-
-    /**
-     * @notice Configure a multi-step route across multiple DEXes
-     */
-    function configureMultiStepRoute(
-        address[] calldata tokens,
-        Protocol[] calldata protocols,
-        RouteConfig[] calldata routeConfigs,
-        string calldata password
-    ) external onlyRouteManager {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
-
-        // All validations first
-        uint256 tokensLength = tokens.length;
-        uint256 protocolsLength = protocols.length;
-
-        require(tokensLength >= 2, "Need at least 2 tokens");
-        require(tokensLength == protocolsLength + 1, "Invalid array lengths");
-        require(protocolsLength == routeConfigs.length, "Config length mismatch");
-        require(protocolsLength <= MAX_MULTI_STEP_OPERATIONS, "Too many steps");
-
-        // Pre-allocate arrays
-        bytes[] memory routeDatas = new bytes[](protocolsLength);
-        uint256[] memory minAmounts = new uint256[](protocolsLength);
-
-        // Encode route data for each step
-        for (uint256 i = 0; i < protocolsLength; ) {
-            routeDatas[i] = _encodeRouteData(routeConfigs[i], tokens[i], tokens[i + 1]);
-            // minAmounts[i] = 0; // Already initialized to 0
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Store the complete multi-step route
-        bytes32 routeKey = keccak256(abi.encodePacked(tokens[0], tokens[tokensLength - 1]));
-
-        routes[routeKey] = RouteConfig({
-            protocol: Protocol.MultiStep,
-            pool: address(0),
-            fee: 0,
-            directSwap: false,
-            path: "",
-            tokenIndexIn: 0,
-            tokenIndexOut: 0,
-            useUnderlying: false,
-            specialContract: address(0),
-            isConfigured: true,
-            routeData: abi.encode(tokens, protocols, routeDatas, minAmounts)
-        });
-
-        emit RouteConfigured(tokens[0], tokens[tokensLength - 1], Protocol.MultiStep, address(0));
-    }
-
-    /**
-     * @notice Configure a swap route
-     */
-    function configureRoute(
-        address tokenIn,
-        address tokenOut,
-        Protocol protocol,
-        address pool,
-        uint24 fee,
-        int128 tokenIndexIn,
-        int128 tokenIndexOut,
-        string calldata password
-    ) external onlyRouteManager {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
-
-        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
-
-        routes[routeKey] = RouteConfig({
-            protocol: protocol,
-            pool: pool,
-            fee: fee,
-            directSwap: true,
-            path: "",
-            tokenIndexIn: tokenIndexIn,
-            tokenIndexOut: tokenIndexOut,
-            useUnderlying: false,
-            specialContract: address(0),
-            isConfigured: true,
-            routeData: ""
-        });
-
-        emit RouteConfigured(tokenIn, tokenOut, protocol, pool);
-    }
-
-    /**
-     * @notice Configure DirectMint route
-     */
-    function configureDirectMintRoute(
-        address tokenIn,
-        address tokenOut,
-        address minterContract,
-        string calldata password
-    ) external onlyRouteManager {
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
-
-        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
-
-        routes[routeKey] = RouteConfig({
-            protocol: Protocol.DirectMint,
-            pool: address(0),
-            fee: 0,
-            directSwap: true,
-            path: "",
-            tokenIndexIn: 0,
-            tokenIndexOut: 0,
-            useUnderlying: false,
-            specialContract: minterContract,
-            isConfigured: true,
-            routeData: ""
-        });
-
-        emit RouteConfigured(tokenIn, tokenOut, Protocol.DirectMint, minterContract);
-    }
-
-    // ============================================================================
-    // HELPER FUNCTIONS
-    // ============================================================================
-
-    /**
-     * @notice Get Curve route data for external callers
-     */
-    function getCurveRouteData(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (bool isCurve, address pool, int128 indexIn, int128 indexOut, bool useUnderlying) {
-        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
-        RouteConfig memory config = routes[routeKey];
-
-        if (config.isConfigured && config.protocol == Protocol.Curve) {
-            return (true, config.pool, config.tokenIndexIn, config.tokenIndexOut, config.useUnderlying);
-        }
-
-        return (false, address(0), 0, 0, false);
-    }
-
-    /**
-     * @notice Compute UniswapV3 pool address
-     */
-    function _computeUniswapV3Pool(address tokenA, address tokenB, uint24 fee) internal pure returns (address pool) {
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-
-        pool = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            hex"ff",
-                            UNISWAP_V3_FACTORY,
-                            keccak256(abi.encode(token0, token1, fee)),
-                            POOL_INIT_CODE_HASH
-                        )
-                    )
-                )
-            )
-        );
-    }
-
-    /**
-     * @notice Get bridge asset for routing
-     */
-    function _getBridgeAsset(address tokenIn, address tokenOut) internal view returns (address) {
-        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
-        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
-
-        if (typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST) {
-            return address(WETH);
-        } else if (typeIn == AssetType.BTC_WRAPPED && typeOut == AssetType.BTC_WRAPPED) {
-            return WBTC;
-        }
-
-        return address(0);
-    }
-
-    /**
-     * @notice Get slippage for token pair
-     */
-    function _getSlippage(
-        address tokenIn,
-        address tokenOut,
-        SlippageType slippageType
-    ) internal view returns (uint256) {
-        if (slippageType == SlippageType.QUOTE) {
-            return TIGHT_BUFFER_BPS;
-        }
-
-        uint256 configured = slippageTolerance[tokenIn][tokenOut];
-        if (configured > 0) return configured;
-
-        return _getDefaultSlippage(tokenIn, tokenOut);
-    }
-
-    /**
-     * @notice Get default slippage based on asset types
-     */
-    function _getDefaultSlippage(address tokenIn, address tokenOut) internal view returns (uint256) {
-        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
-        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
-
-        if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE) return 30;
-        if (typeIn == AssetType.ETH_LST || typeOut == AssetType.ETH_LST) return 200;
-        if (typeIn == AssetType.BTC_WRAPPED || typeOut == AssetType.BTC_WRAPPED) return 300;
-
-        return 500;
-    }
-
-    /**
-     * @notice Simple estimate for fallback
-     */
-    function _getSimpleEstimate(uint256 amountIn, address tokenIn, address tokenOut) internal view returns (uint256) {
-        // Normalize amounts based on decimals
-        uint8 decimalsIn = tokenDecimals[tokenIn] > 0 ? tokenDecimals[tokenIn] : 18;
-        uint8 decimalsOut = tokenDecimals[tokenOut] > 0 ? tokenDecimals[tokenOut] : 18;
-
-        if (decimalsIn == decimalsOut) {
-            return (amountIn * 98) / 100; // 2% price impact
-        } else if (decimalsIn > decimalsOut) {
-            uint256 factor = 10 ** (decimalsIn - decimalsOut);
-            return ((amountIn / factor) * 98) / 100;
-        } else {
-            uint256 factor = 10 ** (decimalsOut - decimalsIn);
-            return (amountIn * factor * 98) / 100;
-        }
-    }
-
-    /**
-     * @notice Validate swap parameters
-     */
-    function _validateSwapParams(SwapParams memory params) internal view {
-        if (params.amountIn == 0) revert ZeroAmount();
-        if (params.tokenIn == params.tokenOut) revert SameTokenSwap();
-        if (!initialized) revert NotInitialized();
-
-        _validateTokenSupport(params.tokenIn, params.tokenOut);
-    }
-
-    /**
-     * @notice Validate token support
-     */
-    function _validateTokenSupport(address tokenIn, address tokenOut) internal view {
-        if (!farSupportedTokens[tokenIn] && tokenIn != ETH_ADDRESS) {
-            revert TokenNotSupported();
-        }
-        if (!farSupportedTokens[tokenOut] && tokenOut != ETH_ADDRESS) {
-            revert TokenNotSupported();
-        }
-    }
-
-    /**
-     * @notice Validate strategy pools
-     */
-    function _validateStrategyPools(ExecutionStrategy memory strategy) internal view {
-        if (strategy.protocol == Protocol.UniswapV3) {
-            UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
-            if (!route.isMultiHop && route.pool != address(0) && !poolWhitelist[route.pool]) {
-                revert PoolNotWhitelisted();
-            }
-        } else if (strategy.protocol == Protocol.Curve) {
-            CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
-            if (!poolWhitelist[route.pool]) {
-                revert PoolNotWhitelisted();
-            }
-        }
-    }
-
-    /**
-     * @notice Estimate gas for protocol
-     */
-    function _estimateGasForProtocol(Protocol protocol) internal pure returns (uint256) {
-        if (protocol == Protocol.UniswapV3) return 150000;
-        if (protocol == Protocol.Curve) return 200000;
-        if (protocol == Protocol.DirectMint) return 100000;
-        if (protocol == Protocol.MultiHop) return 250000;
-        if (protocol == Protocol.MultiStep) return 300000;
-        return 200000;
     }
 
     /**
@@ -1610,22 +1764,17 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             return abi.encode(route);
         } else if (config.protocol == Protocol.DirectMint) {
             return abi.encode(config.specialContract);
-        } else if (config.protocol == Protocol.MultiStep) {
-            // For MultiStep, the routeData already contains the encoded multi-step data
-            return config.routeData;
         } else if (config.protocol == Protocol.MultiHop) {
-            // For MultiHop, return the path data
-            return config.path.length > 0 ? config.path : config.routeData;
+            return config.routeData;
+        } else if (config.protocol == Protocol.MultiStep) {
+            return config.routeData;
         }
 
         return config.routeData;
     }
 
     /**
-     * @notice Encode reverse route data
-     */
-    /**
-     * @notice Encode reverse route data with proper path reversal
+     * @notice Encode reverse route data with proper execution parameters
      */
     function _encodeReverseRouteData(
         RouteConfig memory config,
@@ -1633,24 +1782,34 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         address tokenOut
     ) internal pure returns (bytes memory) {
         if (config.protocol == Protocol.UniswapV3) {
-            UniswapV3Route memory route = UniswapV3Route({
-                pool: config.pool,
-                fee: config.fee,
-                isMultiHop: config.path.length > 0,
-                path: config.path.length > 0 ? _reversePath(config.path) : config.path
-            });
-            return abi.encode(route);
+            if (config.path.length > 0) {
+                // Multi-hop path needs reversal
+                bytes memory reversedPath = _reversePath(config.path);
+                return
+                    abi.encode(
+                        UniswapV3Route({pool: config.pool, fee: config.fee, isMultiHop: true, path: reversedPath})
+                    );
+            } else {
+                // Single hop - just swap the tokens logically
+                return abi.encode(UniswapV3Route({pool: config.pool, fee: config.fee, isMultiHop: false, path: ""}));
+            }
         } else if (config.protocol == Protocol.Curve) {
-            CurveRoute memory route = CurveRoute({
-                pool: config.pool,
-                indexIn: config.tokenIndexOut, // Reversed
-                indexOut: config.tokenIndexIn, // Reversed
-                useUnderlying: config.useUnderlying
-            });
-            return abi.encode(route);
+            // Swap indices for reverse
+            return
+                abi.encode(
+                    CurveRoute({
+                        pool: config.pool,
+                        indexIn: config.tokenIndexOut,
+                        indexOut: config.tokenIndexIn,
+                        useUnderlying: config.useUnderlying
+                    })
+                );
         } else if (config.protocol == Protocol.MultiHop) {
-            // Reverse the path for multi-hop
+            // Reverse the entire path
             return _reversePath(config.routeData);
+        } else if (config.protocol == Protocol.DirectMint) {
+            // DirectMint cannot be reversed
+            revert UnsupportedRoute();
         }
 
         return config.routeData;
@@ -1702,594 +1861,404 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Apply production slippage configuration
+     * @notice Apply production slippage configuration with all tested values
      */
     function _applyProductionSlippageConfig() internal {
-        // ETH to LST tokens
+        // ETH to LST tokens - very tight
         slippageTolerance[ETH_ADDRESS][0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84] = 50; // ETH->stETH
         slippageTolerance[ETH_ADDRESS][FRXETH] = 50; // ETH->frxETH
         slippageTolerance[ETH_ADDRESS][SFRXETH] = 50; // ETH->sfrxETH
 
-        // WETH to LST tokens
+        // WETH to LST tokens - varying by liquidity
         slippageTolerance[address(WETH)][0xBe9895146f7AF43049ca1c1AE358B0541Ea49704] = 350; // WETH->cbETH
         slippageTolerance[address(WETH)][RETH] = 750; // WETH->rETH
         slippageTolerance[address(WETH)][OSETH] = 500; // WETH->osETH
 
-        // Add more production configurations as needed
-    }
+        // Reverse routes
+        slippageTolerance[0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84][ETH_ADDRESS] = 50;
+        slippageTolerance[SFRXETH][ETH_ADDRESS] = 50;
+        slippageTolerance[0xBe9895146f7AF43049ca1c1AE358B0541Ea49704][address(WETH)] = 350;
+        slippageTolerance[RETH][address(WETH)] = 750;
+        slippageTolerance[OSETH][address(WETH)] = 500;
 
-    // ============================================================================
-    // INTERNAL EXECUTION FUNCTIONS (LEGACY)
-    // ============================================================================
+        // BTC wrapped pairs
+        slippageTolerance[WBTC][0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa] = 200; // WBTC->uniBTC
+        slippageTolerance[0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa][WBTC] = 200;
 
-    /**
-     * @notice Execute auto-routing in direct transfer mode
-     */
-    function _autoSwapDirectMode(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut
-    ) internal returns (uint256) {
-        // Find optimal strategy
-        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
-
-        // Validate pools
-        _validateStrategyPools(strategy);
-
-        // For direct mode, return expected output for all protocols
-        // LTM will handle the actual execution
-        uint256 expectedOutput = _estimateSwapOutput(tokenIn, tokenOut, amountIn, strategy);
-
-        // Apply appropriate slippage
-        uint256 slippage = _getSlippage(tokenIn, tokenOut, SlippageType.FALLBACK);
-        uint256 adjustedOutput = (expectedOutput * (10000 - slippage)) / 10000;
-
-        require(adjustedOutput >= minAmountOut, "Insufficient expected output");
-
-        return adjustedOutput;
-    }
-    /**
-     * @notice Execute UniswapV3 swap in direct mode
-     */
-    function _executeUniswapV3DirectMode(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        ExecutionStrategy memory strategy
-    ) internal returns (uint256) {
-        UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
-
-        if (!route.isMultiHop) {
-            // Single hop
-            IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
-                tokenIn: tokenIn == ETH_ADDRESS ? address(WETH) : tokenIn,
-                tokenOut: tokenOut == ETH_ADDRESS ? address(WETH) : tokenOut,
-                fee: route.fee,
-                recipient: msg.sender, // Direct to caller
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: minAmountOut,
-                sqrtPriceLimitX96: 0
-            });
-
-            return uniswapRouter.exactInputSingle(params);
-        } else {
-            // Multi-hop
-            IUniswapV3Router.ExactInputParams memory params = IUniswapV3Router.ExactInputParams({
-                path: route.path,
-                recipient: msg.sender, // Direct to caller
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: minAmountOut
-            });
-
-            return uniswapRouter.exactInput(params);
-        }
+        // Bridge routes through WETH
+        slippageTolerance[0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84][RETH] = 800; // stETH->rETH
+        slippageTolerance[RETH][OSETH] = 600; // rETH->osETH
     }
 
     /**
-     * @notice Legacy swap with transfers (for backward compatibility)
+     * @notice Get bridge asset for a token pair
      */
-    function _swapAssetsWithTransfer(SwapParams memory params) internal returns (uint256 amountOut) {
-        // Transfer tokens to FAR
-        uint256 balanceBefore = IERC20(params.tokenIn).balanceOf(address(this));
-        IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
-        uint256 actualAmountIn = IERC20(params.tokenIn).balanceOf(address(this)) - balanceBefore;
+    function _getBridgeAsset(address tokenIn, address tokenOut) internal view returns (address) {
+        // No bridge for same token
+        if (tokenIn == tokenOut) return address(0);
 
-        params.amountIn = actualAmountIn;
+        // Get asset types
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
 
-        // Execute swap using quoter-first approach
-        amountOut = _executeSwapInternal(params);
+        // Cross-category forbidden - return early
+        if (typeIn != typeOut) return address(0);
 
-        // Transfer output to caller
-        IERC20(params.tokenOut).safeTransfer(msg.sender, amountOut);
+        // BTC tokens always bridge through WBTC
+        if (typeIn == AssetType.BTC_WRAPPED && typeOut == AssetType.BTC_WRAPPED) {
+            // Only use WBTC as bridge if it's not one of the tokens
+            if (tokenIn != WBTC && tokenOut != WBTC) {
+                // Check if both routes exist
+                bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, WBTC));
+                bytes32 secondKey = keccak256(abi.encodePacked(WBTC, tokenOut));
+                bytes32 firstReverseKey = keccak256(abi.encodePacked(WBTC, tokenIn));
+                bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, WBTC));
 
-        emit AssetsSwapped(
-            params.tokenIn,
-            params.tokenOut,
-            actualAmountIn,
-            amountOut,
-            params.protocol,
-            msg.sender,
-            0,
-            block.timestamp
-        );
-    }
+                bool firstExists = routes[firstKey].isConfigured || routes[firstReverseKey].isConfigured;
+                bool secondExists = routes[secondKey].isConfigured || routes[secondReverseKey].isConfigured;
 
-    /**
-     * @notice Execute swap internally with full protocol support
-     */
-    function _executeSwapInternal(SwapParams memory params) internal returns (uint256 amountOut) {
-        // Validate protocol is not paused
-        if (protocolPaused[params.protocol]) revert ProtocolIsPaused();
-
-        // Handle token input (ETH to WETH conversion if needed)
-        address actualTokenIn = params.tokenIn;
-        if (params.tokenIn == ETH_ADDRESS) {
-            WETH.deposit{value: params.amountIn}();
-            actualTokenIn = address(WETH);
-        }
-
-        // Use quoter-first approach
-        QuoteData memory quote = _performQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
-
-        uint256 minAmountOut;
-        if (quote.valid && block.timestamp - quote.timestamp <= QUOTE_MAX_AGE) {
-            // Use tight buffer with quote
-            minAmountOut = (quote.expectedOutput * (10000 - TIGHT_BUFFER_BPS)) / 10000;
-        } else {
-            // Fallback to configured slippage
-            uint256 slippage = slippageTolerance[params.tokenIn][params.tokenOut];
-            if (slippage == 0) slippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-
-            uint256 expectedOutput = quote.valid
-                ? quote.expectedOutput
-                : _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
-            minAmountOut = (expectedOutput * (10000 - slippage)) / 10000;
-        }
-
-        // Ensure we meet minimum requirements
-        if (minAmountOut < params.minAmountOut) {
-            minAmountOut = params.minAmountOut;
-        }
-
-        // Execute based on protocol
-        if (params.protocol == Protocol.UniswapV3) {
-            amountOut = _executeUniswapV3Swap(actualTokenIn, params, minAmountOut);
-        } else if (params.protocol == Protocol.Curve) {
-            amountOut = _executeCurveSwap(actualTokenIn, params, minAmountOut);
-        } else if (params.protocol == Protocol.DirectMint) {
-            amountOut = _executeDirectMint(params, minAmountOut);
-        } else if (params.protocol == Protocol.MultiHop) {
-            amountOut = _executeMultiHopSwap(actualTokenIn, params, minAmountOut);
-        } else if (params.protocol == Protocol.MultiStep) {
-            amountOut = _executeMultiStepSwap(actualTokenIn, params, minAmountOut);
-        } else {
-            revert InvalidProtocol();
-        }
-
-        // Handle WETH to ETH conversion if output is ETH
-        if (params.tokenOut == ETH_ADDRESS && amountOut > 0) {
-            WETH.withdraw(amountOut);
-        }
-
-        if (amountOut < params.minAmountOut) revert InsufficientOutput();
-    }
-
-    /**
-     * @notice Execute UniswapV3 swap
-     */
-    function _executeUniswapV3Swap(
-        address actualTokenIn,
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
-        UniswapV3Route memory route = abi.decode(params.routeData, (UniswapV3Route));
-
-        // Validate pool if single-hop
-        if (!route.isMultiHop && route.pool != address(0)) {
-            if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
-            if (poolPaused[route.pool]) revert PoolIsPaused();
-        }
-
-        // Set approval using safe pattern
-        _safeApprove(IERC20(actualTokenIn), address(uniswapRouter), params.amountIn);
-
-        if (route.isMultiHop) {
-            amountOut = uniswapRouter.exactInput(
-                IUniswapV3Router.ExactInputParams({
-                    path: route.path,
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: params.amountIn,
-                    amountOutMinimum: minAmountOut
-                })
-            );
-        } else {
-            // For single hop, compute pool if not provided
-            if (route.pool == address(0)) {
-                route.pool = _computeUniswapV3Pool(
-                    actualTokenIn,
-                    params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
-                    route.fee
-                );
+                if (firstExists && secondExists) {
+                    return WBTC;
+                }
             }
-
-            amountOut = uniswapRouter.exactInputSingle(
-                IUniswapV3Router.ExactInputSingleParams({
-                    tokenIn: actualTokenIn,
-                    tokenOut: params.tokenOut == ETH_ADDRESS ? address(WETH) : params.tokenOut,
-                    fee: route.fee,
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: params.amountIn,
-                    amountOutMinimum: minAmountOut,
-                    sqrtPriceLimitX96: 0
-                })
-            );
         }
 
-        // Reset approval
-        _safeApprove(IERC20(actualTokenIn), address(uniswapRouter), 0);
-    }
+        // ETH LST tokens - try WETH first, then ETH
+        if (typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST) {
+            // Try WETH bridge first (most common according to config)
+            if (tokenIn != address(WETH) && tokenOut != address(WETH)) {
+                bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, address(WETH)));
+                bytes32 secondKey = keccak256(abi.encodePacked(address(WETH), tokenOut));
+                bytes32 firstReverseKey = keccak256(abi.encodePacked(address(WETH), tokenIn));
+                bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, address(WETH)));
 
-    /**
-     * @notice Execute Curve swap
-     */
-    function _executeCurveSwap(
-        address actualTokenIn,
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
-        CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
+                bool firstExists = routes[firstKey].isConfigured || routes[firstReverseKey].isConfigured;
+                bool secondExists = routes[secondKey].isConfigured || routes[secondReverseKey].isConfigured;
 
-        // Validate pool
-        if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
-        if (poolPaused[route.pool]) revert PoolIsPaused();
-
-        // Handle ETH/WETH for Curve
-        uint256 valueToSend = 0;
-        if (params.tokenIn == ETH_ADDRESS) {
-            valueToSend = params.amountIn;
-            // WETH was already withdrawn in _executeSwapInternal
-        } else {
-            _safeApprove(IERC20(actualTokenIn), route.pool, params.amountIn);
-        }
-
-        // Execute swap
-        if (route.useUnderlying) {
-            amountOut = ICurvePool(route.pool).exchange_underlying{value: valueToSend}(
-                route.indexIn,
-                route.indexOut,
-                params.amountIn,
-                minAmountOut
-            );
-        } else {
-            amountOut = ICurvePool(route.pool).exchange{value: valueToSend}(
-                route.indexIn,
-                route.indexOut,
-                params.amountIn,
-                minAmountOut
-            );
-        }
-
-        // Reset approval if needed
-        if (params.tokenIn != ETH_ADDRESS) {
-            _safeApprove(IERC20(actualTokenIn), route.pool, 0);
-        }
-    }
-
-    /**
-     * @notice Execute direct mint
-     */
-    function _executeDirectMint(SwapParams memory params, uint256 minAmountOut) internal returns (uint256 amountOut) {
-        address minter = abi.decode(params.routeData, (address));
-
-        if (params.tokenIn == ETH_ADDRESS && params.tokenOut == SFRXETH) {
-            amountOut = IFrxETHMinter(minter).submitAndDeposit{value: params.amountIn}(address(this));
-            if (amountOut < minAmountOut) revert InsufficientOutput();
-        } else {
-            revert UnsupportedRoute();
-        }
-    }
-
-    /**
-     * @notice Execute multi-hop swap (single DEX, multiple pools)
-     */
-    function _executeMultiHopSwap(
-        address actualTokenIn,
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
-        // Decode the multi-hop route
-        bytes memory path = abi.decode(params.routeData, (bytes));
-        require(path.length >= 43, "Invalid path"); // minimum: 20 + 3 + 20
-
-        // For Uniswap V3 multi-hop
-        if (params.protocol == Protocol.UniswapV3 || params.protocol == Protocol.MultiHop) {
-            // Approve router using safe pattern
-            _safeApprove(IERC20(actualTokenIn), address(uniswapRouter), params.amountIn);
-
-            // Execute multi-hop swap
-            amountOut = uniswapRouter.exactInput(
-                IUniswapV3Router.ExactInputParams({
-                    path: path,
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: params.amountIn,
-                    amountOutMinimum: minAmountOut
-                })
-            );
-
-            // Reset approval
-            _safeApprove(IERC20(actualTokenIn), address(uniswapRouter), 0);
-
-            require(amountOut >= minAmountOut, "Insufficient output");
-        } else {
-            revert("Unsupported multi-hop protocol");
-        }
-    }
-    /**
-     * @notice Execute multi-step swap (multiple DEXes)
-     */
-    function _executeMultiStepSwap(
-        address actualTokenIn,
-        SwapParams memory params,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
-        // Decode multi-step data
-        (
-            address[] memory tokens,
-            Protocol[] memory protocols,
-            bytes[] memory routeDatas,
-            uint256[] memory minAmounts
-        ) = abi.decode(params.routeData, (address[], Protocol[], bytes[], uint256[]));
-
-        // All validations BEFORE the loop
-        require(tokens.length >= 2, "Invalid tokens array");
-        require(tokens.length == protocols.length + 1, "Invalid protocols length");
-        require(protocols.length == routeDatas.length, "Invalid route data length");
-        require(protocols.length == minAmounts.length, "Invalid min amounts length");
-        require(protocols.length <= MAX_MULTI_STEP_OPERATIONS, "Too many steps");
-        require(tokens[0] == actualTokenIn, "First token mismatch");
-        require(tokens[tokens.length - 1] == params.tokenOut, "Last token mismatch");
-
-        uint256 currentAmount = params.amountIn;
-        address currentToken = actualTokenIn;
-
-        // Execute each step without redundant checks
-        for (uint256 i = 0; i < protocols.length; ) {
-            address nextToken = tokens[i + 1];
-
-            // Create swap params for this step
-            SwapParams memory stepParams = SwapParams({
-                tokenIn: currentToken,
-                tokenOut: nextToken,
-                amountIn: currentAmount,
-                minAmountOut: minAmounts[i],
-                protocol: protocols[i],
-                routeData: routeDatas[i]
-            });
-
-            // Execute based on protocol
-            if (protocols[i] == Protocol.UniswapV3) {
-                currentAmount = _executeUniswapV3Swap(currentToken, stepParams, minAmounts[i]);
-            } else if (protocols[i] == Protocol.Curve) {
-                currentAmount = _executeCurveSwap(currentToken, stepParams, minAmounts[i]);
-            } else if (protocols[i] == Protocol.DirectMint) {
-                currentAmount = _executeDirectMint(stepParams, minAmounts[i]);
-            } else {
-                revert("Unsupported protocol in multi-step");
-            }
-
-            currentToken = nextToken;
-
-            // Handle WETH/ETH conversions between steps if needed
-            if (i < protocols.length - 1) {
-                if (currentToken == address(WETH) && tokens[i + 2] == ETH_ADDRESS) {
-                    WETH.withdraw(currentAmount);
-                    currentToken = ETH_ADDRESS;
-                } else if (currentToken == ETH_ADDRESS && tokens[i + 2] != ETH_ADDRESS) {
-                    WETH.deposit{value: currentAmount}();
-                    currentToken = address(WETH);
+                if (firstExists && secondExists) {
+                    return address(WETH);
                 }
             }
 
-            // Use unchecked for gas optimization since we know i < protocols.length
-            unchecked {
-                ++i;
+            // Try ETH bridge for tokens that have ETH pairs
+            if (tokenIn != ETH_ADDRESS && tokenOut != ETH_ADDRESS) {
+                bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, ETH_ADDRESS));
+                bytes32 secondKey = keccak256(abi.encodePacked(ETH_ADDRESS, tokenOut));
+                bytes32 firstReverseKey = keccak256(abi.encodePacked(ETH_ADDRESS, tokenIn));
+                bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, ETH_ADDRESS));
+
+                bool firstExists = routes[firstKey].isConfigured || routes[firstReverseKey].isConfigured;
+                bool secondExists = routes[secondKey].isConfigured || routes[secondReverseKey].isConfigured;
+
+                if (firstExists && secondExists) {
+                    return ETH_ADDRESS;
+                }
             }
         }
 
-        amountOut = currentAmount;
-        require(amountOut >= minAmountOut, "Insufficient final output");
+        return address(0);
     }
+
+    /*
+    function _getDefaultSlippage(address tokenIn, address tokenOut) internal view returns (uint256) {
+        AssetType typeIn = assetTypes[tokenIn];
+        AssetType typeOut = assetTypes[tokenOut];
+
+        // Same type swaps - lower slippage
+        if (typeIn == typeOut) {
+            if (typeIn == AssetType.STABLE) return 30; // 0.3%
+            if (typeIn == AssetType.ETH_LST) return 50; // 0.5%
+            if (typeIn == AssetType.BTC_WRAPPED) return 100; // 1%
+        }
+
+        // Cross-type swaps - higher slippage
+        if (typeIn == AssetType.VOLATILE || typeOut == AssetType.VOLATILE) {
+            return 500; // 5%
+        }
+
+        return 200; // 2% default
+    }
+
+    function _getSimpleEstimate(uint256 amountIn, address tokenIn, address tokenOut) internal view returns (uint256) {
+        // Handle ETH as 18 decimals
+        uint8 decimalsIn = tokenIn == ETH_ADDRESS ? 18 : tokenDecimals[tokenIn];
+        uint8 decimalsOut = tokenOut == ETH_ADDRESS ? 18 : tokenDecimals[tokenOut];
+
+        // Default to 18 if not set
+        if (decimalsIn == 0) decimalsIn = 18;
+        if (decimalsOut == 0) decimalsOut = 18;
+
+        // Get asset types
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
+
+        // Start with decimal adjustment
+        uint256 estimate;
+        if (decimalsIn == decimalsOut) {
+            estimate = amountIn;
+        } else if (decimalsIn > decimalsOut) {
+            estimate = amountIn / (10 ** (decimalsIn - decimalsOut));
+        } else {
+            estimate = amountIn * (10 ** (decimalsOut - decimalsIn));
+        }
+
+        // Apply type-based adjustments
+        if (typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST) {
+            // ETH LST pairs are close to 1:1 after decimal adjustment
+            // Check if either token is rebasing (stETH)
+            if (
+                tokenIn == 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84 ||
+                tokenOut == 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84
+            ) {
+                return (estimate * 9900) / 10000; // 1% haircut for rebasing
+            } else {
+                return (estimate * 9950) / 10000; // 0.5% haircut for non-rebasing
+            }
+        } else if (typeIn == AssetType.BTC_WRAPPED && typeOut == AssetType.BTC_WRAPPED) {
+            // BTC wrapped pairs are very close to 1:1
+            return (estimate * 9980) / 10000; // 0.2% haircut
+        } else if (typeIn == AssetType.STABLE && typeOut == AssetType.STABLE) {
+            // Stablecoins should be exactly 1:1 after decimal adjustment
+            return (estimate * 9990) / 10000; // 0.1% haircut
+        } else {
+            // Different types or volatile - shouldn't happen due to cross-category check
+            // But if it does, apply conservative estimate
+            return (estimate * 9500) / 10000; // 5% haircut
+        }
+    }
+*/
     /**
-     * @notice Auto swap with transfers (legacy mode)
+     * @notice Estimate gas for protocol with better accuracy
      */
-    function _autoSwapWithTransfers(
+    function _estimateGasForProtocol(Protocol protocol) internal pure returns (uint256) {
+        if (protocol == Protocol.UniswapV3) return 150000;
+        if (protocol == Protocol.Curve) return 250000; // Increased for Curve complexity
+        if (protocol == Protocol.DirectMint) return 120000;
+        if (protocol == Protocol.MultiHop) return 300000;
+        if (protocol == Protocol.MultiStep) return 500000;
+        return 200000; // Default
+    }
+
+    /**
+     * @notice Calculate gas for multi-step route
+     */
+    function _calculateMultiStepGas(Protocol[] memory protocols) internal pure returns (uint256) {
+        uint256 totalGas = 50000; // Base overhead
+        for (uint256 i = 0; i < protocols.length; i++) {
+            totalGas += _estimateGasForProtocol(protocols[i]);
+        }
+        return totalGas;
+    }
+
+    /**
+     * @notice Estimate swap output (view safe)
+     */
+    function _estimateSwapOutputView(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
-        // Find optimal route
-        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, minAmountOut);
-
-        // Handle token input
-        if (tokenIn == ETH_ADDRESS) {
-            require(msg.value >= amountIn, "Insufficient ETH");
-            if (msg.value > amountIn) {
-                // Refund excess
-                (bool success, ) = msg.sender.call{value: msg.value - amountIn}("");
-                require(success, "ETH refund failed");
-            }
-        } else {
-            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-        }
-
-        // Execute based on route type
-        if (strategy.routeType == RouteType.Direct || strategy.routeType == RouteType.Reverse) {
-            // Single swap
-            SwapParams memory params = SwapParams({
-                tokenIn: tokenIn,
-                tokenOut: tokenOut,
-                amountIn: amountIn,
-                minAmountOut: minAmountOut,
-                protocol: strategy.protocol,
-                routeData: strategy.primaryRouteData
-            });
-
-            amountOut = _executeSwapInternal(params);
-        } else if (strategy.routeType == RouteType.Bridge) {
-            // Bridge swap (two hops)
-            // First swap: tokenIn -> bridgeAsset
-            SwapParams memory firstParams = SwapParams({
-                tokenIn: tokenIn,
-                tokenOut: strategy.bridgeAsset,
-                amountIn: amountIn,
-                minAmountOut: 0, // Will calculate intermediate minimum
-                protocol: _getProtocolFromRouteData(strategy.primaryRouteData),
-                routeData: strategy.primaryRouteData
-            });
-
-            uint256 bridgeAmount = _executeSwapInternal(firstParams);
-
-            // Second swap: bridgeAsset -> tokenOut
-            SwapParams memory secondParams = SwapParams({
-                tokenIn: strategy.bridgeAsset,
-                tokenOut: tokenOut,
-                amountIn: bridgeAmount,
-                minAmountOut: minAmountOut,
-                protocol: _getProtocolFromRouteData(strategy.secondaryRouteData),
-                routeData: strategy.secondaryRouteData
-            });
-
-            amountOut = _executeSwapInternal(secondParams);
-        } else {
-            revert NoRouteFound();
-        }
-
-        // Transfer output to caller
-        if (tokenOut == ETH_ADDRESS) {
-            (bool success, ) = msg.sender.call{value: amountOut}("");
-            if (!success) {
-                // Fallback to WETH
-                WETH.deposit{value: amountOut}();
-                IERC20(address(WETH)).safeTransfer(msg.sender, amountOut);
-            }
-        } else {
-            IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
-        }
-
-        emit AssetsSwapped(tokenIn, tokenOut, amountIn, amountOut, strategy.protocol, msg.sender, 0, block.timestamp);
+        ExecutionStrategy memory strategy
+    ) internal view returns (uint256) {
+        // For view context, use simple estimation
+        return _getRawDecimalAdjustedAmount(amountIn, tokenIn, tokenOut);
     }
 
     /**
-     * @notice Execute direct mode swap (no token transfers to FAR)
+     * @notice Validate strategy pools
      */
-    function _executeDirectModeSwap(SwapParams memory params) internal returns (uint256 amountOut) {
-        // Validate caller has approved FAR
-        if (params.tokenIn != ETH_ADDRESS) {
-            uint256 allowance = IERC20(params.tokenIn).allowance(msg.sender, address(this));
-            require(allowance >= params.amountIn, "Insufficient allowance");
+    function _validateStrategyPools(ExecutionStrategy memory strategy) internal view {
+        if (strategy.protocol == Protocol.UniswapV3) {
+            UniswapV3Route memory route = abi.decode(strategy.primaryRouteData, (UniswapV3Route));
+            if (!route.isMultiHop && route.pool != address(0)) {
+                if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
+                if (poolPaused[route.pool]) revert PoolIsPaused();
+            }
+        } else if (strategy.protocol == Protocol.Curve) {
+            CurveRoute memory route = abi.decode(strategy.primaryRouteData, (CurveRoute));
+            if (!poolWhitelist[route.pool]) revert PoolNotWhitelisted();
+            if (poolPaused[route.pool]) revert PoolIsPaused();
         }
+    }
 
-        // Find route
-        bytes32 routeKey = keccak256(abi.encodePacked(params.tokenIn, params.tokenOut));
-        RouteConfig memory config = routes[routeKey];
+    /**
+     * @notice Compute Uniswap V3 pool address
+     */
+    function _computeUniswapV3Pool(address tokenA, address tokenB, uint24 fee) internal pure returns (address pool) {
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
 
-        if (!config.isConfigured) {
-            // Try reverse route
-            routeKey = keccak256(abi.encodePacked(params.tokenOut, params.tokenIn));
-            config = routes[routeKey];
-            require(config.isConfigured, "No route found");
-
-            // Adjust for reverse
-            params = _makeReverseSwapParams(params);
-        }
-
-        // For direct mode, we return the expected output
-        // The actual swap execution happens in the caller (LTM)
-
-        // Get quote for accurate output
-        QuoteData memory quote = _performQuote(params.tokenIn, params.tokenOut, params.amountIn, params);
-
-        if (quote.valid) {
-            amountOut = quote.expectedOutput;
-        } else {
-            // Estimate based on slippage
-            amountOut = _getSimpleEstimate(params.amountIn, params.tokenIn, params.tokenOut);
-        }
-
-        // Apply slippage for safety
-        uint256 slippage = slippageTolerance[params.tokenIn][params.tokenOut];
-        if (slippage == 0) slippage = _getDefaultSlippage(params.tokenIn, params.tokenOut);
-
-        amountOut = (amountOut * (10000 - slippage)) / 10000;
-
-        require(amountOut >= params.minAmountOut, "Insufficient output");
-
-        emit AssetsSwapped(
-            params.tokenIn,
-            params.tokenOut,
-            params.amountIn,
-            amountOut,
-            params.protocol,
-            msg.sender,
-            0,
-            block.timestamp
+        pool = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            UNISWAP_V3_FACTORY,
+                            keccak256(abi.encode(token0, token1, fee)),
+                            POOL_INIT_CODE_HASH
+                        )
+                    )
+                )
+            )
         );
     }
 
-    /**
-     * @notice Helper to make reverse swap params
-     */
-    function _makeReverseSwapParams(SwapParams memory params) internal pure returns (SwapParams memory) {
-        // Swap tokenIn and tokenOut
-        address tempToken = params.tokenIn;
-        params.tokenIn = params.tokenOut;
-        params.tokenOut = tempToken;
+    // ============================================================================
+    // ROUTE CONFIGURATION
+    // ============================================================================
 
-        // Reverse route data indices for Curve
-        if (params.protocol == Protocol.Curve) {
-            CurveRoute memory route = abi.decode(params.routeData, (CurveRoute));
-            int128 tempIndex = route.indexIn;
-            route.indexIn = route.indexOut;
-            route.indexOut = tempIndex;
-            params.routeData = abi.encode(route);
+    /**
+     * @notice Configure a new route
+     * @param tokenIn Input token address
+     * @param tokenOut Output token address
+     * @param protocol Protocol to use
+     * @param poolAddress Pool address (for Uniswap/Curve)
+     * @param fee Fee tier (for Uniswap)
+     * @param curveIndices Token indices (for Curve)
+     * @param useUnderlying Use underlying (for Curve)
+     * @param specialContract Special contract (for DirectMint)
+     * @param password Security password
+     */
+    function configureRoute(
+        address tokenIn,
+        address tokenOut,
+        Protocol protocol,
+        address poolAddress,
+        uint24 fee,
+        int128[2] memory curveIndices,
+        bool useUnderlying,
+        address specialContract,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(tokenIn != address(0) && tokenOut != address(0), "Invalid tokens");
+        require(tokenIn != tokenOut, "Same token");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        // Create route config
+        RouteConfig memory config = RouteConfig({
+            protocol: protocol,
+            pool: poolAddress,
+            fee: fee,
+            directSwap: true,
+            path: "",
+            tokenIndexIn: curveIndices[0],
+            tokenIndexOut: curveIndices[1],
+            useUnderlying: useUnderlying,
+            specialContract: specialContract,
+            isConfigured: true,
+            routeData: ""
+        });
+
+        // Encode route data based on protocol
+        if (protocol == Protocol.UniswapV3) {
+            config.routeData = abi.encode(UniswapV3Route({pool: poolAddress, fee: fee, isMultiHop: false, path: ""}));
+        } else if (protocol == Protocol.Curve) {
+            config.routeData = abi.encode(
+                CurveRoute({
+                    pool: poolAddress,
+                    indexIn: curveIndices[0],
+                    indexOut: curveIndices[1],
+                    useUnderlying: useUnderlying
+                })
+            );
+        } else if (protocol == Protocol.DirectMint) {
+            config.routeData = abi.encode(specialContract);
         }
 
-        return params;
+        routes[routeKey] = config;
+        emit RouteConfigured(tokenIn, tokenOut, protocol, poolAddress);
     }
 
     /**
-     * @notice Get protocol from route data
+     * @notice Configure a multi-hop route
+     * @param tokenIn Starting token
+     * @param tokenOut Ending token
+     * @param path Encoded Uniswap V3 path
+     * @param password Security password
      */
-    function _getProtocolFromRouteData(bytes memory routeData) internal pure returns (Protocol) {
-        // Decode first byte as protocol identifier
-        if (routeData.length > 0) {
-            uint8 protocolId = uint8(routeData[0]);
-            if (protocolId <= uint8(Protocol.MultiStep)) {
-                return Protocol(protocolId);
-            }
-        }
-        return Protocol.UniswapV3; // Default
+    function configureMultiHopRoute(
+        address tokenIn,
+        address tokenOut,
+        bytes calldata path,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(path.length >= 43, "Path too short");
+        require((path.length - 20) % 23 == 0, "Invalid path length");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        RouteConfig memory config = RouteConfig({
+            protocol: Protocol.MultiHop,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: path,
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0),
+            isConfigured: true,
+            routeData: path
+        });
+
+        routes[routeKey] = config;
+        emit RouteConfigured(tokenIn, tokenOut, Protocol.MultiHop, address(0));
+    }
+
+    /**
+     * @notice Configure a multi-step route
+     * @param tokenIn Starting token
+     * @param tokenOut Ending token
+     * @param tokens Token path
+     * @param protocols Protocols for each step
+     * @param routeDatas Route data for each step
+     * @param minAmounts Minimum amounts for each step
+     * @param password Security password
+     */
+    function configureMultiStepRoute(
+        address tokenIn,
+        address tokenOut,
+        address[] calldata tokens,
+        Protocol[] calldata protocols,
+        bytes[] calldata routeDatas,
+        uint256[] calldata minAmounts,
+        string calldata password
+    ) external onlyRouteManager {
+        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
+        require(tokens.length >= 2, "Invalid tokens");
+        require(tokens[0] == tokenIn && tokens[tokens.length - 1] == tokenOut, "Token mismatch");
+        require(protocols.length == tokens.length - 1, "Invalid protocols");
+        require(routeDatas.length == protocols.length, "Invalid route data");
+        require(minAmounts.length == protocols.length, "Invalid min amounts");
+
+        bytes32 routeKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
+
+        // Encode multi-step data
+        bytes memory encodedData = abi.encode(tokens, protocols, routeDatas, minAmounts);
+
+        RouteConfig memory config = RouteConfig({
+            protocol: Protocol.MultiStep,
+            pool: address(0),
+            fee: 0,
+            directSwap: false,
+            path: "",
+            tokenIndexIn: 0,
+            tokenIndexOut: 0,
+            useUnderlying: false,
+            specialContract: address(0),
+            isConfigured: true,
+            routeData: encodedData
+        });
+
+        routes[routeKey] = config;
+        emit RouteConfigured(tokenIn, tokenOut, Protocol.MultiStep, address(0));
     }
 
     // ============================================================================
     // ADMIN FUNCTIONS
     // ============================================================================
-
-    /**
-     * @notice Set direct transfer mode
-     */
-    function setDirectTransferMode(bool _enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        directTransferMode = _enabled;
-        emit DirectTransferModeUpdated(_enabled, block.timestamp);
-    }
 
     /**
      * @notice Grant operator role
@@ -2403,15 +2372,8 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         routeManager = newManager;
     }
 
-    // ============================================================================
-    // CUSTOM DEX
-    // ============================================================================
-
     /**
      * @notice Register a new DEX for custom routing
-     * @param dex The DEX contract address
-     * @param name The name of the DEX
-     * @param password Security password for registration
      */
     function registerDEX(
         address dex,
@@ -2441,7 +2403,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Unregister a DEX
-     * @param dex The DEX to unregister
      */
     function unregisterDEX(address dex) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(registeredDEXes[dex], "DEX not registered");
@@ -2453,8 +2414,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Whitelist a function selector for custom DEX calls
-     * @param selector The function selector to whitelist
-     * @param description Description of what this selector does
      */
     function whitelistSelector(bytes4 selector, string calldata description) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!dangerousSelectors[selector], "Selector is blacklisted");
@@ -2469,8 +2428,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Blacklist a dangerous function selector
-     * @param selector The function selector to blacklist
-     * @param reason Reason for blacklisting
      */
     function blacklistSelector(bytes4 selector, string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(bytes(reason).length > 0, "Reason required");
@@ -2508,128 +2465,228 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         dangerousSelectors[0x8129fc1c] = true; // initialize()
     }
 
-    /**
-     * @notice Execute a swap through a registered custom DEX
-     * @param targetDEX The DEX to execute swap on
-     * @param swapData The encoded swap function call
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Input amount
-     * @param minAmountOut Minimum output amount
-     * @param password Security password
-     * @return amountOut The actual output amount
-     */
-    function executeBackendSwap(
-        address targetDEX,
-        bytes calldata swapData,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        string calldata password
-    ) external payable onlyRouteManager globalNonReentrant whenNotPaused returns (uint256 amountOut) {
-        // Validate password
-        require(keccak256(abi.encode(password, address(this))) == ROUTE_PASSWORD_HASH, "Invalid password");
-
-        // Validate DEX
-        require(registeredDEXes[targetDEX], "DEX not registered");
-        require(block.timestamp >= dexRegistrationTime[targetDEX] + DEX_TIMELOCK, "DEX timelock not expired");
-
-        // Validate swap data
-        require(swapData.length >= 4, "Invalid swap data");
-        bytes4 selector = bytes4(swapData[:4]);
-
-        // Security checks
-        require(!dangerousSelectors[selector], "Dangerous selector");
-        require(whitelistedSelectors[selector], "Selector not whitelisted");
-
-        // Validate tokens
-        require(tokenIn != address(0) && tokenOut != address(0), "Invalid tokens");
-        require(tokenIn != tokenOut, "Same token swap");
-
-        // Record balances before
-        uint256 balanceBefore = tokenOut == ETH_ADDRESS
-            ? address(this).balance
-            : IERC20(tokenOut).balanceOf(address(this));
-
-        // Handle token approvals - FIXED: Using increase/decrease pattern
-        if (tokenIn != ETH_ADDRESS) {
-            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-            _safeApprove(IERC20(tokenIn), targetDEX, amountIn);
-        }
-
-        // Execute swap with gas limit
-        (bool success, bytes memory result) = targetDEX.call{
-            value: tokenIn == ETH_ADDRESS ? amountIn : 0,
-            gas: MAX_DEX_GAS_LIMIT
-        }(swapData);
-
-        if (!success) {
-            // Reset approval on failure
-            if (tokenIn != ETH_ADDRESS) {
-                _safeApprove(IERC20(tokenIn), targetDEX, 0);
-            }
-
-            // Decode revert reason if possible
-            string memory reason = "Unknown error";
-            if (result.length > 0) {
-                assembly {
-                    reason := mload(add(result, 0x20))
-                }
-            }
-
-            emit CustomDexSwapFailed(targetDEX, reason, result);
-            revert SwapFailed(reason);
-        }
-
-        // Reset approval
-        if (tokenIn != ETH_ADDRESS) {
-            _safeApprove(IERC20(tokenIn), targetDEX, 0);
-        }
-
-        // Calculate output amount
-        uint256 balanceAfter = tokenOut == ETH_ADDRESS
-            ? address(this).balance
-            : IERC20(tokenOut).balanceOf(address(this));
-
-        amountOut = balanceAfter - balanceBefore;
-        require(amountOut >= minAmountOut, "Insufficient output");
-
-        // Transfer output to caller
-        if (tokenOut == ETH_ADDRESS) {
-            (bool sent, ) = msg.sender.call{value: amountOut}("");
-            require(sent, "ETH transfer failed");
-        } else {
-            IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
-        }
-
-        emit BackendSwapExecuted(targetDEX, tokenIn, tokenOut, amountIn, amountOut, msg.sender, block.timestamp);
-    }
-    //  internal function for safe approval handling
-    /**
-     * @notice Safe approval handling with atomic operations
-     */
-    /**
-     * @notice Safe approval handling with maximum compatibility
-     */
-    function _safeApprove(IERC20 token, address spender, uint256 amount) internal {
-        // Use low-level calls for maximum compatibility
-
-        // First, try to set approval to 0
-        (bool success, ) = address(token).call(abi.encodeWithSelector(token.approve.selector, spender, 0));
-
-        if (amount > 0) {
-            // Then set to desired amount
-            (success, ) = address(token).call(abi.encodeWithSelector(token.approve.selector, spender, amount));
-
-            // Verify the approval was set correctly
-            require(token.allowance(address(this), spender) >= amount, "Approval failed");
-        }
-    }
     // ============================================================================
     // VIEW FUNCTIONS
     // ============================================================================
+    // ADD these new multicall functions
 
+    /**
+     * @notice Generate complete execution plan for multi-step swaps
+     * @dev Returns all steps with pre-calculated amounts for atomic execution
+     */
+    function getCompleteMultiStepPlan(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    ) external returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan) {
+        // Validate inputs
+        if (amountIn == 0) revert ZeroAmount();
+        if (tokenIn == tokenOut) revert SameTokenSwap();
+        if (_isCrossCategory(tokenIn, tokenOut)) revert NoRouteFound();
+
+        // Find strategy
+        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
+
+        if (strategy.protocol == Protocol.MultiStep) {
+            plan = _buildMultiStepPlan(strategy, amountIn, recipient);
+            totalQuotedAmount = plan.expectedFinalAmount;
+        } else if (strategy.routeType == RouteType.Bridge) {
+            plan = _buildBridgePlan(strategy, tokenIn, tokenOut, amountIn, recipient);
+            totalQuotedAmount = plan.expectedFinalAmount;
+        } else {
+            // Single step - wrap in plan for consistency
+            plan = _wrapSingleStepPlan(strategy, tokenIn, tokenOut, amountIn, recipient);
+            totalQuotedAmount = plan.expectedFinalAmount;
+        }
+
+        emit MultiStepPlanGenerated(tokenIn, tokenOut, amountIn, plan.steps.length);
+    }
+
+    /**
+     * @notice Build complete multi-step execution plan
+     * @dev Pre-calculates all amounts and generates all calldata upfront
+     */
+    function _buildMultiStepPlan(
+        ExecutionStrategy memory strategy,
+        uint256 amountIn,
+        address recipient
+    ) internal returns (MultiStepExecutionPlan memory plan) {
+        // Decode multi-step configuration
+        (address[] memory tokens, Protocol[] memory protocols, bytes[] memory routeDatas, ) = abi.decode(
+            strategy.primaryRouteData,
+            (address[], Protocol[], bytes[], uint256[])
+        );
+
+        // Pre-calculate all amounts
+        uint256[] memory minAmounts;
+        uint256 finalAmount;
+        (minAmounts, finalAmount) = _calculateMultiStepMinAmounts(tokens, amountIn, protocols, routeDatas);
+
+        // Build execution steps
+        plan.steps = new SwapStep[](protocols.length);
+        uint256 currentAmount = amountIn;
+
+        for (uint256 i = 0; i < protocols.length; i++) {
+            SwapStep memory step;
+            step.tokenIn = tokens[i];
+            step.tokenOut = tokens[i + 1];
+            step.amountIn = currentAmount;
+            step.minAmountOut = minAmounts[i];
+            step.protocol = protocols[i];
+
+            // Generate execution data for this step
+            ExecutionStrategy memory stepStrategy = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: protocols[i],
+                bridgeAsset: address(0),
+                primaryRouteData: routeDatas[i],
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(protocols[i])
+            });
+
+            (step.data, step.target) = _generateDirectExecutionData(
+                stepStrategy,
+                step.tokenIn,
+                step.tokenOut,
+                step.amountIn,
+                step.minAmountOut,
+                recipient
+            );
+
+            step.value = (step.tokenIn == ETH_ADDRESS) ? step.amountIn : 0;
+            plan.steps[i] = step;
+
+            // Update for next iteration
+            currentAmount = (minAmounts[i] * 10050) / 10000; // Add 0.5% buffer for next step
+        }
+
+        plan.expectedFinalAmount = finalAmount;
+    }
+
+    /**
+     * @notice Build bridge swap as multi-step plan
+     * @dev Converts bridge route to two-step execution plan
+     */
+    function _buildBridgePlan(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    ) internal returns (MultiStepExecutionPlan memory plan) {
+        plan.steps = new SwapStep[](2);
+
+        // First leg: tokenIn -> bridgeAsset
+        (uint256 firstLegQuote, uint256 firstLegMin) = _getQuoteWithFallback(
+            tokenIn,
+            strategy.bridgeAsset,
+            amountIn,
+            ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: strategy.protocol,
+                bridgeAsset: address(0),
+                primaryRouteData: strategy.primaryRouteData,
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(strategy.protocol)
+            })
+        );
+
+        SwapStep memory firstStep;
+        firstStep.tokenIn = tokenIn;
+        firstStep.tokenOut = strategy.bridgeAsset;
+        firstStep.amountIn = amountIn;
+        firstStep.minAmountOut = firstLegMin;
+        firstStep.protocol = strategy.protocol;
+
+        (firstStep.data, firstStep.target) = _generateDirectExecutionData(
+            strategy,
+            tokenIn,
+            strategy.bridgeAsset,
+            amountIn,
+            firstLegMin,
+            recipient
+        );
+
+        firstStep.value = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
+        plan.steps[0] = firstStep;
+
+        // Second leg: bridgeAsset -> tokenOut
+        bytes32 secondRouteKey = keccak256(abi.encodePacked(strategy.bridgeAsset, tokenOut));
+        RouteConfig memory secondConfig = routes[secondRouteKey];
+
+        ExecutionStrategy memory secondStrategy = ExecutionStrategy({
+            routeType: RouteType.Direct,
+            protocol: secondConfig.protocol,
+            bridgeAsset: address(0),
+            primaryRouteData: secondConfig.routeData,
+            secondaryRouteData: "",
+            expectedGas: _estimateGasForProtocol(secondConfig.protocol)
+        });
+
+        (uint256 secondLegQuote, uint256 secondLegMin) = _getQuoteWithFallback(
+            strategy.bridgeAsset,
+            tokenOut,
+            firstLegQuote,
+            secondStrategy
+        );
+
+        SwapStep memory secondStep;
+        secondStep.tokenIn = strategy.bridgeAsset;
+        secondStep.tokenOut = tokenOut;
+        secondStep.amountIn = firstLegQuote;
+        secondStep.minAmountOut = secondLegMin;
+        secondStep.protocol = secondConfig.protocol;
+
+        (secondStep.data, secondStep.target) = _generateDirectExecutionData(
+            secondStrategy,
+            strategy.bridgeAsset,
+            tokenOut,
+            firstLegQuote,
+            secondLegMin,
+            recipient
+        );
+
+        secondStep.value = (strategy.bridgeAsset == ETH_ADDRESS) ? firstLegQuote : 0;
+        plan.steps[1] = secondStep;
+
+        plan.expectedFinalAmount = secondLegQuote;
+    }
+
+    /**
+     * @notice Wrap single step in plan for consistent interface
+     */
+    function _wrapSingleStepPlan(
+        ExecutionStrategy memory strategy,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    ) internal returns (MultiStepExecutionPlan memory plan) {
+        plan.steps = new SwapStep[](1);
+
+        (uint256 quotedAmount, uint256 minAmountOut) = _getQuoteWithFallback(tokenIn, tokenOut, amountIn, strategy);
+
+        SwapStep memory step;
+        step.tokenIn = tokenIn;
+        step.tokenOut = tokenOut;
+        step.amountIn = amountIn;
+        step.minAmountOut = minAmountOut;
+        step.protocol = strategy.protocol;
+
+        (step.data, step.target) = _generateDirectExecutionData(
+            strategy,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            minAmountOut,
+            recipient
+        );
+
+        step.value = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
+        plan.steps[0] = step;
+        plan.expectedFinalAmount = quotedAmount;
+    }
     /**
      * @notice Check if a route exists
      */
@@ -2665,19 +2722,6 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Get all supported tokens
-     */
-    function getSupportedTokens() external view returns (address[] memory tokens, AssetType[] memory types) {
-        uint256 count = 0;
-        address[] memory tempTokens = new address[](100);
-
-        // Count supported tokens (simplified for demo)
-        // In production, maintain a separate array of supported tokens
-
-        return (tempTokens, types);
-    }
-
-    /**
      * @notice Get pool status
      */
     function getPoolStatus(address pool) external view returns (bool whitelisted, bool paused) {
@@ -2690,10 +2734,58 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     function getProtocolStatus(Protocol protocol) external view returns (bool paused) {
         return protocolPaused[protocol];
     }
+    /**
+     * @notice Check if swap is cross-category (forbidden)
+     */
+    /**
+     * @notice Check if swap is cross-category (forbidden)
+     */
+    function _isCrossCategory(address tokenIn, address tokenOut) internal view returns (bool) {
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
 
-    // ============================================================================
-    // RECEIVE ETHER
-    // ============================================================================
+        // Same type is always allowed
+        if (typeIn == typeOut) return false;
 
-    receive() external payable {}
+        // ETH is considered ETH_LST, so ETH <-> ETH_LST is allowed
+        if (
+            (tokenIn == ETH_ADDRESS && tokenOut != address(0) && assetTypes[tokenOut] == AssetType.ETH_LST) ||
+            (tokenOut == ETH_ADDRESS && tokenIn != address(0) && assetTypes[tokenIn] == AssetType.ETH_LST)
+        ) {
+            return false;
+        }
+
+        // Everything else is cross-category
+        return true;
+    }
+    /**
+     * @notice Validate multi-step route configuration
+     */
+    function _validateMultiStepRoute(
+        address[] memory tokens,
+        Protocol[] memory protocols,
+        bytes[] memory routeDatas
+    ) internal view returns (bool) {
+        // Check array lengths
+        if (tokens.length < 2) return false;
+        if (protocols.length != tokens.length - 1) return false;
+        if (routeDatas.length != protocols.length) return false;
+
+        // Validate each step doesn't create cross-category swap
+        for (uint256 i = 0; i < protocols.length; i++) {
+            if (_isCrossCategory(tokens[i], tokens[i + 1])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(paused(), "Not in emergency");
+        if (token == ETH_ADDRESS) {
+            payable(to).transfer(amount);
+        } else {
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
 }
