@@ -38,4 +38,4 @@ make tests
 ## Deployments
 
 - [Holesky Deployments](https://github.com/EigenExplorer/lat-deployments/tree/main/holesky)
-- Mainnet Deployments (Coming Q2 2025)
+- [Mainnet Deployments](https://github.com/EigenExplorer/lat-deployments/tree/main/mainnet)
