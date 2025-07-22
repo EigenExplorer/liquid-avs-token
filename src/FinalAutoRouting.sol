@@ -15,7 +15,6 @@ import "./interfaces/IFrxETHMinter.sol";
 /**
  * @title FinalAutoRouting - Superior Version
  * @notice Production-ready routing intelligence with delegated execution pattern
- * @author ThinkOutSideTheBlock
  * @dev Revolutionary features:
  * - Stateless execution data generation for LTM→DEX→LTM flow
  * - Zero token transfers to FAR in operator mode
