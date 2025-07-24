@@ -429,6 +429,7 @@ contract BaseTest is Test {
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
+            baseAsset: 0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83, // Use EIGEN token address for test environment
             initialOwner: deployer,
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),

@@ -426,6 +426,11 @@ contract LiquidTokenManagerTest is BaseTest {
         // First verify token is already supported
         assertTrue(liquidTokenManager.tokenIsSupported(IERC20(address(testToken))), "testToken should be supported");
 
+        // Get current info for debugging
+        ILiquidTokenManager.TokenInfo memory tokenInfo = liquidTokenManager.getTokenInfo(IERC20(address(testToken)));
+        console.log("Current token price:", tokenInfo.pricePerUnit);
+        console.log("Current volatility threshold:", tokenInfo.volatilityThreshold);
+
         uint8 decimals = 18;
         uint256 volatilityThreshold = 0;
         MockStrategy duplicateStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
@@ -607,7 +612,10 @@ contract LiquidTokenManagerTest is BaseTest {
         assertFalse(isInArray, "Unsupported token should not be in supported tokens array");
 
         vm.expectRevert(
-            abi.encodeWithSelector(ILiquidTokenManager.TokenNotSupported.selector, address(unsupportedToken))
+            abi.encodeWithSelector(
+                ILiquidTokenManager.TokenNotSupported.selector,
+                address(unsupportedToken)
+            )
         );
         liquidTokenManager.getTokenInfo(IERC20(address(unsupportedToken)));
     }
@@ -1098,6 +1106,28 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encode(uint256(2e18), true)
         );
 
+        // Configure tokens in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(tokenA),
+            1, // Chainlink
+            address(tokenAFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+        
+        tokenRegistryOracle.configureToken(
+            address(tokenB),
+            1, // Chainlink  
+            address(tokenBFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
+
         vm.startPrank(admin);
 
         // Add tokens with their strategies
@@ -1222,6 +1252,28 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encode(uint256(1e18), true)
         );
 
+        // Configure tokens in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(tokenC),
+            1, // Chainlink
+            address(tokenCFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+        
+        tokenRegistryOracle.configureToken(
+            address(tokenD),
+            1, // Chainlink  
+            address(tokenCFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
+
         vm.startPrank(admin);
 
         // Add first token with the strategy
@@ -1285,6 +1337,28 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(token2)),
             abi.encode(2 ether, true) // price = 2 ether, success = true
         );
+
+        // Configure tokens in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(token1),
+            1, // Chainlink
+            address(testTokenFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+        
+        tokenRegistryOracle.configureToken(
+            address(token2),
+            1, // Chainlink  
+            address(testToken2Feed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
 
         vm.startPrank(admin);
 
@@ -1360,6 +1434,19 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encode(1 ether, true) // price = 1 ether, success = true
         );
 
+        // Configure token in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(mockToken),
+            1, // Chainlink
+            address(initialFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
+
         vm.startPrank(admin);
 
         // Add token with volatility threshold of 5%
@@ -1426,6 +1513,19 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(token)),
             abi.encode(1e18, true) // price = 1e18, success = true
         );
+
+        // Configure token in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(token),
+            1, // Chainlink
+            address(testTokenFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
 
         // Configure the token using the addToken function
         // This automatically configures it in the oracle
@@ -1529,6 +1629,19 @@ contract LiquidTokenManagerTest is BaseTest {
             abi.encodeWithSelector(ITokenRegistryOracle._getTokenPrice_getter.selector, address(tokenWithBalance)),
             abi.encode(1e18, true) // price = 1e18, success = true
         );
+
+        // Configure token in oracle first to avoid validation errors
+        vm.startPrank(admin);
+        tokenRegistryOracle.configureToken(
+            address(tokenWithBalance),
+            1, // Chainlink
+            address(testTokenFeed),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        vm.stopPrank();
 
         // Configure the token in the manager
         liquidTokenManager.addToken(
@@ -1639,11 +1752,11 @@ contract LiquidTokenManagerTest is BaseTest {
         assertEq(initialQueuedBalance, 0, "Initial queued balance should be 0");
 
         uint256 nodeId = 0;
-        uint256[] memory strategyAmounts = new uint256[](1);
-        strategyAmounts[0] = 50 ether;
+        uint256[] memory amountsToStake = new uint256[](1);
+        amountsToStake[0] = 50 ether;
 
         vm.prank(admin);
-        liquidTokenManager.stakeAssetsToNode(nodeId, assets, strategyAmounts);
+        liquidTokenManager.stakeAssetsToNode(nodeId, assets, amountsToStake);
 
         uint256[] memory nodeIds = new uint256[](1);
         nodeIds[0] = nodeId;
@@ -1723,6 +1836,7 @@ contract LiquidTokenManagerTest is BaseTest {
         uint256 nodeId = 0;
         uint256[] memory amountsToStake = new uint256[](1);
         amountsToStake[0] = 5 ether;
+
         vm.prank(admin);
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amountsToStake);
 
@@ -1797,8 +1911,7 @@ contract LiquidTokenManagerTest is BaseTest {
         _ensureNodeIsDelegated(0);
         
         // User1 deposits 10 ether
-        vm.prank(user1);
-
+        vm.startPrank(user1);
         IERC20[] memory assets = new IERC20[](1);
         assets[0] = IERC20(address(testToken));
         uint256[] memory amountsToDeposit = new uint256[](1);
@@ -2018,6 +2131,7 @@ contract LiquidTokenManagerTest is BaseTest {
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 100 ether;
+
         liquidToken.deposit(assets, amounts, user1);
         vm.stopPrank();
 
@@ -2087,6 +2201,7 @@ contract LiquidTokenManagerTest is BaseTest {
         assets[0] = IERC20(address(testToken));
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 50 ether;
+
         liquidToken.deposit(assets, amounts, user1);
         vm.stopPrank();
 
@@ -2218,8 +2333,7 @@ contract LiquidTokenManagerTest is BaseTest {
         withdrawShares[0] = 10 ether;
         withdrawShares[1] = 5 ether;
         liquidToken.requestWithdrawal(assets, withdrawShares);
-        vm.stopPrank();
-
+        
         assertEq(
             liquidToken.totalSupply(),
             initialTotalSupply,

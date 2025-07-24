@@ -33,6 +33,10 @@ contract LiquidToken is
     /// @notice Role identifier for pausing the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
+    /// @notice The primary asset this LAT represents (e.g., ETH, EIGEN, LA)
+    /// @dev Use address(0) for ETH, actual token address for ERC20 tokens
+    address public baseAsset;
+
     /// @notice LAT contracts
     ILiquidTokenManager public liquidTokenManager;
     ITokenRegistryOracle public tokenRegistryOracle;
@@ -80,6 +84,7 @@ contract LiquidToken is
 
         liquidTokenManager = init.liquidTokenManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
+        baseAsset = init.baseAsset;
     }
 
     // ------------------------------------------------------------------------------
