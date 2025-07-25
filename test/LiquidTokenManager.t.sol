@@ -21,11 +21,16 @@ import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISigna
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
+import {MockFinalAutoRouting, MockSwapExecutor} from "./mocks/MockFar.sol";
+import {IFinalAutoRouting} from "./mocks/MockFar.sol";
+
 contract LiquidTokenManagerTest is BaseTest {
     IStakerNode public stakerNode;
     bool public isLocalTestNetwork;
     event TokenRemoved(IERC20 indexed token, address indexed remover);
-
+    // Add FAR integration properties
+    MockFinalAutoRouting public mockFAR;
+    MockSwapExecutor public mockExecutor;
     // For token oracle admin - needed for various tests
     bytes32 internal constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
     bytes32 internal constant RATE_UPDATER_ROLE = keccak256("RATE_UPDATER_ROLE");
@@ -249,6 +254,60 @@ contract LiquidTokenManagerTest is BaseTest {
             "After setup - testToken2 supported:",
             liquidTokenManager.tokenIsSupported(IERC20(address(testToken2)))
         );
+
+        setupFARIntegration();
+    }
+    function setupFARIntegration() public payable {
+        console.log("Setting up FAR integration for LTM tests...");
+
+        // Deploy mock FAR and executor
+        mockFAR = new MockFinalAutoRouting();
+        mockExecutor = new MockSwapExecutor();
+
+        // Configure FAR in LTM
+        vm.startPrank(admin);
+        liquidTokenManager.updateFinalAutoRouting(address(mockFAR));
+        vm.stopPrank();
+
+        // Add our test tokens to FAR (from BaseTest)
+        mockFAR.addSupportedToken(address(testToken), 18);
+        mockFAR.addSupportedToken(address(testToken2), 18);
+
+        // Configure swap routes between test tokens
+        // testToken -> testToken2: 0.95 rate (1 TEST = 0.95 TEST2)
+        mockFAR.setMockRate(
+            address(testToken),
+            address(testToken2),
+            0.95e18,
+            IFinalAutoRouting.Protocol.UniswapV3,
+            address(mockExecutor)
+        );
+
+        // testToken2 -> testToken: 1.05 rate (1 TEST2 = 1.05 TEST)
+        mockFAR.setMockRate(
+            address(testToken2),
+            address(testToken),
+            1.05e18,
+            IFinalAutoRouting.Protocol.UniswapV3,
+            address(mockExecutor)
+        );
+
+        // Set slippage settings
+        mockFAR.setSlippage(address(testToken), address(testToken2), 50); // 0.5%
+        mockFAR.setSlippage(address(testToken2), address(testToken), 50); // 0.5%
+
+        // Fund the mock executor (DEX) with tokens for swaps
+        testToken.mint(address(mockExecutor), 10000 ether);
+        testToken2.mint(address(mockExecutor), 10000 ether);
+
+        // Fund liquidToken for testing
+        testToken.mint(address(liquidToken), 1000 ether);
+        testToken2.mint(address(liquidToken), 1000 ether);
+
+        console.log("FAR integration setup completed");
+        console.log("MockFAR address:", address(mockFAR));
+        console.log("MockExecutor (DEX) address:", address(mockExecutor));
+        console.log("LiquidTokenManager address:", address(liquidTokenManager));
     }
     // Helper function to ensure a node is delegated (only on test networks)
     function _ensureNodeIsDelegated(uint256 nodeId) internal {
@@ -1570,6 +1629,415 @@ contract LiquidTokenManagerTest is BaseTest {
         assertTrue(address(testToken2Feed) != address(0), "Test token 2 feed should exist");
     }
 
+    // ================= FAR INTEGRATION TESTS =================
+
+    function testFARIntegrationBasicSetup() public {
+        // Verify FAR is properly configured
+        assertEq(address(liquidTokenManager.finalAutoRouting()), address(mockFAR), "FAR not set correctly");
+        assertTrue(mockFAR.hasRoute(address(testToken), address(testToken2)), "Route not configured");
+
+        // Test quote functionality
+        (uint256 quotedAmount, , , address targetContract, ) = mockFAR.getQuoteAndExecutionData(
+            address(testToken),
+            address(testToken2),
+            10 ether,
+            address(liquidTokenManager)
+        );
+
+        assertGt(quotedAmount, 0, "Quote should be greater than 0");
+        assertEq(targetContract, address(mockExecutor), "Target should be mockExecutor");
+    }
+
+    function testSwapAndStakeWithMockFAR() public {
+        // Skip if no staker node
+        if (!isLocalTestNetwork || address(stakerNode) == address(0)) {
+            console.log("Skipping testSwapAndStakeWithMockFAR - no staker node available");
+            return;
+        }
+
+        _ensureNodeIsDelegated(0);
+
+        // Prepare test data
+        IERC20[] memory assetsToSwap = new IERC20[](1);
+        assetsToSwap[0] = IERC20(address(testToken));
+
+        uint256[] memory amountsToSwap = new uint256[](1);
+        amountsToSwap[0] = 10 ether;
+
+        IERC20[] memory assetsToStake = new IERC20[](1);
+        assetsToStake[0] = IERC20(address(testToken2));
+
+        // Ensure liquidToken has testToken balance
+        uint256 liquidTokenBalance = testToken.balanceOf(address(liquidToken));
+        console.log("LiquidToken testToken balance:", liquidTokenBalance);
+
+        // Record initial balances
+        uint256 initialTestToken2Balance = testToken2.balanceOf(address(liquidTokenManager));
+        uint256 initialNodeBalance = testToken2.balanceOf(address(stakerNode));
+
+        // Execute swap and stake
+        vm.startPrank(admin);
+        liquidTokenManager.swapAndStakeAssetsToNode(0, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+
+        // Verify swap occurred - LTM should have received testToken2
+        uint256 finalTestToken2Balance = testToken2.balanceOf(address(liquidTokenManager));
+        console.log("LTM received from swap:", finalTestToken2Balance - initialTestToken2Balance);
+
+        // Verify stake occurred - node should have received testToken2
+        uint256 finalNodeBalance = testToken2.balanceOf(address(stakerNode));
+        assertGt(finalNodeBalance, initialNodeBalance, "Node should have received tokens");
+    }
+
+    function testSwapAndStakeSameToken() public {
+        // Test when no swap is needed (same token in and out)
+        if (!isLocalTestNetwork || address(stakerNode) == address(0)) {
+            console.log("Skipping testSwapAndStakeSameToken - no staker node available");
+            return;
+        }
+
+        _ensureNodeIsDelegated(0);
+
+        IERC20[] memory assetsToSwap = new IERC20[](1);
+        assetsToSwap[0] = IERC20(address(testToken));
+
+        uint256[] memory amountsToSwap = new uint256[](1);
+        amountsToSwap[0] = 5 ether;
+
+        IERC20[] memory assetsToStake = new IERC20[](1);
+        assetsToStake[0] = IERC20(address(testToken)); // Same token
+
+        uint256 initialNodeBalance = testToken.balanceOf(address(stakerNode));
+
+        vm.startPrank(admin);
+        liquidTokenManager.swapAndStakeAssetsToNode(0, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+
+        uint256 finalNodeBalance = testToken.balanceOf(address(stakerNode));
+        assertEq(finalNodeBalance - initialNodeBalance, 5 ether, "Node should receive exact amount when no swap");
+    }
+
+    function testSwapAndStakeMultipleAssets() public {
+        if (!isLocalTestNetwork || address(stakerNode) == address(0)) {
+            console.log("Skipping testSwapAndStakeMultipleAssets - no staker node available");
+            return;
+        }
+
+        _ensureNodeIsDelegated(0);
+
+        // Test with multiple assets - one needs swap, one doesn't
+        IERC20[] memory assetsToSwap = new IERC20[](2);
+        assetsToSwap[0] = IERC20(address(testToken));
+        assetsToSwap[1] = IERC20(address(testToken2));
+
+        uint256[] memory amountsToSwap = new uint256[](2);
+        amountsToSwap[0] = 5 ether;
+        amountsToSwap[1] = 3 ether;
+
+        IERC20[] memory assetsToStake = new IERC20[](2);
+        assetsToStake[0] = IERC20(address(testToken2)); // Needs swap
+        assetsToStake[1] = IERC20(address(testToken2)); // No swap needed
+
+        vm.startPrank(admin);
+        liquidTokenManager.swapAndStakeAssetsToNode(0, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+
+        // Verify node received tokens
+        uint256 nodeBalance = testToken2.balanceOf(address(stakerNode));
+        assertGt(nodeBalance, 0, "Node should have received testToken2");
+    }
+
+    function testSwapExecutionFlow() public {
+        // Test the actual flow: LiquidToken -> LTM -> DEX -> LTM -> Node
+
+        // Setup amounts
+        uint256 swapAmount = 10 ether;
+
+        // Fund LTM with tokens directly for this test
+        testToken.mint(address(liquidTokenManager), swapAmount);
+
+        // Record initial balances at each step
+        uint256 liquidTokenInitial = testToken.balanceOf(address(liquidToken));
+        uint256 ltmInitial = testToken.balanceOf(address(liquidTokenManager));
+        uint256 executorInitial = testToken.balanceOf(address(mockExecutor));
+
+        console.log("=== Initial Balances ===");
+        console.log("LiquidToken testToken:", liquidTokenInitial);
+        console.log("LTM testToken:", ltmInitial);
+        console.log("Executor testToken:", executorInitial);
+
+        // Get quote first
+        (uint256 quotedAmount, bytes memory executionData, , address target, ) = mockFAR.getQuoteAndExecutionData(
+            address(testToken),
+            address(testToken2),
+            swapAmount,
+            address(liquidTokenManager)
+        );
+
+        console.log("Quoted output:", quotedAmount);
+        console.log("Target DEX:", target);
+
+        // Simulate the swap execution that would happen inside LTM
+        vm.startPrank(address(liquidTokenManager));
+
+        // 1. LTM approves DEX
+        testToken.approve(address(mockExecutor), swapAmount);
+
+        // 2. LTM calls DEX
+        (bool success, ) = target.call(executionData);
+        assertTrue(success, "Swap execution should succeed");
+
+        vm.stopPrank();
+
+        // Verify final balances
+        uint256 ltmFinalTestToken = testToken.balanceOf(address(liquidTokenManager));
+        uint256 ltmFinalTestToken2 = testToken2.balanceOf(address(liquidTokenManager));
+
+        console.log("LTM final testToken:", ltmFinalTestToken);
+        console.log("LTM received testToken2:", ltmFinalTestToken2);
+
+        assertEq(ltmFinalTestToken, 0, "LTM should have spent all testToken");
+        assertGt(ltmFinalTestToken2, 0, "LTM should have received testToken2");
+
+        // Verify the amount received (accounting for 0.1% fee in MockSwapExecutor)
+        uint256 expectedOutput = (swapAmount * 9990) / 10000;
+        assertEq(ltmFinalTestToken2, expectedOutput, "Output amount should match expected");
+    }
+
+    function testFARErrorHandling() public {
+        // Test error cases
+
+        // 1. No route available
+        MockERC20 unsupportedToken = new MockERC20("Unsupported", "UNS");
+
+        IERC20[] memory assetsToSwap = new IERC20[](1);
+        assetsToSwap[0] = IERC20(address(unsupportedToken));
+
+        uint256[] memory amountsToSwap = new uint256[](1);
+        amountsToSwap[0] = 1 ether;
+
+        IERC20[] memory assetsToStake = new IERC20[](1);
+        assetsToStake[0] = IERC20(address(testToken2));
+
+        vm.startPrank(admin);
+        vm.expectRevert(); // Should revert due to no route
+        liquidTokenManager.swapAndStakeAssetsToNode(0, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+    }
+
+    //More complex tests :
+
+    function testSwapValidation() public {
+        console.log("=== Testing Swap Validation ===");
+
+        // Test various validation scenarios
+        vm.startPrank(address(liquidTokenManager));
+
+        // 1. Valid swap
+        (bool isValid, string memory reason, uint256 estimatedOutput) = mockFAR.validateSwapExecution(
+            address(testToken),
+            address(testToken2),
+            10 ether,
+            9 ether,
+            address(liquidTokenManager)
+        );
+        assertTrue(isValid, "Valid swap should pass validation");
+        assertGt(estimatedOutput, 0, "Should return estimated output");
+
+        // 2. Zero amount
+        (isValid, reason, ) = mockFAR.validateSwapExecution(
+            address(testToken),
+            address(testToken2),
+            0,
+            0,
+            address(liquidTokenManager)
+        );
+        assertFalse(isValid, "Zero amount should fail");
+        assertEq(reason, "Zero amount", "Should return zero amount reason");
+
+        // 3. Same token swap
+        (isValid, reason, ) = mockFAR.validateSwapExecution(
+            address(testToken),
+            address(testToken),
+            10 ether,
+            10 ether,
+            address(liquidTokenManager)
+        );
+        assertFalse(isValid, "Same token swap should fail");
+        assertEq(reason, "Same token swap", "Should return same token reason");
+
+        // 4. Insufficient output
+        (isValid, reason, estimatedOutput) = mockFAR.validateSwapExecution(
+            address(testToken),
+            address(testToken2),
+            10 ether,
+            20 ether, // Requesting more than possible
+            address(liquidTokenManager)
+        );
+        assertFalse(isValid, "Should fail when minAmountOut too high");
+        assertEq(reason, "Output below minimum", "Should return output below minimum reason");
+
+        vm.stopPrank();
+    }
+
+    function testCompleteExecutionPlan() public {
+        console.log("=== Testing Complete Execution Plan ===");
+
+        vm.prank(address(liquidTokenManager));
+        (
+            uint256 quotedOutput,
+            uint256 minAmountOut,
+            IFinalAutoRouting.ExecutionStep[] memory steps,
+            uint256 totalGas,
+            uint256 ethValue
+        ) = mockFAR.getCompleteExecutionPlan(
+                address(testToken),
+                address(testToken2),
+                5 ether,
+                address(liquidTokenManager)
+            );
+
+        console.log("Quoted output:", quotedOutput);
+        console.log("Min amount out:", minAmountOut);
+        console.log("Number of steps:", steps.length);
+        console.log("Total gas estimate:", totalGas);
+        console.log("ETH value:", ethValue);
+
+        // Verify execution plan
+        assertEq(steps.length, 1, "Should have single step");
+        assertEq(steps[0].tokenIn, address(testToken), "Token in should be testToken");
+        assertEq(steps[0].tokenOut, address(testToken2), "Token out should be testToken2");
+        assertTrue(steps[0].requiresApproval, "Should require approval for ERC20");
+        assertEq(steps[0].value, 0, "Should have 0 ETH value for ERC20 swap");
+        assertEq(steps[0].target, address(mockExecutor), "Target should be mockExecutor");
+
+        // Verify slippage calculation (0.5% slippage)
+        uint256 expectedQuoted = (5 ether * 0.95e18) / 1e18;
+        uint256 expectedMinOut = (expectedQuoted * 9950) / 10000;
+        assertEq(quotedOutput, expectedQuoted, "Quoted output incorrect");
+        assertEq(minAmountOut, expectedMinOut, "Min amount out incorrect");
+    }
+
+    function testSwapWithInsufficientLiquidity() public {
+        console.log("=== Testing Swap With Insufficient Liquidity ===");
+
+        // Create new tokens with no liquidity in executor
+        MockERC20 tokenA = new MockERC20("Token A", "TKA");
+        MockERC20 tokenB = new MockERC20("Token B", "TKB");
+
+        mockFAR.addSupportedToken(address(tokenA), 18);
+        mockFAR.addSupportedToken(address(tokenB), 18);
+        mockFAR.setMockRate(
+            address(tokenA),
+            address(tokenB),
+            1e18,
+            IFinalAutoRouting.Protocol.UniswapV3,
+            address(mockExecutor)
+        );
+
+        // Fund LTM with tokenA
+        tokenA.mint(address(liquidTokenManager), 10 ether);
+
+        // Try to execute swap - should fail due to insufficient tokenB in executor
+        vm.startPrank(address(liquidTokenManager));
+        tokenA.approve(address(mockExecutor), 10 ether);
+
+        (uint256 quotedAmount, bytes memory executionData, , address target, ) = mockFAR.getQuoteAndExecutionData(
+            address(tokenA),
+            address(tokenB),
+            10 ether,
+            address(liquidTokenManager)
+        );
+
+        (bool success, ) = target.call(executionData);
+        assertFalse(success, "Swap should fail due to insufficient liquidity");
+
+        vm.stopPrank();
+    }
+
+    function testBridgeSecondLegData() public {
+        console.log("=== Testing Bridge Second Leg Data ===");
+
+        vm.prank(address(liquidTokenManager));
+        (bytes memory executionData, address targetContract, bool requiresApproval) = mockFAR.getBridgeSecondLegData(
+            address(testToken),
+            address(testToken2),
+            5 ether,
+            4.5 ether,
+            address(liquidTokenManager)
+        );
+
+        console.log("Target contract:", targetContract);
+        console.log("Requires approval:", requiresApproval);
+        console.log("Execution data length:", executionData.length);
+
+        assertEq(targetContract, address(mockExecutor), "Target should be mockExecutor");
+        assertTrue(requiresApproval, "Should require approval for ERC20");
+        assertGt(executionData.length, 0, "Should have execution data");
+    }
+
+    function testETHSwapHandling() public {
+        console.log("=== Testing ETH Swap Handling ===");
+
+        // Add ETH support to FAR
+        address ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+        mockFAR.addSupportedToken(ETH_ADDRESS, 18);
+
+        // Set up ETH -> testToken2 route
+        mockFAR.setMockRate(
+            ETH_ADDRESS,
+            address(testToken2),
+            2000e18, // 1 ETH = 2000 TEST2
+            IFinalAutoRouting.Protocol.UniswapV3,
+            address(mockExecutor)
+        );
+
+        // Fund executor with ETH
+        vm.deal(address(mockExecutor), 100 ether);
+
+        vm.prank(address(liquidTokenManager));
+        (uint256 quotedOutput, , IFinalAutoRouting.ExecutionStep[] memory steps, , uint256 ethValue) = mockFAR
+            .getCompleteExecutionPlan(ETH_ADDRESS, address(testToken2), 1 ether, address(liquidTokenManager));
+
+        console.log("ETH swap quoted output:", quotedOutput);
+        console.log("ETH value required:", ethValue);
+
+        assertEq(ethValue, 1 ether, "Should require 1 ETH value");
+        assertFalse(steps[0].requiresApproval, "ETH should not require approval");
+        assertEq(quotedOutput, 2000e18, "Should return correct quote for ETH");
+    }
+
+    function testGetNextStepExecutionData() public {
+        console.log("=== Testing Get Next Step Execution Data ===");
+
+        vm.prank(address(liquidTokenManager));
+        (bytes memory executionData, address targetContract, bool isFinalStep) = mockFAR.getNextStepExecutionData(
+            address(testToken),
+            address(testToken2),
+            10 ether,
+            "", // Empty route data for single step
+            0, // First step
+            address(liquidTokenManager)
+        );
+
+        console.log("Target contract:", targetContract);
+        console.log("Is final step:", isFinalStep);
+        console.log("Execution data length:", executionData.length);
+
+        assertEq(targetContract, address(mockExecutor), "Target should be mockExecutor");
+        assertTrue(isFinalStep, "Should be final step for direct swap");
+        assertGt(executionData.length, 0, "Should have execution data");
+    }
+    // Helper function to fund liquidToken for tests
+    function _fundLiquidToken(address token, uint256 amount) internal {
+        MockERC20(token).mint(address(liquidToken), amount);
+    }
+
+    // Helper to check swap execution event
+    function _expectSwapExecutedEvent(address tokenIn, address tokenOut, uint256 amountIn, uint256 nodeId) internal {
+        vm.expectEmit(true, true, true, false);
+        emit ILiquidTokenManager.SwapExecuted(tokenIn, tokenOut, amountIn, 0, nodeId);
+    }
     /// Tests for withdrawal functionality that will be implemented in future versions
     /// OUT OF SCOPE FOR V1
     /**

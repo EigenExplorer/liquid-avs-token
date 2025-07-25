@@ -27,6 +27,7 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
+import {IFinalAutoRouting} from "../../src/interfaces/IFinalAutoRouting.sol"; // Added import
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
@@ -51,6 +52,9 @@ contract BaseTest is Test {
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
+
+    // Mock FAR contract for testing - Added
+    IFinalAutoRouting public mockFinalAutoRouting;
 
     // Mock contracts - base test tokens
     MockERC20 public testToken;
@@ -273,6 +277,9 @@ contract BaseTest is Test {
         // Deploy price feed mocks with realistic values for test tokens
         testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
         testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
+
+        // Deploy mock FAR contract - Added
+        mockFinalAutoRouting = IFinalAutoRouting(address(0xDEAD)); // Placeholder address for now
     }
 
     function _deployMainContracts() private {
@@ -287,9 +294,16 @@ contract BaseTest is Test {
         tokenRegistryOracle = TokenRegistryOracle(
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
+
+        // Fixed: Use payable() for LiquidTokenManager since it has receive() function
         liquidTokenManager = LiquidTokenManager(
-            address(new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, ""))
+            payable(
+                address(
+                    new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, "")
+                )
+            )
         );
+
         liquidToken = LiquidToken(
             address(new TransparentUpgradeableProxy(address(_liquidTokenImplementation), proxyAdminAddress, ""))
         );
@@ -396,6 +410,11 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
         liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this));
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
+
+        // Update FAR address if mockFinalAutoRouting is set - Added
+        if (address(mockFinalAutoRouting) != address(0) && address(mockFinalAutoRouting) != address(0xDEAD)) {
+            liquidTokenManager.updateFinalAutoRouting(address(mockFinalAutoRouting));
+        }
         vm.stopPrank();
     }
 
@@ -591,5 +610,42 @@ contract BaseTest is Test {
 
     function _createMockFailingOracle() internal returns (MockFailingOracle) {
         return new MockFailingOracle();
+    }
+
+    // ================= NEW SWAP AND STAKE HELPER METHODS - Added =================
+
+    /**
+     * @dev Sets a mock FAR contract for testing swap functionality
+     */
+    function _setMockFinalAutoRouting(address mockFAR) internal {
+        mockFinalAutoRouting = IFinalAutoRouting(mockFAR);
+
+        // Update in LiquidTokenManager if it's already initialized
+        if (address(liquidTokenManager) != address(0)) {
+            vm.prank(deployer);
+            liquidTokenManager.updateFinalAutoRouting(mockFAR);
+        }
+    }
+
+    /**
+     * @dev Helper to test swap and stake functionality with mock data
+     */
+    function _testSwapAndStake(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) internal {
+        // This would be overridden in actual test contracts that set up proper mocks
+        vm.startPrank(deployer);
+        liquidTokenManager.swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+    }
+
+    /**
+     * @dev Helper to get current FAR address
+     */
+    function _getFinalAutoRoutingAddress() internal view returns (address) {
+        return address(liquidTokenManager.finalAutoRouting());
     }
 }

@@ -18,6 +18,7 @@ import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
+import "../interfaces/IFinalAutoRouting.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
@@ -52,6 +53,9 @@ contract LiquidTokenManager is
     IStakerNodeCoordinator public stakerNodeCoordinator;
     ITokenRegistryOracle public tokenRegistryOracle;
 
+    /// @notice FinalAutoRouting contract for swap execution
+    IFinalAutoRouting public finalAutoRouting;
+
     /// @notice Mapping of tokens to their corresponding token info
     mapping(IERC20 => TokenInfo) public tokens;
 
@@ -63,6 +67,9 @@ contract LiquidTokenManager is
 
     /// @notice Array of supported token addresses
     IERC20[] public supportedTokens;
+
+    /// @notice Constant for ETH address representation
+    address private constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -101,7 +108,22 @@ contract LiquidTokenManager is
     }
 
     // ------------------------------------------------------------------------------
-    // Core functions
+    // Admin functions
+    // ------------------------------------------------------------------------------
+
+    /// @notice Updates the FinalAutoRouting contract address
+    /// @param newFinalAutoRouting The new FAR contract address
+    function updateFinalAutoRouting(address newFinalAutoRouting) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFinalAutoRouting == address(0)) revert ZeroAddress();
+
+        address oldFAR = address(finalAutoRouting);
+        finalAutoRouting = IFinalAutoRouting(newFinalAutoRouting);
+
+        emit FinalAutoRoutingUpdated(oldFAR, newFinalAutoRouting, msg.sender);
+    }
+
+    // ------------------------------------------------------------------------------
+    // Core functions (existing - exactly as in initial version)
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidTokenManager
@@ -145,6 +167,7 @@ contract LiquidTokenManager is
             if (decimalsFromContract == 0) revert InvalidDecimals();
             if (decimals != decimalsFromContract) revert InvalidDecimals();
         } catch {} // Fallback to `decimals` if token contract doesn't implement `decimals()`
+
         uint256 fetchedPrice;
         if (!isNative) {
             (uint256 price, bool ok) = tokenRegistryOracle._getTokenPrice_getter(address(token));
@@ -337,6 +360,194 @@ contract LiquidTokenManager is
         emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
     }
 
+    // ------------------------------------------------------------------------------
+    // New Swap and Stake functions - Following colleague's exact specification
+    // ------------------------------------------------------------------------------
+
+    /// @inheritdoc ILiquidTokenManager
+    function swapAndStakeAssetsToNodes(
+        NodeAllocationWithSwap[] calldata allocationsWithSwaps
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+        for (uint256 i = 0; i < allocationsWithSwaps.length; i++) {
+            NodeAllocationWithSwap memory allocationWithSwap = allocationsWithSwaps[i];
+            _swapAndStakeAssetsToNode(
+                allocationWithSwap.nodeId,
+                allocationWithSwap.assetsToSwap,
+                allocationWithSwap.amountsToSwap,
+                allocationWithSwap.assetsToStake
+            );
+        }
+    }
+
+    /// @inheritdoc ILiquidTokenManager
+    function swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) nonReentrant {
+        _swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
+    }
+
+    /// @dev Called by `swapAndStakeAssetsToNode` and `swapAndStakeAssetsToNodes`
+    /// @dev Flow: LTM >> DEX >> LTM (using FAR for routing data)
+    function _swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) internal {
+        uint256 assetsLength = assetsToStake.length;
+
+        if (assetsLength != assetsToSwap.length) {
+            revert LengthMismatch(assetsLength, assetsToSwap.length);
+        }
+        if (assetsLength != amountsToSwap.length) {
+            revert LengthMismatch(assetsLength, amountsToSwap.length);
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+
+        // Find EigenLayer strategies for the given assets (using assetsToStake not assetsToSwap)
+        IStrategy[] memory strategiesForNode = new IStrategy[](assetsLength);
+        for (uint256 i = 0; i < assetsLength; i++) {
+            IERC20 asset = assetsToStake[i]; // using `assetsToStake` not `assetsToSwap`
+            if (amountsToSwap[i] == 0) {
+                revert InvalidStakingAmount(amountsToSwap[i]);
+            }
+            IStrategy strategy = tokenStrategies[asset];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(asset));
+            }
+            strategiesForNode[i] = strategy;
+        }
+
+        // Bring unstaked assets in from `LiquidToken`
+        liquidToken.transferAssets(assetsToSwap, amountsToSwap);
+
+        uint256[] memory amountsToStake = new uint256[](assetsLength);
+
+        // Swap using FAR - for every tokenIn swap to corresponding tokenOut
+        for (uint256 i = 0; i < assetsLength; i++) {
+            address tokenIn = address(assetsToSwap[i]);
+            address tokenOut = address(assetsToStake[i]);
+            uint256 amountIn = amountsToSwap[i];
+
+            if (tokenIn == tokenOut) {
+                // No swap needed, direct stake
+                amountsToStake[i] = amountIn;
+            } else {
+                // Get swap plan from FAR
+                (uint256 quotedAmount, IFinalAutoRouting.MultiStepExecutionPlan memory plan) = finalAutoRouting
+                    .getCompleteMultiStepPlan(
+                        tokenIn,
+                        tokenOut,
+                        amountIn,
+                        address(this) // LTM is the recipient
+                    );
+
+                // Execute the swap plan step by step
+                uint256 actualAmountOut = _executeFARSwapPlan(tokenIn, tokenOut, amountIn, plan);
+                amountsToStake[i] = actualAmountOut;
+
+                emit SwapExecuted(tokenIn, tokenOut, amountIn, actualAmountOut, nodeId);
+            }
+        }
+
+        IERC20[] memory depositAssets = new IERC20[](assetsLength);
+        uint256[] memory depositAmounts = new uint256[](assetsLength);
+
+        // Transfer assets to node
+        for (uint256 i = 0; i < assetsLength; i++) {
+            depositAssets[i] = assetsToStake[i];
+            depositAmounts[i] = amountsToStake[i];
+            assetsToStake[i].safeTransfer(address(node), amountsToStake[i]);
+        }
+
+        emit AssetsSwappedAndStakedToNode(
+            nodeId,
+            assetsToSwap,
+            amountsToSwap,
+            assetsToStake,
+            amountsToStake,
+            msg.sender
+        );
+
+        // Call for node to deposit assets into EigenLayer
+        node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
+
+        emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
+    }
+
+    /// @dev Executes a swap plan from FAR following LTM >> DEX >> LTM flow
+    /// @param tokenIn Input token address
+    /// @param tokenOut Output token address
+    /// @param amountIn Input amount
+    /// @param plan Execution plan from FAR
+    /// @return actualAmountOut The actual amount received from the swap
+    function _executeFARSwapPlan(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        IFinalAutoRouting.MultiStepExecutionPlan memory plan
+    ) internal returns (uint256 actualAmountOut) {
+        require(plan.steps.length > 0, "Empty swap plan");
+        require(address(finalAutoRouting) != address(0), "FAR not configured");
+
+        // Track balances before and after
+        uint256 initialBalance = tokenOut == ETH_ADDRESS
+            ? address(this).balance
+            : IERC20(tokenOut).balanceOf(address(this));
+
+        // Execute each step in the plan
+        for (uint256 i = 0; i < plan.steps.length; i++) {
+            IFinalAutoRouting.SwapStep memory step = plan.steps[i];
+
+            // Approve the target DEX to spend our tokens
+            if (step.tokenIn != ETH_ADDRESS) {
+                IERC20(step.tokenIn).safeApprove(step.target, 0);
+                IERC20(step.tokenIn).safeApprove(step.target, step.amountIn);
+            }
+
+            // Execute the swap on the DEX
+            (bool success, bytes memory returnData) = step.target.call{value: step.value}(step.data);
+
+            if (!success) {
+                // Decode revert reason if possible
+                if (returnData.length > 0) {
+                    assembly {
+                        let returnDataSize := mload(returnData)
+                        revert(add(32, returnData), returnDataSize)
+                    }
+                } else {
+                    revert("Swap execution failed");
+                }
+            }
+
+            // Reset approval
+            if (step.tokenIn != ETH_ADDRESS) {
+                IERC20(step.tokenIn).safeApprove(step.target, 0);
+            }
+        }
+
+        // Calculate actual output amount
+        uint256 finalBalance = tokenOut == ETH_ADDRESS
+            ? address(this).balance
+            : IERC20(tokenOut).balanceOf(address(this));
+
+        actualAmountOut = finalBalance - initialBalance;
+
+        // Validate we received at least the minimum expected
+        IFinalAutoRouting.SwapStep memory lastStep = plan.steps[plan.steps.length - 1];
+        require(actualAmountOut >= lastStep.minAmountOut, "Insufficient output amount");
+
+        return actualAmountOut;
+    }
+
+    /// @notice Fallback to receive ETH from swaps
+    receive() external payable {
+        // Accept ETH from DEX swaps
+    }
     /// @dev OUT OF SCOPE FOR V1
     /**
     function undelegateNodes(
@@ -379,8 +590,8 @@ contract LiquidTokenManager is
         }
         return balances;
     }
+    
     */
-
     // ------------------------------------------------------------------------------
     // Getter functions
     // ------------------------------------------------------------------------------
