@@ -2675,6 +2675,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         plan.steps[0] = step;
         plan.expectedFinalAmount = quotedAmount;
     }
+    
     /**
      * @notice Check if a route exists (enhanced with multi-hop support)
      * @dev Now discovers routes up to MAX_MULTI_STEP_OPERATIONS hops
@@ -2888,6 +2889,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
             revert("No route found");
         }
     }
+
     /**
      * @notice Recursive multi-hop route discovery
      * @dev Core algorithm for finding complex routes
@@ -3033,6 +3035,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
         return new address[](0);
     }
+
     /**
      * @notice Get route configuration
      */
@@ -3054,9 +3057,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     function getProtocolStatus(Protocol protocol) external view returns (bool paused) {
         return protocolPaused[protocol];
     }
-    /**
-     * @notice Check if swap is cross-category (forbidden)
-     */
+    
     /**
      * @notice Check if swap is cross-category (forbidden)
      */
@@ -3078,6 +3079,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         // Everything else is cross-category
         return true;
     }
+
     /**
      * @notice Validate multi-step route configuration
      */
@@ -3100,6 +3102,7 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
 
         return true;
     }
+
     function emergencyWithdraw(address token, address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(paused(), "Not in emergency");
         if (token == ETH_ADDRESS) {
