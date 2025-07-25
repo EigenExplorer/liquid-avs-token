@@ -10,7 +10,6 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
-import {FinalAutoRouting} from "../../src/FinalAutoRouting.sol";
 
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
@@ -28,17 +27,9 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
+import {IFinalAutoRouting} from "../../src/interfaces/IFinalAutoRouting.sol"; // Added import
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
-// ✅ NEW: Import interfaces for FAR mocks
-import {IWETH} from "../../src/interfaces/IWETH.sol";
-import {IUniswapV3Router} from "../../src/interfaces/IUniswapV3Router.sol";
-import {IUniswapV3Quoter} from "../../src/interfaces/IUniswapV3Quoter.sol";
-import {IFrxETHMinter} from "../../src/interfaces/IFrxETHMinter.sol";
-import {MockWETH} from "../mocks/MockWETH.sol";
-import {MockUniswapV3Router} from "../mocks/MockUniswapV3Router.sol";
-import {MockUniswapV3Quoter} from "../mocks/MockUniswapV3Quoter.sol";
-import {MockFrxETHMinter} from "../mocks/MockFrxETHMinter.sol";
 contract BaseTest is Test {
     // Source type constants
     uint8 constant SOURCE_TYPE_CHAINLINK = 1;
@@ -62,13 +53,8 @@ contract BaseTest is Test {
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
 
-    // ✅ NEW: Mock contracts for FAR dependencies
-    MockWETH public mockWETH;
-    address public mockUniswapRouter;
-    address public mockUniswapQuoter;
-    address public mockFrxETHMinter;
-    address public mockRouteManager;
-    bytes32 public constant MOCK_ROUTE_PASSWORD_HASH = keccak256("test_password");
+    // Mock FAR contract for testing - Added
+    IFinalAutoRouting public mockFinalAutoRouting;
 
     // Mock contracts - base test tokens
     MockERC20 public testToken;
@@ -127,7 +113,7 @@ contract BaseTest is Test {
         // 2. Setup oracle sources
         _setupOracleSources();
 
-        // 3. Initialize LiquidTokenManager (✅ FIXED: New signature)
+        // 3. Initialize LiquidTokenManager
         _initializeLiquidTokenManager();
 
         // 4. Initialize LiquidToken (depends on LiquidTokenManager)
@@ -292,19 +278,10 @@ contract BaseTest is Test {
         testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
         testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
 
-        // ✅ FIXED: Deploy proper FAR mock dependencies
-        mockWETH = new MockWETH(); // ✅ Use MockWETH instead of MockERC20
-
-        // Deploy actual mock contracts instead of simple addresses
-        MockUniswapV3Router mockRouterContract = new MockUniswapV3Router();
-        MockUniswapV3Quoter mockQuoterContract = new MockUniswapV3Quoter();
-        MockFrxETHMinter mockMinterContract = new MockFrxETHMinter();
-
-        mockUniswapRouter = address(mockRouterContract);
-        mockUniswapQuoter = address(mockQuoterContract);
-        mockFrxETHMinter = address(mockMinterContract);
-        mockRouteManager = address(0x9999); // Simple address for route manager
+        // Deploy mock FAR contract - Added
+        mockFinalAutoRouting = IFinalAutoRouting(address(0xDEAD)); // Placeholder address for now
     }
+
     function _deployMainContracts() private {
         _tokenRegistryOracleImplementation = new TokenRegistryOracle();
         _liquidTokenImplementation = new LiquidToken();
@@ -318,7 +295,7 @@ contract BaseTest is Test {
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
 
-        // ✅ FIXED: Use payable casting for LiquidTokenManager
+        // Fixed: Use payable() for LiquidTokenManager since it has receive() function
         liquidTokenManager = LiquidTokenManager(
             payable(
                 address(
@@ -412,12 +389,9 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    // ✅ FIXED: Updated LiquidTokenManager initialization with new signature
     function _initializeLiquidTokenManager() private {
         console.log("Initializing LiquidTokenManager...");
-
-        // LTM Init struct
-        ILiquidTokenManager.Init memory ltmInit = ILiquidTokenManager.Init({
+        ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
@@ -428,68 +402,19 @@ contract BaseTest is Test {
             priceUpdater: address(tokenRegistryOracle)
         });
 
-        // ✅ FIXED: Initialize LTM with mock addresses
+        // Initialize LTM with deployer as owner
         vm.prank(deployer);
-        liquidTokenManager.initialize(
-            ltmInit,
-            address(mockWETH), // wethAddr
-            mockUniswapRouter, // routerAddr
-            mockUniswapQuoter, // quoterAddr
-            mockFrxETHMinter, // minterAddr
-            mockRouteManager, // routeMgrAddr
-            MOCK_ROUTE_PASSWORD_HASH // routePasswordHash
-        );
-
-        // ✅ NEW: Configure test environment after initialization
-        vm.startPrank(deployer);
-
-        // Set mock addresses in FAR (inherited by LTM)
-        liquidTokenManager.setMockAddresses(
-            address(mockWETH),
-            mockUniswapRouter,
-            mockUniswapQuoter,
-            mockFrxETHMinter,
-            mockRouteManager
-        );
-
-        // Add test tokens to FAR
-        address[] memory testTokenAddresses = new address[](2);
-        FinalAutoRouting.AssetType[] memory testTokenTypes = new FinalAutoRouting.AssetType[](2);
-        uint8[] memory testTokenDecimals = new uint8[](2);
-
-        testTokenAddresses[0] = address(testToken);
-        testTokenAddresses[1] = address(testToken2);
-        testTokenTypes[0] = FinalAutoRouting.AssetType.ETH_LST;
-        testTokenTypes[1] = FinalAutoRouting.AssetType.ETH_LST;
-        testTokenDecimals[0] = 18;
-        testTokenDecimals[1] = 18;
-
-        liquidTokenManager.addTestTokens(testTokenAddresses, testTokenTypes, testTokenDecimals);
-
-        // Add test route (testToken -> testToken2)
-        FinalAutoRouting.RouteConfig memory testRoute = FinalAutoRouting.RouteConfig({
-            protocol: FinalAutoRouting.Protocol.UniswapV3,
-            pool: mockUniswapRouter, // Use mock router as pool
-            fee: 3000,
-            directSwap: true,
-            path: "",
-            tokenIndexIn: 0,
-            tokenIndexOut: 0,
-            useUnderlying: false,
-            specialContract: address(0)
-        });
-
-        liquidTokenManager.addTestRoute(address(testToken), address(testToken2), testRoute);
-
-        // Set test slippage
-        liquidTokenManager.setTestSlippage(address(testToken), address(testToken2), 1000); // 10%
-
-        vm.stopPrank();
+        liquidTokenManager.initialize(init);
 
         // Grant roles
         vm.startPrank(deployer);
         liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this));
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
+
+        // Update FAR address if mockFinalAutoRouting is set - Added
+        if (address(mockFinalAutoRouting) != address(0) && address(mockFinalAutoRouting) != address(0xDEAD)) {
+            liquidTokenManager.updateFinalAutoRouting(address(mockFinalAutoRouting));
+        }
         vm.stopPrank();
     }
 
@@ -685,5 +610,42 @@ contract BaseTest is Test {
 
     function _createMockFailingOracle() internal returns (MockFailingOracle) {
         return new MockFailingOracle();
+    }
+
+    // ================= NEW SWAP AND STAKE HELPER METHODS - Added =================
+
+    /**
+     * @dev Sets a mock FAR contract for testing swap functionality
+     */
+    function _setMockFinalAutoRouting(address mockFAR) internal {
+        mockFinalAutoRouting = IFinalAutoRouting(mockFAR);
+
+        // Update in LiquidTokenManager if it's already initialized
+        if (address(liquidTokenManager) != address(0)) {
+            vm.prank(deployer);
+            liquidTokenManager.updateFinalAutoRouting(mockFAR);
+        }
+    }
+
+    /**
+     * @dev Helper to test swap and stake functionality with mock data
+     */
+    function _testSwapAndStake(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) internal {
+        // This would be overridden in actual test contracts that set up proper mocks
+        vm.startPrank(deployer);
+        liquidTokenManager.swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
+        vm.stopPrank();
+    }
+
+    /**
+     * @dev Helper to get current FAR address
+     */
+    function _getFinalAutoRoutingAddress() internal view returns (address) {
+        return address(liquidTokenManager.finalAutoRouting());
     }
 }

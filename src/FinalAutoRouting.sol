@@ -1187,8 +1187,8 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Calculate minimum amounts for each step in multi-step swap
-     * @dev Each step gets proper slippage based on pre-tested values
+     * @notice Calculate minimum amounts for each step in multi-step swap (enhanced)
+     * @dev Now takes token path instead of just protocols
      */
     function _calculateMultiStepMinAmounts(
         address[] memory tokens,
@@ -1446,7 +1446,8 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         }
     }
     /**
-     * @notice Find optimal execution strategy
+     * @notice Find optimal execution strategy (enhanced with multi-hop support)
+     * @dev Now handles 3+ hop routes via MultiStep protocol
      */
     function _findOptimalExecutionStrategy(
         address tokenIn,
@@ -1455,109 +1456,55 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         uint256 minAmountOut
     ) internal view returns (ExecutionStrategy memory strategy) {
         // Validate cross-category early
-        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
-        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
-
-        // Cross-category swaps are forbidden
-        if (typeIn != typeOut && !(typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST)) {
+        if (_isCrossCategory(tokenIn, tokenOut)) {
             revert NoRouteFound();
         }
 
-        // Cache route keys
-        bytes32 directKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
-        bytes32 reverseKey = keccak256(abi.encodePacked(tokenOut, tokenIn));
+        // Try to find multi-hop route
+        (
+            bool found,
+            address[] memory path,
+            Protocol[] memory protocols,
+            bytes[] memory routeDatas
+        ) = _findMultiHopRoute(tokenIn, tokenOut, MAX_MULTI_STEP_OPERATIONS);
 
-        // Load both routes in single SLOAD each
-        RouteConfig memory directRoute = routes[directKey];
-        RouteConfig memory reverseRoute = routes[reverseKey];
+        if (!found) {
+            revert NoRouteFound();
+        }
 
-        // Check direct route first
-        if (directRoute.isConfigured) {
+        // Single hop - direct route
+        if (path.length == 2) {
             strategy.routeType = RouteType.Direct;
-            strategy.protocol = directRoute.protocol;
-            strategy.primaryRouteData = _encodeRouteData(directRoute, tokenIn, tokenOut);
-            strategy.expectedGas = _estimateGasForProtocol(directRoute.protocol);
+            strategy.protocol = protocols[0];
+            strategy.primaryRouteData = routeDatas[0];
+            strategy.expectedGas = _estimateGasForProtocol(protocols[0]);
             return strategy;
         }
 
-        // Check reverse route
-        if (reverseRoute.isConfigured) {
-            strategy.routeType = RouteType.Reverse;
-            strategy.protocol = reverseRoute.protocol;
-            strategy.primaryRouteData = _encodeReverseRouteData(reverseRoute, tokenOut, tokenIn);
-            strategy.expectedGas = _estimateGasForProtocol(reverseRoute.protocol);
+        // Two hops - bridge route
+        if (path.length == 3) {
+            strategy.routeType = RouteType.Bridge;
+            strategy.protocol = protocols[0];
+            strategy.bridgeAsset = path[1];
+            strategy.primaryRouteData = routeDatas[0];
+            strategy.secondaryRouteData = routeDatas[1];
+            strategy.expectedGas = _estimateGasForProtocol(protocols[0]) + _estimateGasForProtocol(protocols[1]);
             return strategy;
         }
 
-        // Check bridge route
-        address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
-        if (bridgeAsset != address(0)) {
-            // Try all combinations of forward/reverse routes
-            bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, bridgeAsset));
-            bytes32 firstReverseKey = keccak256(abi.encodePacked(bridgeAsset, tokenIn));
-            bytes32 secondKey = keccak256(abi.encodePacked(bridgeAsset, tokenOut));
-            bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, bridgeAsset));
+        // Three or more hops - multi-step route
+        strategy.routeType = RouteType.Direct; // Will be treated as MultiStep by protocol
+        strategy.protocol = Protocol.MultiStep;
 
-            // Cache all possible routes
-            RouteConfig storage firstRoute = routes[firstKey];
-            RouteConfig storage firstReverseRoute = routes[firstReverseKey];
-            RouteConfig storage secondRoute = routes[secondKey];
-            RouteConfig storage secondReverseRoute = routes[secondReverseKey];
-
-            // Try forward-forward
-            if (firstRoute.isConfigured && secondRoute.isConfigured) {
-                strategy.routeType = RouteType.Bridge;
-                strategy.protocol = firstRoute.protocol;
-                strategy.bridgeAsset = bridgeAsset;
-                strategy.primaryRouteData = _encodeRouteData(firstRoute, tokenIn, bridgeAsset);
-                strategy.secondaryRouteData = _encodeRouteData(secondRoute, bridgeAsset, tokenOut);
-                strategy.expectedGas =
-                    _estimateGasForProtocol(firstRoute.protocol) +
-                    _estimateGasForProtocol(secondRoute.protocol);
-                return strategy;
-            }
-
-            // Try reverse-forward
-            if (firstReverseRoute.isConfigured && secondRoute.isConfigured) {
-                strategy.routeType = RouteType.Bridge;
-                strategy.protocol = firstReverseRoute.protocol;
-                strategy.bridgeAsset = bridgeAsset;
-                strategy.primaryRouteData = _encodeReverseRouteData(firstReverseRoute, bridgeAsset, tokenIn);
-                strategy.secondaryRouteData = _encodeRouteData(secondRoute, bridgeAsset, tokenOut);
-                strategy.expectedGas =
-                    _estimateGasForProtocol(firstReverseRoute.protocol) +
-                    _estimateGasForProtocol(secondRoute.protocol);
-                return strategy;
-            }
-
-            // Try forward-reverse
-            if (firstRoute.isConfigured && secondReverseRoute.isConfigured) {
-                strategy.routeType = RouteType.Bridge;
-                strategy.protocol = firstRoute.protocol;
-                strategy.bridgeAsset = bridgeAsset;
-                strategy.primaryRouteData = _encodeRouteData(firstRoute, tokenIn, bridgeAsset);
-                strategy.secondaryRouteData = _encodeReverseRouteData(secondReverseRoute, tokenOut, bridgeAsset);
-                strategy.expectedGas =
-                    _estimateGasForProtocol(firstRoute.protocol) +
-                    _estimateGasForProtocol(secondReverseRoute.protocol);
-                return strategy;
-            }
-
-            // Try reverse-reverse
-            if (firstReverseRoute.isConfigured && secondReverseRoute.isConfigured) {
-                strategy.routeType = RouteType.Bridge;
-                strategy.protocol = firstReverseRoute.protocol;
-                strategy.bridgeAsset = bridgeAsset;
-                strategy.primaryRouteData = _encodeReverseRouteData(firstReverseRoute, bridgeAsset, tokenIn);
-                strategy.secondaryRouteData = _encodeReverseRouteData(secondReverseRoute, tokenOut, bridgeAsset);
-                strategy.expectedGas =
-                    _estimateGasForProtocol(firstReverseRoute.protocol) +
-                    _estimateGasForProtocol(secondReverseRoute.protocol);
-                return strategy;
-            }
+        // Create placeholder min amounts (will be calculated later)
+        uint256[] memory placeholderMinAmounts = new uint256[](protocols.length);
+        for (uint256 i = 0; i < protocols.length; i++) {
+            placeholderMinAmounts[i] = 0; // Will be calculated in _calculateMultiStepMinAmounts
         }
 
-        revert NoRouteFound();
+        strategy.primaryRouteData = abi.encode(path, protocols, routeDatas, placeholderMinAmounts);
+        strategy.expectedGas = _calculateMultiStepGas(protocols);
+        return strategy;
     }
 
     /**
@@ -2468,11 +2415,10 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
     // ============================================================================
     // VIEW FUNCTIONS
     // ============================================================================
-    // ADD these new multicall functions
 
     /**
-     * @notice Generate complete execution plan for multi-step swaps
-     * @dev Returns all steps with pre-calculated amounts for atomic execution
+     * @notice Generate complete execution plan for multi-step swaps (enhanced)
+     * @dev Now handles any number of hops discovered by route finding
      */
     function getCompleteMultiStepPlan(
         address tokenIn,
@@ -2485,21 +2431,63 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         if (tokenIn == tokenOut) revert SameTokenSwap();
         if (_isCrossCategory(tokenIn, tokenOut)) revert NoRouteFound();
 
-        // Find strategy
-        ExecutionStrategy memory strategy = _findOptimalExecutionStrategy(tokenIn, tokenOut, amountIn, 0);
+        // Find multi-hop route
+        (
+            bool found,
+            address[] memory path,
+            Protocol[] memory protocols,
+            bytes[] memory routeDatas
+        ) = _findMultiHopRoute(tokenIn, tokenOut, MAX_MULTI_STEP_OPERATIONS);
 
-        if (strategy.protocol == Protocol.MultiStep) {
-            plan = _buildMultiStepPlan(strategy, amountIn, recipient);
-            totalQuotedAmount = plan.expectedFinalAmount;
-        } else if (strategy.routeType == RouteType.Bridge) {
-            plan = _buildBridgePlan(strategy, tokenIn, tokenOut, amountIn, recipient);
-            totalQuotedAmount = plan.expectedFinalAmount;
-        } else {
-            // Single step - wrap in plan for consistency
-            plan = _wrapSingleStepPlan(strategy, tokenIn, tokenOut, amountIn, recipient);
-            totalQuotedAmount = plan.expectedFinalAmount;
+        if (!found) {
+            revert NoRouteFound();
         }
 
+        // Calculate all minimum amounts
+        uint256[] memory minAmounts;
+        (minAmounts, totalQuotedAmount) = _calculateMultiStepMinAmounts(path, amountIn, protocols, routeDatas);
+
+        // Build execution steps
+        plan.steps = new SwapStep[](protocols.length);
+        uint256 currentAmount = amountIn;
+
+        for (uint256 i = 0; i < protocols.length; i++) {
+            SwapStep memory step;
+            step.tokenIn = path[i];
+            step.tokenOut = path[i + 1];
+            step.amountIn = currentAmount;
+            step.minAmountOut = minAmounts[i];
+            step.protocol = protocols[i];
+
+            // Generate execution data for this step
+            ExecutionStrategy memory stepStrategy = ExecutionStrategy({
+                routeType: RouteType.Direct,
+                protocol: protocols[i],
+                bridgeAsset: address(0),
+                primaryRouteData: routeDatas[i],
+                secondaryRouteData: "",
+                expectedGas: _estimateGasForProtocol(protocols[i])
+            });
+
+            (step.data, step.target) = _generateDirectExecutionData(
+                stepStrategy,
+                step.tokenIn,
+                step.tokenOut,
+                step.amountIn,
+                step.minAmountOut,
+                recipient
+            );
+
+            step.value = (step.tokenIn == ETH_ADDRESS) ? step.amountIn : 0;
+            plan.steps[i] = step;
+
+            // Update for next iteration - use quote as input for next step
+            if (i < protocols.length - 1) {
+                currentAmount = (minAmounts[i] * 10050) / 10000; // Add 0.5% buffer
+            }
+        }
+
+        plan.expectedFinalAmount = totalQuotedAmount;
         emit MultiStepPlanGenerated(tokenIn, tokenOut, amountIn, plan.steps.length);
     }
 
@@ -2688,31 +2676,363 @@ contract FinalAutoRouting is AccessControl, ReentrancyGuard, Pausable {
         plan.expectedFinalAmount = quotedAmount;
     }
     /**
-     * @notice Check if a route exists
+     * @notice Check if a route exists (enhanced with multi-hop support)
+     * @dev Now discovers routes up to MAX_MULTI_STEP_OPERATIONS hops
      */
     function hasRoute(address tokenIn, address tokenOut) external view returns (bool) {
-        // Create route keys once
+        if (tokenIn == tokenOut) return false;
+        if (_isCrossCategory(tokenIn, tokenOut)) return false;
+
+        // Try to find multi-hop route
+        (bool found, , , ) = _findMultiHopRoute(tokenIn, tokenOut, MAX_MULTI_STEP_OPERATIONS);
+        return found;
+    }
+
+    /**
+     * @notice Find multi-hop route with iterative breadth-first search
+     * @dev More reliable than recursive approach - finds shortest paths first
+     */
+    function _findMultiHopRoute(
+        address tokenIn,
+        address tokenOut,
+        uint256 maxHops
+    )
+        internal
+        view
+        returns (bool found, address[] memory path, Protocol[] memory protocols, bytes[] memory routeDatas)
+    {
+        if (maxHops == 0 || tokenIn == tokenOut) return (false, new address[](0), new Protocol[](0), new bytes[](0));
+
+        // Try direct route first (1-hop)
         bytes32 directKey = keccak256(abi.encodePacked(tokenIn, tokenOut));
         bytes32 reverseKey = keccak256(abi.encodePacked(tokenOut, tokenIn));
 
-        // Single storage read for each
-        if (routes[directKey].isConfigured || routes[reverseKey].isConfigured) {
-            return true;
+        if (routes[directKey].isConfigured) {
+            path = new address[](2);
+            path[0] = tokenIn;
+            path[1] = tokenOut;
+
+            protocols = new Protocol[](1);
+            protocols[0] = routes[directKey].protocol;
+
+            routeDatas = new bytes[](1);
+            routeDatas[0] = routes[directKey].routeData;
+
+            return (true, path, protocols, routeDatas);
         }
 
-        // Check bridge route
-        address bridgeAsset = _getBridgeAsset(tokenIn, tokenOut);
-        if (bridgeAsset != address(0)) {
-            bytes32 firstKey = keccak256(abi.encodePacked(tokenIn, bridgeAsset));
-            bytes32 secondKey = keccak256(abi.encodePacked(bridgeAsset, tokenOut));
+        if (routes[reverseKey].isConfigured) {
+            path = new address[](2);
+            path[0] = tokenIn;
+            path[1] = tokenOut;
 
-            // Single check with AND operation
-            return routes[firstKey].isConfigured && routes[secondKey].isConfigured;
+            protocols = new Protocol[](1);
+            protocols[0] = routes[reverseKey].protocol;
+
+            routeDatas = new bytes[](1);
+            routeDatas[0] = _encodeReverseRouteData(routes[reverseKey], tokenOut, tokenIn);
+
+            return (true, path, protocols, routeDatas);
         }
 
-        return false;
+        // Try 2-hop routes (bridge routes)
+        if (maxHops >= 2) {
+            address[] memory intermediates = _getIntermediateTokens(tokenIn, tokenOut);
+
+            for (uint256 i = 0; i < intermediates.length; i++) {
+                address bridge = intermediates[i];
+
+                // Check first leg: tokenIn -> bridge
+                bool firstLegExists = false;
+                Protocol firstProtocol;
+                bytes memory firstRouteData;
+
+                bytes32 firstDirectKey = keccak256(abi.encodePacked(tokenIn, bridge));
+                bytes32 firstReverseKey = keccak256(abi.encodePacked(bridge, tokenIn));
+
+                if (routes[firstDirectKey].isConfigured) {
+                    firstLegExists = true;
+                    firstProtocol = routes[firstDirectKey].protocol;
+                    firstRouteData = routes[firstDirectKey].routeData;
+                } else if (routes[firstReverseKey].isConfigured) {
+                    firstLegExists = true;
+                    firstProtocol = routes[firstReverseKey].protocol;
+                    firstRouteData = _encodeReverseRouteData(routes[firstReverseKey], bridge, tokenIn);
+                }
+
+                if (!firstLegExists) continue;
+
+                // Check second leg: bridge -> tokenOut
+                bool secondLegExists = false;
+                Protocol secondProtocol;
+                bytes memory secondRouteData;
+
+                bytes32 secondDirectKey = keccak256(abi.encodePacked(bridge, tokenOut));
+                bytes32 secondReverseKey = keccak256(abi.encodePacked(tokenOut, bridge));
+
+                if (routes[secondDirectKey].isConfigured) {
+                    secondLegExists = true;
+                    secondProtocol = routes[secondDirectKey].protocol;
+                    secondRouteData = routes[secondDirectKey].routeData;
+                } else if (routes[secondReverseKey].isConfigured) {
+                    secondLegExists = true;
+                    secondProtocol = routes[secondReverseKey].protocol;
+                    secondRouteData = _encodeReverseRouteData(routes[secondReverseKey], tokenOut, bridge);
+                }
+
+                if (secondLegExists) {
+                    // Found 2-hop route!
+                    path = new address[](3);
+                    path[0] = tokenIn;
+                    path[1] = bridge;
+                    path[2] = tokenOut;
+
+                    protocols = new Protocol[](2);
+                    protocols[0] = firstProtocol;
+                    protocols[1] = secondProtocol;
+
+                    routeDatas = new bytes[](2);
+                    routeDatas[0] = firstRouteData;
+                    routeDatas[1] = secondRouteData;
+
+                    return (true, path, protocols, routeDatas);
+                }
+            }
+        }
+
+        // Try 3-hop routes if needed
+        if (maxHops >= 3) {
+            return _find3HopRoute(tokenIn, tokenOut);
+        }
+
+        return (false, new address[](0), new Protocol[](0), new bytes[](0));
     }
 
+    /**
+     * @notice Find 3-hop routes specifically
+     * @dev Handles cases like STETH->WETH->RETH->OSETH
+     */
+    function _find3HopRoute(
+        address tokenIn,
+        address tokenOut
+    )
+        internal
+        view
+        returns (bool found, address[] memory path, Protocol[] memory protocols, bytes[] memory routeDatas)
+    {
+        address[] memory intermediates = _getIntermediateTokens(tokenIn, tokenOut);
+
+        // Try each intermediate as first bridge
+        for (uint256 i = 0; i < intermediates.length; i++) {
+            address firstBridge = intermediates[i];
+
+            // Check if tokenIn -> firstBridge exists
+            if (!_hasDirectRoute(tokenIn, firstBridge)) continue;
+
+            // Try each intermediate as second bridge
+            for (uint256 j = 0; j < intermediates.length; j++) {
+                address secondBridge = intermediates[j];
+                if (secondBridge == firstBridge) continue;
+
+                // Check the 3-hop path: tokenIn -> firstBridge -> secondBridge -> tokenOut
+                if (_hasDirectRoute(firstBridge, secondBridge) && _hasDirectRoute(secondBridge, tokenOut)) {
+                    // Build the path
+                    path = new address[](4);
+                    path[0] = tokenIn;
+                    path[1] = firstBridge;
+                    path[2] = secondBridge;
+                    path[3] = tokenOut;
+
+                    protocols = new Protocol[](3);
+                    routeDatas = new bytes[](3);
+
+                    // Get route data for each leg
+                    (protocols[0], routeDatas[0]) = _getRouteInfo(tokenIn, firstBridge);
+                    (protocols[1], routeDatas[1]) = _getRouteInfo(firstBridge, secondBridge);
+                    (protocols[2], routeDatas[2]) = _getRouteInfo(secondBridge, tokenOut);
+
+                    return (true, path, protocols, routeDatas);
+                }
+            }
+        }
+
+        return (false, new address[](0), new Protocol[](0), new bytes[](0));
+    }
+
+    /**
+     * @notice Check if direct route exists (either direction)
+     */
+    function _hasDirectRoute(address tokenA, address tokenB) internal view returns (bool) {
+        bytes32 directKey = keccak256(abi.encodePacked(tokenA, tokenB));
+        bytes32 reverseKey = keccak256(abi.encodePacked(tokenB, tokenA));
+        return routes[directKey].isConfigured || routes[reverseKey].isConfigured;
+    }
+
+    /**
+     * @notice Get route protocol and data (handles reverse routes)
+     */
+    function _getRouteInfo(
+        address tokenA,
+        address tokenB
+    ) internal view returns (Protocol protocol, bytes memory routeData) {
+        bytes32 directKey = keccak256(abi.encodePacked(tokenA, tokenB));
+        bytes32 reverseKey = keccak256(abi.encodePacked(tokenB, tokenA));
+
+        if (routes[directKey].isConfigured) {
+            protocol = routes[directKey].protocol;
+            routeData = routes[directKey].routeData;
+        } else if (routes[reverseKey].isConfigured) {
+            protocol = routes[reverseKey].protocol;
+            routeData = _encodeReverseRouteData(routes[reverseKey], tokenB, tokenA);
+        } else {
+            revert("No route found");
+        }
+    }
+    /**
+     * @notice Recursive multi-hop route discovery
+     * @dev Core algorithm for finding complex routes
+     */
+    function _findMultiHopRouteRecursive(
+        address tokenIn,
+        address tokenOut,
+        uint256 remainingHops,
+        address[] memory visitedTokens
+    )
+        internal
+        view
+        returns (bool found, address[] memory path, Protocol[] memory protocols, bytes[] memory routeDatas)
+    {
+        if (remainingHops == 0) return (false, new address[](0), new Protocol[](0), new bytes[](0));
+
+        // Prevent infinite loops
+        for (uint256 i = 0; i < visitedTokens.length; i++) {
+            if (visitedTokens[i] == tokenIn) {
+                return (false, new address[](0), new Protocol[](0), new bytes[](0));
+            }
+        }
+
+        // Get potential intermediate tokens based on asset type
+        address[] memory intermediateTokens = _getIntermediateTokens(tokenIn, tokenOut);
+
+        for (uint256 i = 0; i < intermediateTokens.length; i++) {
+            address intermediate = intermediateTokens[i];
+
+            // Skip if already visited
+            bool alreadyVisited = false;
+            for (uint256 j = 0; j < visitedTokens.length; j++) {
+                if (visitedTokens[j] == intermediate) {
+                    alreadyVisited = true;
+                    break;
+                }
+            }
+            if (alreadyVisited) continue;
+
+            // Check if there's a direct route from tokenIn to intermediate
+            bytes32 directKey = keccak256(abi.encodePacked(tokenIn, intermediate));
+            bytes32 reverseKey = keccak256(abi.encodePacked(intermediate, tokenIn));
+
+            if (!routes[directKey].isConfigured && !routes[reverseKey].isConfigured) continue;
+
+            // Create new visited array
+            address[] memory newVisited = new address[](visitedTokens.length + 1);
+            for (uint256 j = 0; j < visitedTokens.length; j++) {
+                newVisited[j] = visitedTokens[j];
+            }
+            newVisited[visitedTokens.length] = tokenIn;
+
+            // Recursively find route from intermediate to tokenOut
+            (
+                bool foundNext,
+                address[] memory nextPath,
+                Protocol[] memory nextProtocols,
+                bytes[] memory nextRouteDatas
+            ) = _findMultiHopRouteRecursive(intermediate, tokenOut, remainingHops - 1, newVisited);
+
+            if (foundNext) {
+                // Construct complete path
+                path = new address[](nextPath.length + 1);
+                path[0] = tokenIn;
+                for (uint256 j = 0; j < nextPath.length; j++) {
+                    path[j + 1] = nextPath[j];
+                }
+
+                // Construct protocols
+                protocols = new Protocol[](nextProtocols.length + 1);
+                protocols[0] = routes[directKey].isConfigured
+                    ? routes[directKey].protocol
+                    : routes[reverseKey].protocol;
+                for (uint256 j = 0; j < nextProtocols.length; j++) {
+                    protocols[j + 1] = nextProtocols[j];
+                }
+
+                // Construct route datas
+                routeDatas = new bytes[](nextRouteDatas.length + 1);
+                if (routes[directKey].isConfigured) {
+                    routeDatas[0] = routes[directKey].routeData;
+                } else {
+                    routeDatas[0] = _encodeReverseRouteData(routes[reverseKey], intermediate, tokenIn);
+                }
+                for (uint256 j = 0; j < nextRouteDatas.length; j++) {
+                    routeDatas[j + 1] = nextRouteDatas[j];
+                }
+
+                return (true, path, protocols, routeDatas);
+            }
+        }
+
+        return (false, new address[](0), new Protocol[](0), new bytes[](0));
+    }
+
+    /**
+     * @notice Get potential intermediate tokens (simplified and more reliable)
+     */
+    function _getIntermediateTokens(address tokenIn, address tokenOut) internal view returns (address[] memory) {
+        AssetType typeIn = tokenIn == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenIn];
+        AssetType typeOut = tokenOut == ETH_ADDRESS ? AssetType.ETH_LST : assetTypes[tokenOut];
+
+        // Cross-category not allowed
+        if (typeIn != typeOut && !(typeIn == AssetType.ETH_LST && typeOut == AssetType.ETH_LST)) {
+            return new address[](0);
+        }
+
+        if (typeIn == AssetType.ETH_LST) {
+            // ETH LST tokens - return all major tokens except input/output
+            address[] memory allCandidates = new address[](6);
+            allCandidates[0] = address(WETH); // Most liquid
+            allCandidates[1] = ETH_ADDRESS; // Native ETH
+            allCandidates[2] = RETH; // rETH
+            allCandidates[3] = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84; // stETH
+            allCandidates[4] = 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704; // cbETH
+            allCandidates[5] = OSETH; // osETH
+
+            // Filter out input and output tokens
+            uint256 validCount = 0;
+            for (uint256 i = 0; i < allCandidates.length; i++) {
+                if (allCandidates[i] != tokenIn && allCandidates[i] != tokenOut) {
+                    validCount++;
+                }
+            }
+
+            address[] memory result = new address[](validCount);
+            uint256 resultIndex = 0;
+            for (uint256 i = 0; i < allCandidates.length; i++) {
+                if (allCandidates[i] != tokenIn && allCandidates[i] != tokenOut) {
+                    result[resultIndex++] = allCandidates[i];
+                }
+            }
+
+            return result;
+        } else if (typeIn == AssetType.BTC_WRAPPED) {
+            // BTC wrapped tokens - use WBTC as bridge
+            if (tokenIn != WBTC && tokenOut != WBTC) {
+                address[] memory result = new address[](1);
+                result[0] = WBTC;
+                return result;
+            }
+        }
+
+        return new address[](0);
+    }
     /**
      * @notice Get route configuration
      */

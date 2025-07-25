@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../../src/interfaces/IFinalAutoRouting.sol";
-import "../../src/FinalAutoRouting.sol";
 import "forge-std/console.sol";
 
 contract MockLiquidTokenManager is ReentrancyGuard {
@@ -18,20 +17,27 @@ contract MockLiquidTokenManager is ReentrancyGuard {
 
     // Constants
     address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address constant STETH_ADDRESS = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
 
-    // Events
-    event SwapAndStake(
-        address indexed user,
+    // Events - matching the interface
+    event FinalAutoRoutingUpdated(address indexed oldFAR, address indexed newFAR, address updatedBy);
+    event AssetsSwappedAndStakedToNode(
+        uint256 indexed nodeId,
+        IERC20[] assetsSwapped,
+        uint256[] amountsSwapped,
+        IERC20[] assetsStaked,
+        uint256[] amountsStaked,
+        address indexed initiator
+    );
+    event SwapExecuted(
         address indexed tokenIn,
         address indexed tokenOut,
         uint256 amountIn,
         uint256 amountOut,
-        uint256 nodeId
+        uint256 indexed nodeId
     );
 
-    event MultiStepSwapExecuted(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, uint256 steps);
-
-    // Structs
+    // Structs - matching the interface
     struct Init {
         address strategyManager;
         address delegationManager;
@@ -45,6 +51,13 @@ contract MockLiquidTokenManager is ReentrancyGuard {
         address weth;
     }
 
+    struct NodeAllocationWithSwap {
+        uint256 nodeId;
+        IERC20[] assetsToSwap;
+        uint256[] amountsToSwap;
+        IERC20[] assetsToStake;
+    }
+
     // Initialize
     function initialize(Init memory init) external {
         require(address(finalAutoRouting) == address(0), "Already initialized");
@@ -52,7 +65,263 @@ contract MockLiquidTokenManager is ReentrancyGuard {
         weth = init.weth;
     }
 
-    // Main swap and stake function
+    // Admin function to update FAR
+    function updateFinalAutoRouting(address newFinalAutoRouting) external {
+        require(newFinalAutoRouting != address(0), "Zero address");
+        address oldFAR = address(finalAutoRouting);
+        finalAutoRouting = IFinalAutoRouting(newFinalAutoRouting);
+        emit FinalAutoRoutingUpdated(oldFAR, newFinalAutoRouting, msg.sender);
+    }
+
+    // Main functions following the 3-function pattern from your colleague
+
+    /// @notice Swaps multiple assets and stakes them to multiple nodes
+    function swapAndStakeAssetsToNodes(NodeAllocationWithSwap[] calldata allocationsWithSwaps) external nonReentrant {
+        for (uint256 i = 0; i < allocationsWithSwaps.length; i++) {
+            NodeAllocationWithSwap memory allocationWithSwap = allocationsWithSwaps[i];
+            _swapAndStakeAssetsToNode(
+                allocationWithSwap.nodeId,
+                allocationWithSwap.assetsToSwap,
+                allocationWithSwap.amountsToSwap,
+                allocationWithSwap.assetsToStake
+            );
+        }
+    }
+
+    /// @notice Swaps assets and stakes them to a single node
+    function swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) external nonReentrant {
+        _swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
+    }
+
+    /// @dev Called by `swapAndStakeAssetsToNode` and `swapAndStakeAssetsToNodes`
+    /// @dev Flow: MockLTM >> DEX >> MockLTM (using FAR for routing data)
+    function _swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
+    ) internal {
+        uint256 assetsLength = assetsToStake.length;
+
+        require(assetsLength == assetsToSwap.length, "Assets length mismatch");
+        require(assetsLength == amountsToSwap.length, "Amounts length mismatch");
+        require(address(finalAutoRouting) != address(0), "FAR not configured");
+
+        console.log("\n[MockLTM] SwapAndStakeAssetsToNode called:");
+        console.log("Node ID:", nodeId);
+        console.log("Assets to swap:", assetsLength);
+
+        // Mock: Simulate bringing assets from LiquidToken
+        console.log("[MockLTM] Simulating asset retrieval from LiquidToken...");
+
+        uint256[] memory amountsToStake = new uint256[](assetsLength);
+
+        // Swap using FAR - for every tokenIn swap to corresponding tokenOut
+        for (uint256 i = 0; i < assetsLength; i++) {
+            address tokenIn = address(assetsToSwap[i]);
+            address tokenOut = address(assetsToStake[i]);
+            uint256 amountIn = amountsToSwap[i];
+
+            console.log("\n[MockLTM] Processing swap", i + 1, "of", assetsLength);
+            console.log("Token In:", tokenIn);
+            console.log("Token Out:", tokenOut);
+            console.log("Amount In:", amountIn);
+
+            require(amountIn > 0, "Invalid swap amount");
+
+            if (tokenIn == tokenOut) {
+                // No swap needed, direct stake
+                amountsToStake[i] = amountIn;
+                console.log("Direct stake (no swap needed)");
+            } else {
+                // Execute swap using FAR
+                uint256 actualAmountOut = _executeFARSwapPlan(tokenIn, tokenOut, amountIn);
+                amountsToStake[i] = actualAmountOut;
+
+                emit SwapExecuted(tokenIn, tokenOut, amountIn, actualAmountOut, nodeId);
+            }
+        }
+
+        // Mock: Simulate transferring assets to node and staking
+        console.log("\n[MockLTM] Simulating asset transfer to node and staking...");
+        for (uint256 i = 0; i < assetsLength; i++) {
+            address tokenAddress = address(assetsToStake[i]);
+            uint256 amount = amountsToStake[i];
+
+            // Mock staking - just track the balance
+            mockStakedBalances[nodeId][tokenAddress] += amount;
+
+            console.log("Staked", amount, "of");
+            console.log(tokenAddress, "to node", nodeId);
+        }
+
+        emit AssetsSwappedAndStakedToNode(
+            nodeId,
+            assetsToSwap,
+            amountsToSwap,
+            assetsToStake,
+            amountsToStake,
+            msg.sender
+        );
+
+        console.log("[MockLTM] SwapAndStakeAssetsToNode completed successfully");
+    }
+
+    /// @dev Executes a swap plan from FAR following MockLTM >> DEX >> MockLTM flow
+    function _executeFARSwapPlan(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) internal returns (uint256 actualAmountOut) {
+        console.log("\n[MockLTM] Executing FAR swap plan:");
+        console.log("Token In:", tokenIn);
+        console.log("Token Out:", tokenOut);
+        console.log("Amount In:", amountIn);
+
+        // Execute step by step with dynamic planning
+        return _executeStepByStepSwap(tokenIn, tokenOut, amountIn);
+    }
+
+    /// @dev Execute swap step by step, regenerating execution data for each step
+    function _executeStepByStepSwap(address tokenIn, address tokenOut, uint256 amountIn) internal returns (uint256) {
+        console.log("\n[MockLTM] Starting step-by-step swap execution");
+
+        address currentTokenIn = tokenIn;
+        uint256 currentAmountIn = amountIn;
+        uint256 totalSteps = 0;
+
+        // Handle stETH input precision issue at the beginning
+        if (currentTokenIn == STETH_ADDRESS) {
+            // Measure actual balance after transfer
+            uint256 actualBalance = IERC20(STETH_ADDRESS).balanceOf(address(this));
+            console.log("stETH requested:", currentAmountIn);
+            console.log("stETH actual balance:", actualBalance);
+
+            // Use actual balance if it's less than requested (precision loss)
+            if (actualBalance < currentAmountIn) {
+                currentAmountIn = actualBalance;
+                console.log("Adjusted stETH amount to:", currentAmountIn);
+            }
+        }
+
+        while (currentTokenIn != tokenOut) {
+            totalSteps++;
+            console.log("\n[MockLTM] Step", totalSteps);
+            console.log("Current token:", currentTokenIn);
+            console.log("Target token:", tokenOut);
+            console.log("Current amount:", currentAmountIn);
+
+            // CRITICAL: Always get fresh execution plan with current amount
+            // This ensures the swap data matches the actual amount we have
+            (uint256 quotedOutput, IFinalAutoRouting.MultiStepExecutionPlan memory plan) = finalAutoRouting
+                .getCompleteMultiStepPlan(currentTokenIn, tokenOut, currentAmountIn, address(this));
+
+            require(plan.steps.length > 0, "No steps in plan");
+
+            // Use the first step
+            IFinalAutoRouting.SwapStep memory firstStep = plan.steps[0];
+
+            console.log("Next token:", firstStep.tokenOut);
+            console.log("Expected out:", firstStep.minAmountOut);
+            console.log("Target contract:", firstStep.target);
+
+            // Execute the step
+            uint256 actualOut = _executeStep(
+                firstStep.tokenIn,
+                firstStep.tokenOut,
+                firstStep.amountIn,
+                firstStep.minAmountOut,
+                firstStep.data,
+                firstStep.target,
+                firstStep.value
+            );
+
+            console.log("Actual output:", actualOut);
+
+            // Update for next iteration
+            currentTokenIn = firstStep.tokenOut;
+            currentAmountIn = actualOut;
+
+            // Safety check to prevent infinite loops
+            require(totalSteps <= 5, "Too many steps");
+        }
+
+        console.log("[MockLTM] Step-by-step swap completed successfully");
+        return currentAmountIn;
+    }
+
+    /// @dev Execute a single swap step
+    function _executeStep(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory swapData,
+        address targetContract,
+        uint256 value
+    ) internal returns (uint256) {
+        console.log("\n[MockLTM] Executing step:");
+        console.log("Token in:", tokenIn);
+        console.log("Token out:", tokenOut);
+        console.log("Amount in:", amountIn);
+        console.log("Min amount out:", minAmountOut);
+        console.log("Target:", targetContract);
+
+        // Approve tokens if needed
+        if (tokenIn != ETH_ADDRESS && targetContract != address(0)) {
+            IERC20(tokenIn).safeApprove(targetContract, 0);
+            IERC20(tokenIn).safeApprove(targetContract, amountIn);
+            console.log("Approved tokens for swap");
+        }
+
+        // Get balance before swap
+        uint256 balanceBefore = _getBalance(tokenOut);
+        console.log("Balance before:", balanceBefore);
+
+        // Execute the swap
+        (bool success, bytes memory result) = targetContract.call{value: value}(swapData);
+
+        if (!success) {
+            if (result.length > 0) {
+                assembly {
+                    let size := mload(result)
+                    revert(add(32, result), size)
+                }
+            } else {
+                revert("Swap execution failed");
+            }
+        }
+
+        // Reset approval
+        if (tokenIn != ETH_ADDRESS && targetContract != address(0)) {
+            IERC20(tokenIn).safeApprove(targetContract, 0);
+        }
+
+        // Calculate actual output
+        uint256 balanceAfter = _getBalance(tokenOut);
+        uint256 actualOutput = balanceAfter - balanceBefore;
+
+        console.log("Balance after:", balanceAfter);
+        console.log("Actual output:", actualOutput);
+
+        // Verify minimum output with tolerance for rebasing tokens
+        if (tokenOut == STETH_ADDRESS) {
+            // For stETH, allow 2 wei tolerance
+            require(actualOutput + 2 >= minAmountOut, "Step output too low");
+        } else {
+            require(actualOutput >= minAmountOut, "Step output too low");
+        }
+
+        console.log("Step executed successfully");
+        return actualOutput;
+    }
+
+    // Legacy function for backward compatibility (if needed)
     function swapAndStake(
         address tokenIn,
         address targetAsset,
@@ -63,12 +332,14 @@ contract MockLiquidTokenManager is ReentrancyGuard {
         require(amountIn > 0, "Zero amount");
         require(tokenIn != targetAsset, "Same token");
 
-        console.log("\n[LTM] SwapAndStake called:");
-        console.log("  Token In:", tokenIn);
-        console.log("  Target Asset:", targetAsset);
-        console.log("  Amount In:", amountIn);
-        console.log("  Node ID:", nodeId);
-        console.log("  Min Amount Out:", minAmountOut);
+        // Convert to new format
+        IERC20[] memory assetsToSwap = new IERC20[](1);
+        uint256[] memory amountsToSwap = new uint256[](1);
+        IERC20[] memory assetsToStake = new IERC20[](1);
+
+        assetsToSwap[0] = IERC20(tokenIn);
+        amountsToSwap[0] = amountIn;
+        assetsToStake[0] = IERC20(targetAsset);
 
         // Handle ETH input
         if (tokenIn == ETH_ADDRESS) {
@@ -78,110 +349,25 @@ contract MockLiquidTokenManager is ReentrancyGuard {
             IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        // Get execution plan from FAR
-        console.log("\n[LTM] Getting execution plan from FAR...");
-        (uint256 quotedOutput, IFinalAutoRouting.MultiStepExecutionPlan memory plan) = finalAutoRouting
-            .getCompleteMultiStepPlan(tokenIn, targetAsset, amountIn, address(this));
-
-        console.log("[LTM] FAR returned plan with", plan.steps.length, "steps");
-        console.log("[LTM] Expected final amount:", plan.expectedFinalAmount);
-
-        // Validate minimum output
-        require(plan.expectedFinalAmount >= minAmountOut, "Insufficient output");
-
-        // Execute the swap plan
-        uint256 finalAmount = _executeSwapPlan(plan, tokenIn);
-
-        console.log("[LTM] Swap execution complete. Final amount:", finalAmount);
-
-        // Mock staking - just track the balance
-        mockStakedBalances[nodeId][targetAsset] += finalAmount;
-
-        emit SwapAndStake(msg.sender, tokenIn, targetAsset, amountIn, finalAmount, nodeId);
-
-        if (plan.steps.length > 1) {
-            emit MultiStepSwapExecuted(tokenIn, targetAsset, amountIn, finalAmount, plan.steps.length);
-        }
+        _swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
     }
 
-    function _executeSwapPlan(
-        IFinalAutoRouting.MultiStepExecutionPlan memory plan,
-        address initialTokenIn
-    ) internal returns (uint256) {
-        uint256 currentBalance;
-
-        for (uint256 i = 0; i < plan.steps.length; i++) {
-            IFinalAutoRouting.SwapStep memory step = plan.steps[i];
-
-            console.log("\n[LTM] Executing step", i + 1, "of", plan.steps.length);
-            console.log("  From:", step.tokenIn);
-            console.log("  To:", step.tokenOut);
-            console.log("  Amount:", step.amountIn);
-            console.log("  Min out:", step.minAmountOut);
-            console.log("  Protocol:", uint8(step.protocol));
-
-            // Handle approvals
-            if (step.tokenIn != ETH_ADDRESS && step.target != address(0)) {
-                IERC20(step.tokenIn).safeApprove(step.target, 0);
-                IERC20(step.tokenIn).safeApprove(step.target, step.amountIn);
-                console.log("  Approved", step.amountIn, "to", step.target);
-            }
-
-            // Get balance before
-            uint256 balanceBefore = _getBalance(step.tokenOut);
-
-            // Execute based on protocol
-            if (step.protocol == IFinalAutoRouting.Protocol.UniswapV3) {
-                _executeUniswapV3(step);
-            } else if (step.protocol == IFinalAutoRouting.Protocol.Curve) {
-                _executeCurve(step);
-            } else if (step.protocol == IFinalAutoRouting.Protocol.DirectMint) {
-                _executeDirectMint(step);
-            } else {
-                revert("Unsupported protocol in mock");
-            }
-
-            // Get balance after
-            currentBalance = _getBalance(step.tokenOut) - balanceBefore;
-            console.log("  Output received:", currentBalance);
-
-            // Validate output
-            require(currentBalance >= step.minAmountOut, "Step output too low");
-        }
-
-        return currentBalance;
-    }
-
-    function _executeUniswapV3(IFinalAutoRouting.SwapStep memory step) internal {
-        // For mock, just simulate the swap with expected output
-        console.log("  [Mock] Executing UniswapV3 swap");
-
-        (bool success, ) = step.target.call{value: step.value}(step.data);
-        require(success, "UniswapV3 swap failed");
-    }
-
-    function _executeCurve(IFinalAutoRouting.SwapStep memory step) internal {
-        // For mock, simulate Curve swap
-        console.log("  [Mock] Executing Curve swap");
-
-        (bool success, ) = step.target.call{value: step.value}(step.data);
-        require(success, "Curve swap failed");
-    }
-
-    function _executeDirectMint(IFinalAutoRouting.SwapStep memory step) internal {
-        // For mock, simulate direct mint
-        console.log("  [Mock] Executing DirectMint");
-
-        (bool success, ) = step.target.call{value: step.value}(step.data);
-        require(success, "DirectMint failed");
-    }
-
+    // Helper to get token balance
     function _getBalance(address token) internal view returns (uint256) {
         if (token == ETH_ADDRESS) {
             return address(this).balance;
         } else {
             return IERC20(token).balanceOf(address(this));
         }
+    }
+
+    // Getter functions for testing
+    function getStakedBalance(uint256 nodeId, address token) external view returns (uint256) {
+        return mockStakedBalances[nodeId][token];
+    }
+
+    function getFinalAutoRouting() external view returns (address) {
+        return address(finalAutoRouting);
     }
 
     // Receive ETH
