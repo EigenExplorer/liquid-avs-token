@@ -548,9 +548,52 @@ contract LiquidTokenManager is
     receive() external payable {
         // Accept ETH from DEX swaps
     }
+    /// @dev OUT OF SCOPE FOR V1
+    /**
+    function undelegateNodes(
+        uint256[] calldata nodeIds
+    ) external onlyRole(STRATEGY_CONTROLLER_ROLE) {
+        // Fetch and add all asset balances from the node to queued balances
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById((nodeIds[i]));
 
+            // Convert supportedTokens to IERC20Upgradeable array
+            IERC20Upgradeable[]
+                memory upgradeableTokens = new IERC20Upgradeable[](
+                    supportedTokens.length
+                );
+            for (uint256 j = 0; j < supportedTokens.length; j++) {
+                upgradeableTokens[j] = IERC20Upgradeable(
+                    address(supportedTokens[j])
+                );
+            }
+
+            liquidToken.creditQueuedAssetBalances(
+                upgradeableTokens,
+                _getAllStakedAssetBalancesNode(node)
+            );
+
+            node.undelegate();
+        }
+    }
+
+    function _getAllStakedAssetBalancesNode(
+        IStakerNode node
+    ) internal view returns (uint256[] memory) {
+        uint256[] memory balances = new uint256[](supportedTokens.length);
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            IStrategy strategy = tokenStrategies[supportedTokens[i]];
+            if (address(strategy) == address(0)) {
+                revert StrategyNotFound(address(supportedTokens[i]));
+            }
+            balances[i] = strategy.userUnderlyingView(address(node));
+        }
+        return balances;
+    }
+    
+    */
     // ------------------------------------------------------------------------------
-    // Getter functions (exactly as in initial version)
+    // Getter functions
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc ILiquidTokenManager
