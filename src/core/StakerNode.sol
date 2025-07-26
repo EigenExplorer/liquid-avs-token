@@ -9,6 +9,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
@@ -32,7 +33,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Role identifier for delegation operations
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
 
-    /// @notice LAT contracts
+    /// @notice v1 LAT contracts
     IStakerNodeCoordinator public coordinator;
 
     uint256 public id;
@@ -103,24 +104,76 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         }
     }
 
-    /// @dev OUT OF SCOPE FOR V1
-    /** 
-    function undelegate()
-        public
-        override
-        onlyRole(STAKER_NODES_DELEGATOR_ROLE)
-    {
-        address currentOperator = operatorDelegation;
-        if (currentOperator == address(0)) revert NodeIsNotDelegated();
+    /// @inheritdoc IStakerNode
+    function withdrawAssets(
+        IStrategy[] calldata strategies,
+        uint256[] calldata shareAmounts
+    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) returns (bytes32) {
+        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+        if (strategies.length != shareAmounts.length) revert LengthMismatch(strategies.length, shareAmounts.length);
+
+        IDelegationManagerTypes.QueuedWithdrawalParams[]
+            memory requestParams = new IDelegationManagerTypes.QueuedWithdrawalParams[](1);
+
+        requestParams[0] = IDelegationManagerTypes.QueuedWithdrawalParams({
+            strategies: strategies,
+            depositShares: shareAmounts,
+            __deprecated_withdrawer: address(this)
+        });
 
         IDelegationManager delegationManager = coordinator.delegationManager();
-        delegationManager.undelegate(address(this));
+        return delegationManager.queueWithdrawals(requestParams)[0];
+    }
 
-        emit UndelegatedFromOperator(currentOperator);
+    /// @inheritdoc IStakerNode
+    function completeWithdrawals(
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens
+    ) external override onlyRole(LIQUID_TOKEN_MANAGER_ROLE) returns (IERC20[] memory) {
+        uint256 arrayLength = withdrawals.length;
+        bool[] memory receiveAsTokensArray = new bool[](arrayLength);
+
+        for (uint256 i = 0; i < arrayLength; i++) {
+            receiveAsTokensArray[i] = true;
+        }
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        delegationManager.completeQueuedWithdrawals(withdrawals, tokens, receiveAsTokensArray);
+
+        uint256 totalTokenCount = 0;
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalTokenCount += tokens[i].length;
+        }
+
+        IERC20[] memory receivedTokens = new IERC20[](totalTokenCount);
+        uint256 uniqueCount = 0;
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            for (uint256 j = 0; j < tokens[i].length; j++) {
+                IERC20 token = tokens[i][j];
+                uint256 balance = token.balanceOf(address(this));
+                if (balance > 0) {
+                    token.safeTransfer(msg.sender, balance);
+                    receivedTokens[uniqueCount++] = token;
+                }
+            }
+        }
+
+        return receivedTokens;
+    }
+
+    /// @inheritdoc IStakerNode
+    function undelegate() external override onlyRole(STAKER_NODES_DELEGATOR_ROLE) returns (bytes32[] memory) {
+        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        bytes32[] memory withdrawalRoots = delegationManager.undelegate(address(this));
+
+        emit UndelegatedFromOperator(operatorDelegation);
 
         operatorDelegation = address(0);
+        return withdrawalRoots;
     }
-    */
 
     // ------------------------------------------------------------------------------
     // Getter functions

@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
@@ -10,6 +11,7 @@ import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISigna
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
 import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
+import {IWithdrawalManager} from "./IWithdrawalManager.sol";
 
 /// @title ILiquidTokenManager Interface
 /// @notice Interface for the LiquidTokenManager contract
@@ -25,6 +27,7 @@ interface ILiquidTokenManager {
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
         ITokenRegistryOracle tokenRegistryOracle;
+        IWithdrawalManager withdrawalManager;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -32,19 +35,38 @@ interface ILiquidTokenManager {
 
     /// @notice Supported token information
     /// @param decimals The number of decimals for the token
-    /// @param pricePerUnit The price per unit of the token
-    /// @param volatilityThreshold The allowed change ratio for price update, in 1e18. Must be 0 (disabled) or >= 0.01 * 1e18 and <= 1 * 1e18.
+    /// @param pricePerUnit The price per unit of the token in the unit of account (18 decimals)
+    /// @param volatilityThreshold The allowed change ratio for price update, in 1e18. Must be 0 (disabled) or >= 0.01 * 1e18 and <= 1 * 1e18
     struct TokenInfo {
         uint256 decimals;
         uint256 pricePerUnit;
         uint256 volatilityThreshold;
     }
 
-    /// @notice Represents an allocation of assets to a node
+    /// @notice Represents an allocation of assets to a node for staking
+    /// @param nodeId The ID of the staker node to allocate assets to
+    /// @param assets Array of token addresses to stake
+    /// @param amounts Array of amounts to stake for each asset
     struct NodeAllocation {
         uint256 nodeId;
         IERC20[] assets;
         uint256[] amounts;
+    }
+
+    /// @notice Represents an intent to make a certain amount of funds available by calling staker node withdrawals
+    /// @dev Redemptions are made by the manager to:
+    ///     i. settle a set of user withdrawal requests
+    ///     ii. partially withdraw a set of assets from nodes
+    ///     iii. undelegate nodes from Operators (and hence withdraw all assets)
+    /// @param requestIds Array of request IDs associated with this redemption
+    /// @param withdrawalRoots Array of withdrawal roots from EigenLayer withdrawals
+    /// @param receiver Contract that will receive the withdrawn funds (`LiquidToken` or `WithdrawalManager`)
+    struct Redemption {
+        bytes32[] requestIds;
+        bytes32[] withdrawalRoots;
+        IERC20[] assets;
+        uint256[] withdrawableAmounts;
+        address receiver;
     }
 
     // ============================================================================
@@ -95,6 +117,45 @@ interface ILiquidTokenManager {
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
+    /// @notice Emitted when a redemption is created due to node undelegation
+    /// @dev `assets` is a 1D array since each withdrawal will have only 1 corresponding asset
+    event RedemptionCreatedForNodeUndelegation(
+        bytes32 redemptionId,
+        bytes32 requestId,
+        bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[] assets,
+        uint256 nodeId
+    );
+
+    /// @notice Emitted when a redemption is created to settle user withdrawals
+    event RedemptionCreatedForUserWithdrawals(
+        bytes32 redemptionId,
+        bytes32[] requestIds,
+        bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[][] assets,
+        uint256[] nodeIds
+    );
+
+    /// @notice Emitted when a redemption is created for rebalancing
+    event RedemptionCreatedForRebalancing(
+        bytes32 redemptionId,
+        bytes32[] requestIds,
+        bytes32[] withdrawalRoots,
+        IDelegationManagerTypes.Withdrawal[] withdrawals,
+        IERC20[][] assets,
+        uint256[] nodeIds
+    );
+
+    /// @notice Emitted when a redemption is successfuly completed
+    event RedemptionCompleted(
+        bytes32 indexed redemptionId,
+        IERC20[] assets,
+        uint256[] requestedAmounts,
+        uint256[] receivedAmounts
+    );
+
     // ============================================================================
     // CUSTOM ERRORS
     // ============================================================================
@@ -102,8 +163,17 @@ interface ILiquidTokenManager {
     /// @notice Error for zero address
     error ZeroAddress();
 
+    /// @notice Error for zero amount
+    error ZeroAmount();
+
     /// @notice Error for invalid staking amount
     error InvalidStakingAmount(uint256 amount);
+
+    /// @notice Error thrown when an operation requires more tokens than are available
+    error InsufficientBalance(IERC20 asset, uint256 required, uint256 available);
+
+    /// @notice Error thrown when funds would be sent to an invalid receiver
+    error InvalidReceiver(address receiver);
 
     /// @notice Error when asset already exists
     error TokenExists(address asset);
@@ -149,6 +219,15 @@ interface ILiquidTokenManager {
 
     /// @notice Error thrown when a price update fails due to change exceeding the volatility threshold
     error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
+
+    /// @notice Error thrown when a withdrawal root doesn't match the expected value
+    error InvalidWithdrawalRoot();
+
+    /// @notice Error thrown when redemption amounts for user withdrawal settlement are not enough up to make the withdrawal requests whole
+    error RequestsDoNotSettle(address asset, uint256 expectedAmount, uint256 requestAmount);
+
+    /// @notice Error thrown when a withdrawal is missing when attempting redemption completion
+    error WithdrawalMissing(bytes32 withdrawalRoot);
 
     // ============================================================================
     // FUNCTIONS
@@ -216,12 +295,65 @@ interface ILiquidTokenManager {
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegateNodes(
-        uint256[] calldata nodeIds
+    /// @notice Undelegates a set of staker nodes from their operators and creates a set of redemptions
+    /// @dev A separate redemption is created for each node, since undelegating a node on EL queues one withdrawal per strategy
+    /// @dev On completing a redemption created from undelegation, the funds are transferred to `LiquidToken`
+    /// @dev Caller should index the `RedemptionCreatedForNodeUndelegation` event to have the required data for redemption completion
+    /// @param nodeIds The IDs of the staker nodes
+    function undelegateNodes(uint256[] calldata nodeIds) external;
+
+    /// @notice Allows rebalancing of funds by partially withdrawing assets from nodes and creating a redemption
+    /// @dev On completing the redemption, the funds are transferred to `LiquidToken`
+    /// @dev Caller should index the `RedemptionCreatedForRebalancing` event to have the required data for redemption completion
+    /// @dev Strategies are always withdrawn into their respective assets, they are never converted
+    /// @param nodeIds The ID of the nodes to withdraw from
+    /// @param assets The array of assets to withdraw for each node
+    /// @param amounts The amounts for `assets`
+    function withdrawNodeAssets(
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata assets,
+        uint256[][] calldata amounts
     ) external;
-    */
+
+    /// @notice Enables a set of user withdrawal requests to be fulfillable after 14 days by the respective users
+    /// @dev The caller can allocate funds from both, unstaked and staked balances in the proportion it deems fit
+    /// @dev This function accepts a settlement only if it will actually allocate enough funds per token to settle ALL user withdrawal requests
+    /// @dev If any part of the settlement draws from unstaked balances, funds are transferred right away from `LiquidToken` to `WithdrawalManager`
+    /// @dev If any part of the settlement draws from staked balances, a redemption is created on completion of which, funds are transferred to `WithdrawalManager`
+    /// @dev Caller should index the `RedemptionCreatedForUserWithdrawals` event to have the required data for redemption completion
+    /// @dev The function is not concerned with actual amounts withdrawn from EL after slashing, if any
+    /// @dev The caller is free to decide how much of slashing loss to pass on to users --  more allocation from unstaked balances => less slashing impact
+    /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
+    /// @param ltAssets The assets that will be drawn from `LiquidToken`
+    /// @param ltAmounts The amounts for `ltAssets`
+    /// @param nodeIds The node IDs from which funds will be withdrawn
+    /// @param elAssets The array of assets to be withdrawn for a given node from EigenLayer
+    /// @param elAmounts The amounts for `elAssets`
+    function settleUserWithdrawals(
+        bytes32[] calldata requestIds,
+        IERC20[] calldata ltAssets,
+        uint256[] calldata ltAmounts,
+        uint256[] calldata nodeIds,
+        IERC20[][] calldata elAssets,
+        uint256[][] calldata elAmounts
+    ) external;
+
+    /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
+    /// @dev The caller must make sure every `withdrawals[i][]` aligns with the corresponding `nodeIds[i]`
+    /// @dev The caller must make sure every `assets[i][j][]` aligns with the corresponding `withdrawals[i][]`
+    /// @dev The burden is on the caller to keep track of (node, withdrawal, asset) pairs via corresponding events emitted during redemption creation
+    /// @dev A redemption can never be partially completed, ie. if any withdrawal is missing from the input, the fn will revert
+    /// @dev Fn will revert if a withdrawal that wasn't part of the redemption is provided as input
+    /// @param redemptionId The ID of the redemption to complete
+    /// @param nodeIds The set of all node IDs concerned with the redemption
+    /// @param withdrawals The set of EL Withdrawal structs concerned with the redemption per node ID
+    /// @param assets The set of assets redeemed by the corresponding EL withdrawals
+    function completeRedemption(
+        bytes32 redemptionId,
+        uint256[] calldata nodeIds,
+        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
+        IERC20[][][] calldata assets
+    ) external;
 
     /// @notice Retrieves the list of supported tokens
     /// @return An array of addresses of supported tokens
@@ -236,6 +368,11 @@ interface ILiquidTokenManager {
     /// @param asset Asset to get the strategy for
     /// @return IStrategy Interface for the corresponding strategy
     function getTokenStrategy(IERC20 asset) external view returns (IStrategy);
+
+    /// @notice Returns the set of strategies for a given set of assets
+    /// @param assets Set of assets to get the strategies for
+    /// @return IStrategy Interfaces for the corresponding set of strategies
+    function getTokensStrategies(IERC20[] memory assets) external view returns (IStrategy[] memory);
 
     /// @notice Returns the token for a given strategy
     /// @param strategy Strategy to get the token for
