@@ -22,6 +22,9 @@ async function dailyResponsibilities(retryCount = 0) {
 
         await refreshDeployment()
         await stakeUnstakedAssets()
+        // TODO: trigger withdrawal redemption completions
+        // TODO: trigger node undelegations/delegations
+        // TODO: trigger el reward claims
 
         console.timeEnd('[Manager] Completed all responsibilities in')
     } catch (error) {
