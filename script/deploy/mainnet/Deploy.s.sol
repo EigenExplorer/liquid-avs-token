@@ -278,7 +278,7 @@ contract Deploy is Script, Test {
         liquidTokenManagerProxyDeployBlock = block.number;
         liquidTokenManagerProxyDeployTimestamp = block.timestamp;
         liquidTokenManager = LiquidTokenManager(
-            address(new TransparentUpgradeableProxy(address(liquidTokenManagerImpl), address(proxyAdmin), ""))
+            payable(address(new TransparentUpgradeableProxy(address(liquidTokenManagerImpl), address(proxyAdmin), "")))
         );
 
         stakerNodeCoordinatorProxyDeployBlock = block.number;
