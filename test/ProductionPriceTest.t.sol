@@ -216,22 +216,21 @@ contract RealWorldTokenPriceTest is BaseTest {
             })
         );
 
-        /* 6. osETH - curve
+        //6. osETH - balancerv2
         mainnetTokens.push(
             TokenConfig({
                 name: "osETH",
-                token: 0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9,
+                token: 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38,
                 strategy: 0x57ba429517c3473B6d34CA9aCd56c0e735b94c02,
                 decimals: 18,
                 volatilityThreshold: 5e16,
-                sourceType: 2, // curve
-                primarySource: 0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d,
+                sourceType: 5, // bv2
+                primarySource: 0xDACf5Fa19b1f720111609043ac67A9818262850c,
                 needsArg: 0,
                 fallbackSource: 0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9,
                 fallbackSelector: 0x18977a59
             })
         );
-        */
 
         // 7. ETHx - Curve
         mainnetTokens.push(
@@ -265,7 +264,7 @@ contract RealWorldTokenPriceTest is BaseTest {
             })
         );
 
-        // 9. lsETH - Protocol
+        // 9. lsETH - univ3
         mainnetTokens.push(
             TokenConfig({
                 name: "lsETH",
@@ -273,8 +272,8 @@ contract RealWorldTokenPriceTest is BaseTest {
                 strategy: 0xAe60d8180437b5C34bB956822ac2710972584473,
                 decimals: 18,
                 volatilityThreshold: 5e16,
-                sourceType: 3, // Protocol
-                primarySource: 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549,
+                sourceType: 4, // univ3
+                primarySource: 0x5d811a9d059dDAB0C18B385ad3b752f734f011cB,
                 needsArg: 1,
                 fallbackSource: 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549,
                 fallbackSelector: 0xf79c3f02
@@ -313,7 +312,7 @@ contract RealWorldTokenPriceTest is BaseTest {
             })
         );
 
-        // 12. wbETH - Protocol
+        // 12. wbETH - Protocol>>Curve
         mainnetTokens.push(
             TokenConfig({
                 name: "wbETH",
@@ -321,8 +320,8 @@ contract RealWorldTokenPriceTest is BaseTest {
                 strategy: 0x7CA911E83dabf90C90dD3De5411a10F1A6112184,
                 decimals: 18,
                 volatilityThreshold: 5e16,
-                sourceType: 3, // Protocol
-                primarySource: 0xa2E3356610840701BDf5611a53974510Ae27E2e1,
+                sourceType: 2, // Protocol
+                primarySource: 0xBfAb6FA95E0091ed66058ad493189D2cB29385E6,
                 needsArg: 0,
                 fallbackSource: 0xa2E3356610840701BDf5611a53974510Ae27E2e1,
                 fallbackSelector: 0x3ba0b9a9
@@ -344,7 +343,7 @@ contract RealWorldTokenPriceTest is BaseTest {
                 fallbackSelector: 0x07a2d13a
             })
         );
-        // 15. unibtc - proctol
+        // 15. unibtc - univ3
         mainnetTokens.push(
             TokenConfig({
                 name: "uniBTC",
@@ -352,8 +351,8 @@ contract RealWorldTokenPriceTest is BaseTest {
                 strategy: 0x505241696AB63FaEC03ed7893246DE52EB1A8CFF,
                 decimals: 8,
                 volatilityThreshold: 5e16,
-                sourceType: 3, // protocl
-                primarySource: 0x861d15F8a4059cb918bD6F3670adAEB1220B298f,
+                sourceType: 4, // univ3
+                primarySource: 0x2912868c7aC9b14dD3F64ec1713cbd8f44A17dfd,
                 needsArg: 0,
                 fallbackSource: 0x861d15F8a4059cb918bD6F3670adAEB1220B298f,
                 fallbackSelector: 0x50d25bcd
@@ -1881,5 +1880,349 @@ contract RealWorldTokenPriceTest is BaseTest {
         }
 
         vm.stopPrank();
+    }
+
+    //new test cases add for our new primary sources :
+    function testBalancerV2GetPrice() public {
+        console.log("\n======= Testing Balancer V2 Price Fetching =======");
+
+        // Test osETH (Balancer V2)
+        address osETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
+        address osETHPool = 0xDACf5Fa19b1f720111609043ac67A9818262850c;
+
+        console.log("Testing osETH Balancer V2 price...");
+        console.log("Token: %s", osETH);
+        console.log("Pool: %s", osETHPool);
+
+        vm.startPrank(admin);
+
+        try tokenRegistryOracle.getTokenPrice(osETH) returns (uint256 price) {
+            assertTrue(price > 0, "osETH Balancer V2 price should be positive");
+            assertTrue(price >= 0.5e18 && price <= 2e18, "osETH price should be reasonable (0.5-2 ETH)");
+            console.log("osETH price: %s ETH", _formatEther(price));
+            console.log("osETH Balancer V2 price fetch: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("osETH Balancer V2 price fetch FAILED: %s", reason);
+            assertTrue(false, "osETH Balancer V2 price should work");
+        }
+
+        vm.stopPrank();
+    }
+
+    function testUniswapV3GetPrice() public {
+        console.log("\n======= Testing Uniswap V3 Price Fetching =======");
+
+        // Test lsETH (Uniswap V3) - ETH LST, priced in ETH
+        address lsETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
+        address lsETHPool = 0x5d811a9d059dDAB0C18B385ad3b752f734f011cB;
+
+        console.log("Testing lsETH Uniswap V3 price...");
+        console.log("Token: %s", lsETH);
+        console.log("Pool: %s", lsETHPool);
+
+        vm.startPrank(admin);
+
+        try tokenRegistryOracle.getTokenPrice(lsETH) returns (uint256 price) {
+            assertTrue(price > 0, "lsETH Uniswap V3 price should be positive");
+            assertTrue(price >= 0.5e18 && price <= 2e18, "lsETH price should be reasonable (0.5-2 ETH)");
+            console.log("lsETH price: %s ETH", _formatEther(price));
+            console.log("lsETH Uniswap V3 price fetch: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("lsETH Uniswap V3 price fetch FAILED: %s", reason);
+            assertTrue(false, "lsETH Uniswap V3 price should work");
+        }
+
+        // Test uniBTC (Uniswap V3) - BTC LST, priced in WBTC (8 decimals but normalized to 18)
+        address uniBTC = 0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
+        address uniBTCPool = 0x2912868c7aC9b14dD3F64ec1713cbd8f44A17dfd;
+
+        console.log("\nTesting uniBTC Uniswap V3 price...");
+        console.log("Token: %s", uniBTC);
+        console.log("Pool: %s", uniBTCPool);
+
+        try tokenRegistryOracle.getTokenPrice(uniBTC) returns (uint256 price) {
+            assertTrue(price > 0, "uniBTC Uniswap V3 price should be positive");
+            // uniBTC should be around 0.8-1.2 WBTC (reasonable range for BTC LST)
+            assertTrue(price >= 0.8e18 && price <= 1.2e18, "uniBTC price should be reasonable (0.8-1.2 WBTC)");
+            console.log("uniBTC price: %s WBTC", _formatEther(price));
+            console.log("uniBTC Uniswap V3 price fetch: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("uniBTC Uniswap V3 price fetch FAILED: %s", reason);
+            assertTrue(false, "uniBTC Uniswap V3 price should work");
+        }
+
+        vm.stopPrank();
+    }
+
+    function testUniswapV3PoolIntegration() public {
+        console.log("\n======= Testing Uniswap V3 Pool Integration =======");
+
+        address lsETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
+        address lsETHPool = 0x5d811a9d059dDAB0C18B385ad3b752f734f011cB;
+
+        vm.startPrank(admin);
+
+        // Test lsETH/WETH pool - ETH LST priced in ETH
+        try tokenRegistryOracle.getTokenPrice(lsETH) returns (uint256 price) {
+            console.log("Successfully fetched lsETH price via Uniswap V3 pool");
+            console.log("Pool address: %s", lsETHPool);
+            console.log("Token price: %s ETH", _formatEther(price));
+
+            // Verify price is reasonable for lsETH (ETH LST)
+            assertTrue(price > 0.5e18, "lsETH price should be > 0.5 ETH");
+            assertTrue(price < 2e18, "lsETH price should be < 2 ETH");
+
+            console.log("lsETH Uniswap V3 pool integration: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("lsETH Uniswap V3 pool integration FAILED: %s", reason);
+            assertTrue(false, "lsETH Uniswap V3 pool integration should work");
+        }
+
+        // Test uniBTC/WBTC pool - BTC LST priced in WBTC
+        address uniBTC = 0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
+        address uniBTCPool = 0x2912868c7aC9b14dD3F64ec1713cbd8f44A17dfd;
+
+        try tokenRegistryOracle.getTokenPrice(uniBTC) returns (uint256 price) {
+            console.log("Successfully fetched uniBTC price via Uniswap V3 pool");
+            console.log("Pool address: %s", uniBTCPool);
+            console.log("Token price: %s WBTC", _formatEther(price));
+
+            // Verify price is reasonable for uniBTC (BTC LST priced in WBTC)
+            assertTrue(price > 0.8e18, "uniBTC price should be > 0.8 WBTC");
+            assertTrue(price < 1.2e18, "uniBTC price should be < 1.2 WBTC");
+
+            console.log("uniBTC Uniswap V3 pool integration: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("uniBTC Uniswap V3 pool integration FAILED: %s", reason);
+            assertTrue(false, "uniBTC Uniswap V3 pool integration should work");
+        }
+
+        vm.stopPrank();
+    }
+
+    function testUniswapV3PriceConsistency() public {
+        console.log("\n======= Testing Uniswap V3 Price Consistency =======");
+
+        address lsETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
+        address uniBTC = 0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
+
+        vm.startPrank(admin);
+
+        // Test lsETH consistency (ETH LST)
+        console.log("Testing lsETH price consistency...");
+        uint256[] memory lsETHPrices = new uint256[](3);
+
+        for (uint i = 0; i < 3; i++) {
+            try tokenRegistryOracle.getTokenPrice(lsETH) returns (uint256 price) {
+                lsETHPrices[i] = price;
+                console.log("lsETH price attempt %s: %s ETH", i + 1, _formatEther(price));
+            } catch {
+                assertTrue(false, "lsETH price should be consistent");
+            }
+        }
+
+        // Check lsETH consistency (prices should be very similar)
+        for (uint i = 1; i < 3; i++) {
+            uint256 diff = lsETHPrices[i] > lsETHPrices[0]
+                ? lsETHPrices[i] - lsETHPrices[0]
+                : lsETHPrices[0] - lsETHPrices[i];
+            uint256 tolerance = lsETHPrices[0] / 1000; // 0.1% tolerance
+            assertTrue(diff <= tolerance, "lsETH prices should be consistent");
+        }
+
+        console.log("lsETH Uniswap V3 price consistency: PASSED");
+
+        // Test uniBTC consistency (BTC LST)
+        console.log("Testing uniBTC price consistency...");
+        uint256[] memory uniBTCPrices = new uint256[](3);
+
+        for (uint i = 0; i < 3; i++) {
+            try tokenRegistryOracle.getTokenPrice(uniBTC) returns (uint256 price) {
+                uniBTCPrices[i] = price;
+                console.log("uniBTC price attempt %s: %s WBTC", i + 1, _formatEther(price));
+            } catch {
+                assertTrue(false, "uniBTC price should be consistent");
+            }
+        }
+
+        // Check uniBTC consistency (prices should be very similar)
+        for (uint i = 1; i < 3; i++) {
+            uint256 diff = uniBTCPrices[i] > uniBTCPrices[0]
+                ? uniBTCPrices[i] - uniBTCPrices[0]
+                : uniBTCPrices[0] - uniBTCPrices[i];
+            uint256 tolerance = uniBTCPrices[0] / 1000; // 0.1% tolerance
+            assertTrue(diff <= tolerance, "uniBTC prices should be consistent");
+        }
+
+        console.log("uniBTC Uniswap V3 price consistency: PASSED");
+
+        vm.stopPrank();
+    }
+
+    function testBalancerV2Configuration() public {
+        console.log("\n======= Testing Balancer V2 Configuration =======");
+
+        address osETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
+
+        vm.startPrank(admin);
+
+        // Get token configuration
+        (
+            uint8 primaryType,
+            uint8 needsArg,
+            uint16 reserved,
+            address primarySource,
+            address fallbackSource,
+            bytes4 fallbackFn
+        ) = tokenRegistryOracle.tokenConfigs(osETH);
+
+        // Verify configuration
+        assertEq(primaryType, 5, "osETH should have Balancer V2 source type");
+        assertEq(needsArg, 0, "osETH should not need args for primary");
+        assertEq(primarySource, 0xDACf5Fa19b1f720111609043ac67A9818262850c, "osETH primary source should be correct");
+        assertEq(fallbackSource, 0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9, "osETH fallback source should be correct");
+        assertEq(uint32(fallbackFn), uint32(0x18977a59), "osETH fallback selector should be correct");
+
+        console.log("osETH Balancer V2 configuration:");
+        console.log(" Primary type: %s (Balancer V2)", primaryType);
+        console.log(" Primary source: %s", primarySource);
+        console.log(" Fallback source: %s", fallbackSource);
+        console.log(" Fallback selector: %s", uint32(fallbackFn));
+
+        vm.stopPrank();
+    }
+
+    function testUniswapV3Configuration() public {
+        console.log("\n======= Testing Uniswap V3 Configuration =======");
+
+        address lsETH = 0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549;
+        address uniBTC = 0x004E9C3EF86bc1ca1f0bB5C7662861Ee93350568;
+
+        vm.startPrank(admin);
+
+        // Test lsETH configuration
+        (
+            uint8 primaryType1,
+            uint8 needsArg1,
+            uint16 reserved1,
+            address primarySource1,
+            address fallbackSource1,
+            bytes4 fallbackFn1
+        ) = tokenRegistryOracle.tokenConfigs(lsETH);
+
+        assertEq(primaryType1, 4, "lsETH should have Uniswap V3 source type");
+        assertEq(needsArg1, 1, "lsETH should need args for primary");
+        assertEq(primarySource1, 0x5d811a9d059dDAB0C18B385ad3b752f734f011cB, "lsETH primary source should be correct");
+
+        console.log("lsETH Uniswap V3 configuration:");
+        console.log(" Primary type: %s (Uniswap V3)", primaryType1);
+        console.log(" Needs arg: %s", needsArg1);
+        console.log(" Primary source: %s", primarySource1);
+        console.log(" Fallback source: %s", fallbackSource1);
+
+        // Test uniBTC configuration
+        (
+            uint8 primaryType2,
+            uint8 needsArg2,
+            uint16 reserved2,
+            address primarySource2,
+            address fallbackSource2,
+            bytes4 fallbackFn2
+        ) = tokenRegistryOracle.tokenConfigs(uniBTC);
+
+        assertEq(primaryType2, 4, "uniBTC should have Uniswap V3 source type");
+        assertEq(needsArg2, 0, "uniBTC should not need args for primary");
+        assertEq(primarySource2, 0x2912868c7aC9b14dD3F64ec1713cbd8f44A17dfd, "uniBTC primary source should be correct");
+
+        console.log("uniBTC Uniswap V3 configuration:");
+        console.log(" Primary type: %s (Uniswap V3)", primaryType2);
+        console.log(" Needs arg: %s", needsArg2);
+        console.log(" Primary source: %s", primarySource2);
+        console.log(" Fallback source: %s", fallbackSource2);
+
+        vm.stopPrank();
+    }
+
+    function testBalancerV2PriceConsistency() public {
+        console.log("\n======= Testing Balancer V2 Price Consistency =======");
+
+        address osETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
+
+        vm.startPrank(admin);
+
+        // Get price multiple times to test consistency
+        uint256[] memory prices = new uint256[](3);
+
+        for (uint i = 0; i < 3; i++) {
+            try tokenRegistryOracle.getTokenPrice(osETH) returns (uint256 price) {
+                prices[i] = price;
+                console.log("osETH price attempt %s: %s ETH", i + 1, _formatEther(price));
+            } catch {
+                assertTrue(false, "osETH price should be consistent");
+            }
+        }
+
+        // Check consistency (prices should be very similar)
+        for (uint i = 1; i < 3; i++) {
+            uint256 diff = prices[i] > prices[0] ? prices[i] - prices[0] : prices[0] - prices[i];
+            uint256 tolerance = prices[0] / 1000; // 0.1% tolerance
+            assertTrue(diff <= tolerance, "osETH prices should be consistent");
+        }
+
+        console.log("osETH Balancer V2 price consistency: PASSED");
+
+        vm.stopPrank();
+    }
+
+    function testBalancerV2PoolIntegration() public {
+        console.log("\n======= Testing Balancer V2 Pool Integration =======");
+
+        address osETH = 0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38;
+        address osETHPool = 0xDACf5Fa19b1f720111609043ac67A9818262850c;
+
+        vm.startPrank(admin);
+
+        // Test that we can get the poolId from the pool
+        try tokenRegistryOracle.getTokenPrice(osETH) returns (uint256 price) {
+            console.log("Successfully fetched osETH price via Balancer V2 pool");
+            console.log("Pool address: %s", osETHPool);
+            console.log("Token price: %s ETH", _formatEther(price));
+
+            // Verify price is reasonable for osETH
+            assertTrue(price > 0.5e18, "osETH price should be > 0.5 ETH");
+            assertTrue(price < 2e18, "osETH price should be < 2 ETH");
+
+            console.log("Balancer V2 pool integration: SUCCESS");
+        } catch Error(string memory reason) {
+            console.log("Balancer V2 pool integration FAILED: %s", reason);
+            assertTrue(false, "Balancer V2 pool integration should work");
+        }
+
+        vm.stopPrank();
+    }
+
+    // Helper function to format ether values
+    function _formatEther(uint256 value) internal pure returns (string memory) {
+        return string(abi.encodePacked(_toString(value / 1e18), ".", _toString((value % 1e18) / 1e14)));
+    }
+
+    // Helper function to convert uint to string
+    function _toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 }

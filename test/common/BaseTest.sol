@@ -35,6 +35,8 @@ contract BaseTest is Test {
     uint8 constant SOURCE_TYPE_CURVE = 2;
     uint8 constant SOURCE_TYPE_PROTOCOL = 3;
     uint8 constant SOURCE_TYPE_NATIVE = 0;
+    uint8 constant SOURCE_TYPE_UNISWAP_V3_TWAP = 4;
+    uint8 constant SOURCE_TYPE_BALANCER_V2 = 5;
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;

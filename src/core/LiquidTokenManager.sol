@@ -128,7 +128,7 @@ contract LiquidTokenManager is
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
-        if (!isNative && (primaryType < 1 || primaryType > 3)) revert InvalidPriceSource();
+        if (!isNative && (primaryType < 1 || primaryType > 5)) revert InvalidPriceSource();
         if (!isNative && primarySource == address(0)) revert InvalidPriceSource();
         if (!isNative) {
             tokenRegistryOracle.configureToken(
