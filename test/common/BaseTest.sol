@@ -392,7 +392,7 @@ contract BaseTest is Test {
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
-            lstSwapRouter: ILSTSwapRouter(address(0)), // Will be set later via updateLstSwapRouter
+            lstSwapRouter: mockLSTSwapRouter, // Use mock LSR for testing
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)

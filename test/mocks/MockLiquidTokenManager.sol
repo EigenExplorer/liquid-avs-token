@@ -18,6 +18,9 @@ contract MockLiquidTokenManager is ReentrancyGuard {
     // Constants
     address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address constant STETH_ADDRESS = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+    
+    // Errors
+    error ETHNotSupportedAsDirectToken(address token);
 
     // Events - matching the interface
     event LSTSwapRouterUpdated(address indexed oldLSR, address indexed newLSR, address updatedBy);
@@ -115,10 +118,10 @@ contract MockLiquidTokenManager is ReentrancyGuard {
         // Validate that ETH is not used as direct tokenIn or tokenOut (only as bridge asset)
         for (uint256 i = 0; i < assetsLength; i++) {
             if (address(assetsToSwap[i]) == ETH_ADDRESS) {
-                revert ILiquidTokenManager.ETHNotSupportedAsDirectToken(address(assetsToSwap[i]));
+                revert ETHNotSupportedAsDirectToken(address(assetsToSwap[i]));
             }
             if (address(assetsToStake[i]) == ETH_ADDRESS) {
-                revert ILiquidTokenManager.ETHNotSupportedAsDirectToken(address(assetsToStake[i]));
+                revert ETHNotSupportedAsDirectToken(address(assetsToStake[i]));
             }
         }
 
