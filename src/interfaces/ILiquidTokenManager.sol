@@ -6,7 +6,8 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
-
+import {ILSTSwapRouter} from "../interfaces/ILSTSwapRouter.sol";
+import {IWETH} from "../interfaces/IWETH.sol";
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
 import {ITokenRegistryOracle} from "./ITokenRegistryOracle.sol";
@@ -25,6 +26,7 @@ interface ILiquidTokenManager {
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
         ITokenRegistryOracle tokenRegistryOracle;
+        ILSTSwapRouter lstSwapRouter;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -45,6 +47,14 @@ interface ILiquidTokenManager {
         uint256 nodeId;
         IERC20[] assets;
         uint256[] amounts;
+    }
+
+    /// @notice Represents an allocation of assets to a node with swap
+    struct NodeAllocationWithSwap {
+        uint256 nodeId;
+        IERC20[] assetsToSwap;
+        uint256[] amountsToSwap;
+        IERC20[] assetsToStake;
     }
 
     // ============================================================================
@@ -94,6 +104,28 @@ interface ILiquidTokenManager {
 
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
+
+    /// @notice Emitted when LSTSwapRouter contract is updated
+    event LSTSwapRouterUpdated(address indexed oldLSR, address indexed newLSR, address updatedBy);
+
+    /// @notice Emitted when assets are swapped and staked to a node
+    event AssetsSwappedAndStakedToNode(
+        uint256 indexed nodeId,
+        IERC20[] assetsSwapped,
+        uint256[] amountsSwapped,
+        IERC20[] assetsStaked,
+        uint256[] amountsStaked,
+        address indexed initiator
+    );
+
+    /// @notice Emitted when a swap is executed
+    event SwapExecuted(
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 indexed nodeId
+    );
 
     // ============================================================================
     // CUSTOM ERRORS
@@ -150,6 +182,9 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when a price update fails due to change exceeding the volatility threshold
     error VolatilityThresholdHit(IERC20 token, uint256 changeRatio);
 
+    /// @notice Error thrown when ETH is used as tokenIn or tokenOut (only allowed as bridge asset)
+    error ETHNotSupportedAsDirectToken(address token);
+
     // ============================================================================
     // FUNCTIONS
     // ============================================================================
@@ -157,6 +192,10 @@ interface ILiquidTokenManager {
     /// @notice Initializes the LiquidTokenManager contract
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
+
+    /// @notice Updates the LSTSwapRouter contract address
+    /// @param newLSTSwapRouter The new LSR contract address
+    function updateLSTSwapRouter(address newLSTSwapRouter) external;
 
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
@@ -216,12 +255,21 @@ interface ILiquidTokenManager {
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegateNodes(
-        uint256[] calldata nodeIds
+    /// @notice Swaps multiple assets and stakes them to multiple nodes
+    /// @param allocationsWithSwaps Array of node allocations with swap instructions
+    function swapAndStakeAssetsToNodes(NodeAllocationWithSwap[] calldata allocationsWithSwaps) external;
+
+    /// @notice Swaps assets and stakes them to a single node
+    /// @param nodeId The node ID to stake to
+    /// @param assetsToSwap Array of input tokens to swap from
+    /// @param amountsToSwap Array of amounts to swap
+    /// @param assetsToStake Array of output tokens to receive and stake
+    function swapAndStakeAssetsToNode(
+        uint256 nodeId,
+        IERC20[] memory assetsToSwap,
+        uint256[] memory amountsToSwap,
+        IERC20[] memory assetsToStake
     ) external;
-    */
 
     /// @notice Retrieves the list of supported tokens
     /// @return An array of addresses of supported tokens
@@ -307,4 +355,8 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
+
+    /// @notice Returns the LSTSwapRouter contract
+    /// @return The ILSTSwapRouter interface
+    function LSTSwapRouter() external view returns (ILSTSwapRouter);
 }
