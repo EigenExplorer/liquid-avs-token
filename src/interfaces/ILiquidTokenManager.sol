@@ -26,6 +26,7 @@ interface ILiquidTokenManager {
         IDelegationManager delegationManager;
         IStakerNodeCoordinator stakerNodeCoordinator;
         ITokenRegistryOracle tokenRegistryOracle;
+        ILSTSwapRouter lstSwapRouter;
         address initialOwner;
         address strategyController;
         address priceUpdater;

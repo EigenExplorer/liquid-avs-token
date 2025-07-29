@@ -20,6 +20,7 @@ import {TokenRegistryOracle} from "../../../src/utils/TokenRegistryOracle.sol";
 import {ITokenRegistryOracle} from "../../../src/interfaces/ITokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../../../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../../../src/interfaces/ILiquidTokenManager.sol";
+import {ILSTSwapRouter} from "../../../src/interfaces/ILSTSwapRouter.sol";
 import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
@@ -327,6 +328,7 @@ contract Deploy is Script, Test {
                 delegationManager: IDelegationManager(delegationManager),
                 stakerNodeCoordinator: stakerNodeCoordinator,
                 tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+                lstSwapRouter: ILSTSwapRouter(address(0)), // Will be set later
                 initialOwner: msg.sender, // burner, will transfer to admin
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)

@@ -16,6 +16,13 @@ interface ILSTSwapRouter {
         Bridge // 2
     }
 
+    enum AssetType {
+        STABLE, // 0
+        ETH_LST, // 1
+        BTC_WRAPPED, // 2
+        VOLATILE // 3
+    }
+
     struct UniswapV3Route {
         address pool;
         uint24 fee;
@@ -108,5 +115,5 @@ interface ILSTSwapRouter {
         address tokenOut,
         uint256 amountIn,
         address recipient
-    ) external returns (uint256 quotedOutput, MultiStepExecutionPlan memory plan);
+    ) external returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan);
 }

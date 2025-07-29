@@ -4,107 +4,7 @@ pragma solidity ^0.8.27;
 import "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
-// Mock interfaces for LSR integration
-interface ILSTSwapRouter {
-    enum Protocol {
-        UniswapV3,
-        Curve,
-        DirectMint,
-        MultiHop,
-        MultiStep
-    }
-
-    struct SwapStep {
-        address tokenIn;
-        address tokenOut;
-        uint256 amountIn;
-        uint256 minAmountOut;
-        address target;
-        bytes data;
-        uint256 value;
-        Protocol protocol;
-    }
-
-    struct MultiStepExecutionPlan {
-        SwapStep[] steps;
-        uint256 expectedFinalAmount;
-    }
-
-    struct ExecutionStep {
-        address target;
-        uint256 value;
-        bytes data;
-        address tokenIn;
-        address tokenOut;
-        bool requiresApproval;
-        bool isCurvePool;
-    }
-
-    function getQuoteAndExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        returns (
-            uint256 quotedAmount,
-            bytes memory executionData,
-            Protocol protocol,
-            address targetContract,
-            uint256 value
-        );
-
-    function getCompleteExecutionPlan(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        returns (
-            uint256 quotedOutput,
-            uint256 minAmountOut,
-            ExecutionStep[] memory steps,
-            uint256 totalGas,
-            uint256 ethValue
-        );
-
-    function getCompleteMultiStepPlan(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    ) external returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan);
-
-    function getBridgeSecondLegData(
-        address bridgeAsset,
-        address finalToken,
-        uint256 bridgeAmount,
-        uint256 originalMinOut,
-        address recipient
-    ) external returns (bytes memory executionData, address targetContract, bool requiresApproval);
-
-    function getNextStepExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        bytes calldata fullRouteData,
-        uint256 stepIndex,
-        address recipient
-    ) external view returns (bytes memory executionData, address targetContract, bool isFinalStep);
-
-    function validateSwapExecution(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address executor
-    ) external view returns (bool isValid, string memory reason, uint256 estimatedOutput);
-
-    function hasRoute(address tokenIn, address tokenOut) external view returns (bool);
-}
+import {ILSTSwapRouter} from "../../src/interfaces/ILSTSwapRouter.sol";
 
 // Mock LSTSwapRouter contract for testing
 contract MockLSTSwapRouter is ILSTSwapRouter {
@@ -115,242 +15,92 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
     mapping(address => mapping(address => bool)) public routeExists;
     mapping(address => mapping(address => Protocol)) public routeProtocols;
     mapping(address => mapping(address => address)) public routeTargets;
-    mapping(address => mapping(address => uint256)) public slippageSettings;
-    mapping(address => bool) public supportedTokens;
-    mapping(address => uint8) public tokenDecimals;
-
-    // Mock balances for swaps
-    mapping(address => uint256) public mockBalances;
-
-    // Events
-    event SwapExecuted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        address indexed recipient
-    );
-
-    event RouteConfigured(address indexed tokenIn, address indexed tokenOut, Protocol protocol, address target);
-
-    // Errors
-    error NoRouteFound();
-    error TokenNotSupported();
-    error ZeroAmount();
-    error SameTokenSwap();
-    error InsufficientOutput();
-    error SwapFailed(string reason);
 
     // Constants
-    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant ETH_ADDR = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     constructor() {
-        // Set up some default supported tokens
-        supportedTokens[ETH_ADDRESS] = true;
-        supportedTokens[WETH] = true;
-        tokenDecimals[ETH_ADDRESS] = 18;
-        tokenDecimals[WETH] = 18;
+        // Common token addresses
+        address STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+        address RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
+        address CBETH = 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704;
+        
+        // Set up default supported routes with 1:1 rates for testing
+        _setMockRoute(ETH_ADDR, WETH, 1e18, Protocol.DirectMint, WETH);
+        _setMockRoute(WETH, ETH_ADDR, 1e18, Protocol.DirectMint, WETH);
+        _setMockRoute(WETH, STETH, 1e18, Protocol.Curve, STETH);
+        _setMockRoute(STETH, WETH, 1e18, Protocol.Curve, WETH);
+        _setMockRoute(ETH_ADDR, STETH, 1e18, Protocol.Curve, STETH);
+        _setMockRoute(STETH, ETH_ADDR, 1e18, Protocol.Curve, ETH_ADDR);
+        _setMockRoute(WETH, RETH, 1e18, Protocol.UniswapV3, RETH);
+        _setMockRoute(RETH, WETH, 1e18, Protocol.UniswapV3, WETH);
+        _setMockRoute(WETH, CBETH, 1e18, Protocol.UniswapV3, CBETH);
+        _setMockRoute(CBETH, WETH, 1e18, Protocol.UniswapV3, WETH);
     }
 
-    // Configuration functions
-    function setMockRate(address tokenIn, address tokenOut, uint256 rate, Protocol protocol, address target) external {
+    function _setMockRoute(
+        address tokenIn,
+        address tokenOut,
+        uint256 rate,
+        Protocol protocol,
+        address target
+    ) internal {
         mockRates[tokenIn][tokenOut] = rate;
         routeExists[tokenIn][tokenOut] = true;
         routeProtocols[tokenIn][tokenOut] = protocol;
         routeTargets[tokenIn][tokenOut] = target;
-
-        emit RouteConfigured(tokenIn, tokenOut, protocol, target);
     }
 
-    function setSlippage(address tokenIn, address tokenOut, uint256 slippageBps) external {
-        slippageSettings[tokenIn][tokenOut] = slippageBps;
+    // ILSTSwapRouter implementation
+    function ETH_ADDRESS() external pure returns (address) {
+        return ETH_ADDR;
     }
 
-    function addSupportedToken(address token, uint8 decimals) external {
-        supportedTokens[token] = true;
-        tokenDecimals[token] = decimals;
+    function uniswapRouter() external pure returns (address) {
+        return 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45;
     }
 
-    function fundMockBalance(address token, uint256 amount) external {
-        mockBalances[token] = amount;
-        if (token != ETH_ADDRESS) {
-            // For ERC20 tokens, we need actual balance
-            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        }
+    function getWETHRequirements(
+        address tokenIn,
+        address tokenOut,
+        Protocol protocol
+    ) external pure returns (bool needsWrap, bool needsUnwrap, address wethAddress) {
+        wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        needsWrap = tokenIn == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+        needsUnwrap = tokenOut == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     }
 
-    // Main integration functions
     function getQuoteAndExecutionData(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
         address recipient
-    )
-        external
-        override
-        returns (
-            uint256 quotedAmount,
-            bytes memory executionData,
-            Protocol protocol,
-            address targetContract,
-            uint256 value
-        )
-    {
-        _validateSwapInputs(tokenIn, tokenOut, amountIn);
-
-        if (!routeExists[tokenIn][tokenOut]) {
-            revert NoRouteFound();
-        }
-
-        // Calculate quoted amount
-        quotedAmount = _calculateQuote(tokenIn, tokenOut, amountIn);
-
-        // Get protocol and target
-        protocol = routeProtocols[tokenIn][tokenOut];
+    ) external returns (
+        uint256 quotedAmount,
+        bytes memory executionData,
+        uint8 protocol,
+        address targetContract,
+        uint256 value
+    ) {
+        require(routeExists[tokenIn][tokenOut], "Route not found");
+        
+        quotedAmount = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
+        protocol = uint8(routeProtocols[tokenIn][tokenOut]);
         targetContract = routeTargets[tokenIn][tokenOut];
-
-        // Generate execution data
-        executionData = _generateExecutionData(tokenIn, tokenOut, amountIn, quotedAmount, recipient, protocol);
-
-        // Set ETH value
-        value = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
+        value = tokenIn == ETH_ADDR ? amountIn : 0;
+        
+        // Simple mock execution data
+        executionData = abi.encodeWithSignature("transfer(address,uint256)", recipient, quotedAmount);
     }
 
-    function getCompleteExecutionPlan(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        override
-        returns (
-            uint256 quotedOutput,
-            uint256 minAmountOut,
-            ExecutionStep[] memory steps,
-            uint256 totalGas,
-            uint256 ethValue
-        )
-    {
-        _validateSwapInputs(tokenIn, tokenOut, amountIn);
-
-        if (!routeExists[tokenIn][tokenOut]) {
-            revert NoRouteFound();
-        }
-
-        quotedOutput = _calculateQuote(tokenIn, tokenOut, amountIn);
-        minAmountOut = _calculateMinOutput(tokenIn, tokenOut, quotedOutput);
-
-        // Create single step execution plan
-        steps = new ExecutionStep[](1);
-        steps[0] = ExecutionStep({
-            target: routeTargets[tokenIn][tokenOut],
-            value: (tokenIn == ETH_ADDRESS) ? amountIn : 0,
-            data: _generateExecutionData(
-                tokenIn,
-                tokenOut,
-                amountIn,
-                quotedOutput,
-                recipient,
-                routeProtocols[tokenIn][tokenOut]
-            ),
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            requiresApproval: tokenIn != ETH_ADDRESS,
-            isCurvePool: routeProtocols[tokenIn][tokenOut] == Protocol.Curve
-        });
-
-        totalGas = 150000; // Mock gas estimate
-        ethValue = (tokenIn == ETH_ADDRESS) ? amountIn : 0;
-    }
-
-    function getCompleteMultiStepPlan(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    ) external override returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan) {
-        _validateSwapInputs(tokenIn, tokenOut, amountIn);
-
-        // For mock, create simple 2-step plan if direct route doesn't exist
-        if (routeExists[tokenIn][tokenOut]) {
-            // Single step
-            totalQuotedAmount = _calculateQuote(tokenIn, tokenOut, amountIn);
-
-            plan.steps = new SwapStep[](1);
-            plan.steps[0] = SwapStep({
-                tokenIn: tokenIn,
-                tokenOut: tokenOut,
-                amountIn: amountIn,
-                minAmountOut: _calculateMinOutput(tokenIn, tokenOut, totalQuotedAmount),
-                target: routeTargets[tokenIn][tokenOut],
-                data: _generateExecutionData(
-                    tokenIn,
-                    tokenOut,
-                    amountIn,
-                    totalQuotedAmount,
-                    recipient,
-                    routeProtocols[tokenIn][tokenOut]
-                ),
-                value: (tokenIn == ETH_ADDRESS) ? amountIn : 0,
-                protocol: routeProtocols[tokenIn][tokenOut]
-            });
-
-            plan.expectedFinalAmount = totalQuotedAmount;
-        } else {
-            // Try bridge route through WETH
-            address bridgeAsset = WETH;
-
-            if (routeExists[tokenIn][bridgeAsset] && routeExists[bridgeAsset][tokenOut]) {
-                uint256 bridgeAmount = _calculateQuote(tokenIn, bridgeAsset, amountIn);
-                totalQuotedAmount = _calculateQuote(bridgeAsset, tokenOut, bridgeAmount);
-
-                plan.steps = new SwapStep[](2);
-
-                // First step
-                plan.steps[0] = SwapStep({
-                    tokenIn: tokenIn,
-                    tokenOut: bridgeAsset,
-                    amountIn: amountIn,
-                    minAmountOut: _calculateMinOutput(tokenIn, bridgeAsset, bridgeAmount),
-                    target: routeTargets[tokenIn][bridgeAsset],
-                    data: _generateExecutionData(
-                        tokenIn,
-                        bridgeAsset,
-                        amountIn,
-                        bridgeAmount,
-                        recipient,
-                        routeProtocols[tokenIn][bridgeAsset]
-                    ),
-                    value: (tokenIn == ETH_ADDRESS) ? amountIn : 0,
-                    protocol: routeProtocols[tokenIn][bridgeAsset]
-                });
-
-                // Second step
-                plan.steps[1] = SwapStep({
-                    tokenIn: bridgeAsset,
-                    tokenOut: tokenOut,
-                    amountIn: bridgeAmount,
-                    minAmountOut: _calculateMinOutput(bridgeAsset, tokenOut, totalQuotedAmount),
-                    target: routeTargets[bridgeAsset][tokenOut],
-                    data: _generateExecutionData(
-                        bridgeAsset,
-                        tokenOut,
-                        bridgeAmount,
-                        totalQuotedAmount,
-                        recipient,
-                        routeProtocols[bridgeAsset][tokenOut]
-                    ),
-                    value: 0,
-                    protocol: routeProtocols[bridgeAsset][tokenOut]
-                });
-
-                plan.expectedFinalAmount = totalQuotedAmount;
-            } else {
-                revert NoRouteFound();
-            }
-        }
+    function decodeComplexExecutionData(
+        bytes calldata complexData
+    ) external pure returns (uint8 routeType, address firstTarget, bytes memory firstCalldata, bytes memory additionalData) {
+        routeType = 0;
+        firstTarget = address(0);
+        firstCalldata = "";
+        additionalData = "";
     }
 
     function getBridgeSecondLegData(
@@ -359,29 +109,10 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
         uint256 bridgeAmount,
         uint256 originalMinOut,
         address recipient
-    ) external override returns (bytes memory executionData, address targetContract, bool requiresApproval) {
-        if (!routeExists[bridgeAsset][finalToken]) {
-            revert NoRouteFound();
-        }
-
-        uint256 quotedAmount = _calculateQuote(bridgeAsset, finalToken, bridgeAmount);
-        uint256 minAmountOut = _calculateMinOutput(bridgeAsset, finalToken, quotedAmount);
-
-        // Use the higher of calculated min or original min
-        if (originalMinOut > minAmountOut) {
-            minAmountOut = originalMinOut;
-        }
-
-        targetContract = routeTargets[bridgeAsset][finalToken];
-        executionData = _generateExecutionData(
-            bridgeAsset,
-            finalToken,
-            bridgeAmount,
-            quotedAmount,
-            recipient,
-            routeProtocols[bridgeAsset][finalToken]
-        );
-        requiresApproval = bridgeAsset != ETH_ADDRESS;
+    ) external view returns (bytes memory executionData, address targetContract, bool requiresApproval) {
+        executionData = abi.encodeWithSignature("transfer(address,uint256)", recipient, bridgeAmount);
+        targetContract = bridgeAsset;
+        requiresApproval = true;
     }
 
     function getNextStepExecutionData(
@@ -391,222 +122,70 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
         bytes calldata fullRouteData,
         uint256 stepIndex,
         address recipient
-    ) external view override returns (bytes memory executionData, address targetContract, bool isFinalStep) {
-        if (!routeExists[tokenIn][tokenOut]) {
-            revert NoRouteFound();
-        }
-
-        // For mock, assume single step
+    ) external view returns (bytes memory executionData, address targetContract, bool isFinalStep) {
+        executionData = abi.encodeWithSignature("transfer(address,uint256)", recipient, amountIn);
+        targetContract = tokenOut;
         isFinalStep = true;
-        targetContract = routeTargets[tokenIn][tokenOut];
-
-        uint256 quotedAmount = _calculateQuote(tokenIn, tokenOut, amountIn);
-        executionData = _generateExecutionData(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            quotedAmount,
-            recipient,
-            routeProtocols[tokenIn][tokenOut]
-        );
     }
 
-    function validateSwapExecution(
+    function getCompleteMultiStepPlan(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 minAmountOut,
-        address executor
-    ) external view override returns (bool isValid, string memory reason, uint256 estimatedOutput) {
-        // Basic validation
-        if (!supportedTokens[tokenIn]) {
-            return (false, "Input token not supported", 0);
-        }
-
-        if (!supportedTokens[tokenOut]) {
-            return (false, "Output token not supported", 0);
-        }
-
-        if (amountIn == 0) {
-            return (false, "Zero amount", 0);
-        }
-
-        if (tokenIn == tokenOut) {
-            return (false, "Same token swap", 0);
-        }
-
-        if (!routeExists[tokenIn][tokenOut]) {
-            return (false, "No route found", 0);
-        }
-
-        estimatedOutput = _calculateQuote(tokenIn, tokenOut, amountIn);
-
-        if (estimatedOutput < minAmountOut) {
-            return (false, "Output below minimum", estimatedOutput);
-        }
-
-        return (true, "Valid", estimatedOutput);
-    }
-
-    function hasRoute(address tokenIn, address tokenOut) external view override returns (bool) {
-        return routeExists[tokenIn][tokenOut];
-    }
-
-    // Mock swap execution for testing
-    function mockSwap(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
         address recipient
-    ) external payable returns (uint256 amountOut) {
-        _validateSwapInputs(tokenIn, tokenOut, amountIn);
-
-        if (!routeExists[tokenIn][tokenOut]) {
-            revert NoRouteFound();
-        }
-
-        amountOut = _calculateQuote(tokenIn, tokenOut, amountIn);
-
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput();
-        }
-
-        // Handle token transfers
-        if (tokenIn == ETH_ADDRESS) {
-            require(msg.value >= amountIn, "Insufficient ETH");
-        } else {
-            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-        }
-
-        // Transfer output tokens
-        if (tokenOut == ETH_ADDRESS) {
-            (bool success, ) = payable(recipient).call{value: amountOut}("");
-            require(success, "ETH transfer failed");
-        } else {
-            IERC20(tokenOut).safeTransfer(recipient, amountOut);
-        }
-
-        emit SwapExecuted(tokenIn, tokenOut, amountIn, amountOut, recipient);
+    ) external returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan) {
+        require(routeExists[tokenIn][tokenOut], "Route not found");
+        
+        totalQuotedAmount = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
+        
+        SwapStep[] memory steps = new SwapStep[](1);
+        steps[0] = SwapStep({
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            amountIn: amountIn,
+            minAmountOut: (totalQuotedAmount * 95) / 100, // 5% slippage
+            target: routeTargets[tokenIn][tokenOut],
+            data: abi.encodeWithSignature("transfer(address,uint256)", recipient, totalQuotedAmount),
+            value: tokenIn == ETH_ADDR ? amountIn : 0,
+            protocol: routeProtocols[tokenIn][tokenOut]
+        });
+        
+        plan = MultiStepExecutionPlan({
+            steps: steps,
+            expectedFinalAmount: totalQuotedAmount
+        });
     }
 
-    // Internal helper functions
-    function _validateSwapInputs(address tokenIn, address tokenOut, uint256 amountIn) internal view {
-        if (amountIn == 0) revert ZeroAmount();
-        if (tokenIn == tokenOut) revert SameTokenSwap();
-        if (!supportedTokens[tokenIn]) revert TokenNotSupported();
-        if (!supportedTokens[tokenOut]) revert TokenNotSupported();
-    }
-
-    function _calculateQuote(address tokenIn, address tokenOut, uint256 amountIn) internal view returns (uint256) {
-        uint256 rate = mockRates[tokenIn][tokenOut];
-        if (rate == 0) {
-            // Default 1:1 rate with decimal adjustment
-            rate = _getDecimalAdjustedRate(tokenIn, tokenOut);
-        }
-        return (amountIn * rate) / 1e18;
-    }
-
-    function _calculateMinOutput(
-        address tokenIn,
-        address tokenOut,
-        uint256 quotedAmount
-    ) internal view returns (uint256) {
-        uint256 slippage = slippageSettings[tokenIn][tokenOut];
-        if (slippage == 0) {
-            slippage = 50; // Default 0.5% slippage
-        }
-        return (quotedAmount * (10000 - slippage)) / 10000;
-    }
-
-    function _getDecimalAdjustedRate(address tokenIn, address tokenOut) internal view returns (uint256) {
-        uint8 decimalsIn = tokenDecimals[tokenIn];
-        uint8 decimalsOut = tokenDecimals[tokenOut];
-
-        if (decimalsIn == decimalsOut) {
-            return 1e18; // 1:1 rate
-        } else if (decimalsIn > decimalsOut) {
-            return 1e18 / (10 ** (decimalsIn - decimalsOut));
-        } else {
-            return 1e18 * (10 ** (decimalsOut - decimalsIn));
-        }
-    }
-
-    function _generateExecutionData(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 quotedAmount,
-        address recipient,
-        Protocol protocol
-    ) internal view returns (bytes memory) {
-        // Generate execution data that calls the mock executor's executeSwap function
-        return
-            abi.encodeWithSelector(
-                MockSwapExecutor.executeSwap.selector,
-                tokenIn,
-                tokenOut,
-                amountIn,
-                (quotedAmount * 9950) / 10000, // 0.5% slippage
-                recipient
-            );
-    }
-
-    // Allow contract to receive ETH
-    receive() external payable {}
-}
-
-// Mock executor for testing actual swaps
-contract MockSwapExecutor {
-    using SafeERC20 for IERC20;
-
-    event SwapExecuted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        address indexed recipient
-    );
-
-    // Mock balances for testing
-    mapping(address => uint256) public mockBalances;
-
-    function fundBalance(address token, uint256 amount) external {
-        mockBalances[token] = amount;
-        if (token != 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
-            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        }
-    }
-
+    // Mock execution function for testing
     function executeSwap(
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 minAmountOut,
         address recipient
-    ) external payable returns (uint256 amountOut) {
-        // Simple 1:1 swap with 0.1% fee
-        amountOut = (amountIn * 9990) / 10000;
-
-        require(amountOut >= minAmountOut, "Insufficient output");
-
-        // Handle input token
-        if (tokenIn == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+    ) external payable {
+        require(routeExists[tokenIn][tokenOut], "Route not found");
+        
+        uint256 amountOut = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
+        
+        // Handle input tokens
+        if (tokenIn == ETH_ADDR) {
             require(msg.value >= amountIn, "Insufficient ETH");
         } else {
             IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        // Handle output token
-        if (tokenOut == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+        // Handle output tokens
+        if (tokenOut == ETH_ADDR) {
             (bool success, ) = payable(recipient).call{value: amountOut}("");
             require(success, "ETH transfer failed");
         } else {
             IERC20(tokenOut).safeTransfer(recipient, amountOut);
         }
-
-        emit SwapExecuted(tokenIn, tokenOut, amountIn, amountOut, recipient);
     }
 
     receive() external payable {}
+}
+
+// Type alias for backward compatibility
+contract MockLSR is MockLSTSwapRouter {
 }

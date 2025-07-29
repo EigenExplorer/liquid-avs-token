@@ -112,6 +112,16 @@ contract MockLiquidTokenManager is ReentrancyGuard {
         require(assetsLength == amountsToSwap.length, "Amounts length mismatch");
         require(address(LSTswaprouter) != address(0), "LSR not configured");
 
+        // Validate that ETH is not used as direct tokenIn or tokenOut (only as bridge asset)
+        for (uint256 i = 0; i < assetsLength; i++) {
+            if (address(assetsToSwap[i]) == ETH_ADDRESS) {
+                revert ILiquidTokenManager.ETHNotSupportedAsDirectToken(address(assetsToSwap[i]));
+            }
+            if (address(assetsToStake[i]) == ETH_ADDRESS) {
+                revert ILiquidTokenManager.ETHNotSupportedAsDirectToken(address(assetsToStake[i]));
+            }
+        }
+
         console.log("\n[MockLTM] SwapAndStakeAssetsToNode called:");
         console.log("Node ID:", nodeId);
         console.log("Assets to swap:", assetsLength);

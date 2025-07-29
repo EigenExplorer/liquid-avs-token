@@ -91,7 +91,8 @@ contract LiquidTokenManager is
             address(init.liquidToken) == address(0) ||
             address(init.initialOwner) == address(0) ||
             address(init.priceUpdater) == address(0) ||
-            address(init.tokenRegistryOracle) == address(0)
+            address(init.tokenRegistryOracle) == address(0) ||
+            address(init.lstSwapRouter) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -105,6 +106,7 @@ contract LiquidTokenManager is
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
+        LSTswaprouter = init.lstSwapRouter;
     }
 
     // ------------------------------------------------------------------------------

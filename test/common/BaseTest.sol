@@ -27,7 +27,7 @@ import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
 import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
-import {ILSTSwapRouter} from "../../src/interfaces/ILSTSwapRouter.sol"; // Added import
+import {ILSTSwapRouter} from "../../src/interfaces/ILSTSwapRouter.sol";
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
@@ -295,14 +295,9 @@ contract BaseTest is Test {
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
 
-        // Fixed: Use payable() for LiquidTokenManager since it has receive() function
-        liquidTokenManager = LiquidTokenManager(
-            payable(
-                address(
-                    new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, "")
-                )
-            )
-        );
+        liquidTokenManager = LiquidTokenManager(payable(
+            address(new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, ""))
+        ));
 
         liquidToken = LiquidToken(
             address(new TransparentUpgradeableProxy(address(_liquidTokenImplementation), proxyAdminAddress, ""))
@@ -397,6 +392,7 @@ contract BaseTest is Test {
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+            lstSwapRouter: ILSTSwapRouter(address(0)), // Will be set later via updateLstSwapRouter
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
