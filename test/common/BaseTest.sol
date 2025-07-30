@@ -646,6 +646,6 @@ contract BaseTest is Test {
      * @dev Helper to get current LSR address
      */
     function _getLSTSwapRouterAddress() internal view returns (address) {
-        return address(liquidTokenManager.LSTSwapRouter());
+        return address(liquidTokenManager.lstSwapRouter());
     }
 }

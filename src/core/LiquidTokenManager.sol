@@ -114,7 +114,7 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
         withdrawalManager = init.withdrawalManager;
-        LSTSwapRouter = init.lstSwapRouter;
+        lstSwapRouter = init.lstSwapRouter;
     }
 
     // ------------------------------------------------------------------------------
@@ -437,7 +437,7 @@ contract LiquidTokenManager is
         }
 
         // Bring unstaked assets in from `LiquidToken`
-        liquidToken.transferAssets(assetsToSwap, amountsToSwap);
+        liquidToken.transferAssets(assetsToSwap, amountsToSwap, address(this));
 
         uint256[] memory amountsToStake = new uint256[](assetsLength);
 
@@ -1417,10 +1417,5 @@ contract LiquidTokenManager is
     function isStrategySupported(IStrategy strategy) external view returns (bool) {
         if (address(strategy) == address(0)) return false;
         return address(strategyTokens[strategy]) != address(0);
-    }
-
-    /// @inheritdoc ILiquidTokenManager
-    function lstSwapRouter() external view returns (ILSTSwapRouter) {
-        return lstSwapRouter;
     }
 }
