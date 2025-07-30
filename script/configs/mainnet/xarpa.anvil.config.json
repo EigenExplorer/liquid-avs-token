@@ -1,5 +1,6 @@
 {
     "avsAddress": "0x1de75eaab2df55d467494a172652579e6fa4540e",
+    "baseAsset": "0xba50933c268f567bdc86e1ac131be072c6b0b71a",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -34,8 +35,8 @@
         }
     ],
     "roles": {
-        "admin": "",
-        "pauser": "",
-        "priceUpdater": ""
+        "admin": "0xba375CAe9cEd62E5C2762F84ed324aef52486651",
+        "pauser": "0x60DB8De9a6705c9B36dcE25D631C5EAc0Ac24F4c",
+        "priceUpdater": "0xba375CAe9cEd62E5C2762F84ed324aef52486651"
     }
 }

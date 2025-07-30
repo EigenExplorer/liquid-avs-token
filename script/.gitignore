@@ -5,4 +5,7 @@ outputs/local/abi/*
 outputs/holesky/*
 !outputs/holesky/abi
 outputs/holesky/abi/*
+outputs/mainnet/*
+!outputs/mainnet/abi
+outputs/mainnet/abi/*
 lp/curve/outputs/*

@@ -32,7 +32,8 @@ contract StakeAssetsToNode is Script, Test {
             config,
             ".contractDeployments.proxy.liquidTokenManager.address"
         );
-        LiquidTokenManager liquidTokenManager = LiquidTokenManager(liquidTokenManageraddress);
+
+        LiquidTokenManager liquidTokenManager = LiquidTokenManager(payable(liquidTokenManageraddress));
 
         vm.startBroadcast();
         liquidTokenManager.stakeAssetsToNode(nodeId, assets, amounts);

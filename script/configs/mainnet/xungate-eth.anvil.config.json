@@ -1,5 +1,5 @@
 {
-    "avsAddress": "0xc9e94bf890c9b4f11685d576bc65b08e0e87556f",
+    "avsAddress": "0xb3e069fd6dda251acbde09eda547e0ab207016ee",
     "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
@@ -9,8 +9,8 @@
         },
         "liquidToken": {
             "init": {
-                "name": "zScore by Zeru ETH Liquid Avs Token",
-                "symbol": "xzScore-ETH"
+                "name": "Ungate InfiniRoute ETH Liquid Avs Token",
+                "symbol": "xUngate-ETH"
             }
         }
     },

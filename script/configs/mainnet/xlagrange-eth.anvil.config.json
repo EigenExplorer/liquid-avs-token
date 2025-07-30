@@ -1,5 +1,6 @@
 {
     "avsAddress": "0x22cac0e6a1465f043428e8aef737b3cb09d0eeda",
+    "baseAsset": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
     "contracts": {
         "stakerNodeCoordinator": {
             "init": {
@@ -8,30 +9,12 @@
         },
         "liquidToken": {
             "init": {
-                "name": "Lagrange ZK Prover Network ETH Liquid Avs Token",
-                "symbol": "xLagrangeZKPN-ETH"
+                "name": "Lagrange ETH Liquid Avs Token",
+                "symbol": "xLagrange-ETH"
             }
         }
     },
     "tokens": [
-        {
-            "name": "ETH",
-            "addresses": {
-                "token": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0",
-                "strategy": "0xbeac0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeac0"
-            },
-            "params": {
-                "volatilityThreshold": "0",
-                "decimals": 18
-            },
-            "oracle": {
-                "sourceType": 0,
-                "primarySource": "0x0000000000000000000000000000000000000000",
-                "needsArg": 0,
-                "fallbackSource": "0x0000000000000000000000000000000000000000",
-                "fallbackSelector": "0x00000000"
-            }
-        },
         {
             "name": "rETH",
             "addresses": {
@@ -193,11 +176,65 @@
                 "fallbackSource": "0xac3E018457B222d93114458476f3E3416Abbe38F",
                 "fallbackSelector": "0x07a2d13a"
             }
+        },
+        {
+            "name": "lsETH",
+            "addresses": {
+                "token": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+                "strategy": "0xae60d8180437b5c34bb956822ac2710972584473"
+            },
+            "params": {
+                "volatilityThreshold": "50000000000000000",
+                "decimals": 18
+            },
+            "oracle": {
+                "sourceType": 3,
+                "primarySource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+                "needsArg": 1,
+                "fallbackSource": "0x8c1BEd5b9a0928467c9B1341Da1D7BD5e10b6549",
+                "fallbackSelector": "0xf79c3f02"
+            }
+        },
+        {
+            "name": "OETH",
+            "addresses": {
+                "token": "0x856c4Efb76C1D1AE02e20CEB03A2A6a08b0b8dC3",
+                "strategy": "0xa4c637e0f704745d182e4d38cab7e7485321d059"
+            },
+            "params": {
+                "volatilityThreshold": "50000000000000000",
+                "decimals": 18
+            },
+            "oracle": {
+                "sourceType": 1,
+                "primarySource": "0x703118C4CbccCBF2AB31913e0f8075fbbb15f563",
+                "needsArg": 1,
+                "fallbackSource": "0xDcEe70654261AF21C44c093C300eD3Bb97b78192",
+                "fallbackSelector": "0x07a2d13a"
+            }
+        },
+        {
+            "name": "osETH",
+            "addresses": {
+                "token": "0x0C4576Ca1c365868E162554AF8e385dc3e7C66D9",
+                "strategy": "0x57ba429517c3473b6d34ca9acd56c0e735b94c02"
+            },
+            "params": {
+                "volatilityThreshold": "50000000000000000",
+                "decimals": 18
+            },
+            "oracle": {
+                "sourceType": 2,
+                "primarySource": "0xe080027Bd47353b5D1639772b4a75E9Ed3658A0d",
+                "needsArg": 1,
+                "fallbackSource": "0x2A261e60FB14586B474C208b1B7AC6D0f5000306",
+                "fallbackSelector": "0x07a2d13a"
+            }
         }
     ],
     "roles": {
-        "admin": "",
-        "pauser": "",
-        "priceUpdater": ""
+        "admin": "0xba375CAe9cEd62E5C2762F84ed324aef52486651",
+        "pauser": "0x60DB8De9a6705c9B36dcE25D631C5EAc0Ac24F4c",
+        "priceUpdater": "0xba375CAe9cEd62E5C2762F84ed324aef52486651"
     }
 }

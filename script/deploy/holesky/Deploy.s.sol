@@ -20,6 +20,7 @@ import {TokenRegistryOracle} from "../../../src/utils/TokenRegistryOracle.sol";
 import {ITokenRegistryOracle} from "../../../src/interfaces/ITokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../../../src/core/LiquidTokenManager.sol";
 import {ILiquidTokenManager} from "../../../src/interfaces/ILiquidTokenManager.sol";
+import {ILSTSwapRouter} from "../../../src/interfaces/ILSTSwapRouter.sol";
 import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
@@ -73,6 +74,7 @@ contract Deploy is Script, Test {
 
     // Deployment-level config
     address public AVS_ADDRESS;
+    address public BASE_ASSET;
     uint256 public STAKER_NODE_COORDINATOR_MAX_NODES;
     string public LIQUID_TOKEN_NAME;
     string public LIQUID_TOKEN_SYMBOL;
@@ -200,6 +202,7 @@ contract Deploy is Script, Test {
         pauser = stdJson.readAddress(deployConfigData, ".roles.pauser");
         priceUpdater = stdJson.readAddress(deployConfigData, ".roles.priceUpdater");
         AVS_ADDRESS = stdJson.readAddress(deployConfigData, ".avsAddress");
+        BASE_ASSET = stdJson.readAddress(deployConfigData, ".baseAsset");
         STAKER_NODE_COORDINATOR_MAX_NODES = stdJson.readUint(
             deployConfigData,
             ".contracts.stakerNodeCoordinator.init.maxNodes"
@@ -290,7 +293,7 @@ contract Deploy is Script, Test {
         liquidTokenManagerProxyDeployBlock = block.number;
         liquidTokenManagerProxyDeployTimestamp = block.timestamp;
         liquidTokenManager = LiquidTokenManager(
-            address(new TransparentUpgradeableProxy(address(liquidTokenManagerImpl), address(proxyAdmin), ""))
+            payable(address(new TransparentUpgradeableProxy(address(liquidTokenManagerImpl), address(proxyAdmin), "")))
         );
 
         stakerNodeCoordinatorProxyDeployBlock = block.number;
@@ -347,6 +350,7 @@ contract Deploy is Script, Test {
                 stakerNodeCoordinator: stakerNodeCoordinator,
                 tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
                 withdrawalManager: withdrawalManager,
+                lstSwapRouter: ILSTSwapRouter(address(0)), // Will be set later
                 initialOwner: msg.sender, // burner, will transfer to admin
                 strategyController: admin,
                 priceUpdater: address(tokenRegistryOracle)
@@ -404,19 +408,23 @@ contract Deploy is Script, Test {
     }
 
     function addAndConfigureTokens() internal {
-        TokenConfig[] memory addable = _getAddableTokens(tokens);
+        TokenConfig[] memory addable = tokens;
         for (uint256 i = 0; i < addable.length; ++i) {
-            liquidTokenManager.addToken(
-                IERC20(addable[i].addresses.token),
-                uint8(addable[i].params.decimals),
-                uint256(addable[i].params.volatilityThreshold),
-                IStrategy(addable[i].addresses.strategy),
-                addable[i].oracle.sourceType,
-                addable[i].oracle.primarySource,
-                addable[i].oracle.needsArg,
-                addable[i].oracle.fallbackSource,
-                addable[i].oracle.fallbackSelector
-            );
+            try
+                liquidTokenManager.addToken(
+                    IERC20(addable[i].addresses.token),
+                    uint8(addable[i].params.decimals),
+                    uint256(addable[i].params.volatilityThreshold),
+                    IStrategy(addable[i].addresses.strategy),
+                    addable[i].oracle.sourceType,
+                    addable[i].oracle.primarySource,
+                    addable[i].oracle.needsArg,
+                    addable[i].oracle.fallbackSource,
+                    addable[i].oracle.fallbackSelector
+                )
+            {} catch {
+                console.log("[WARNING] Unable to add token: ", addable[i].addresses.token);
+            }
         }
 
         // Configure curve pools that require reentrancy locks
@@ -569,7 +577,7 @@ contract Deploy is Script, Test {
 
         // Assets and strategies
         IERC20[] memory registeredTokens = liquidTokenManager.getSupportedTokens();
-        TokenConfig[] memory addableTokens = _getAddableTokens(tokens);
+        TokenConfig[] memory addableTokens = tokens;
         require(
             registeredTokens.length == addableTokens.length,
             "LiquidTokenManager: wrong number of registered tokens"
@@ -665,9 +673,11 @@ contract Deploy is Script, Test {
         // Top level properties
         vm.serializeAddress(parent_object, "proxyAddress", address(liquidToken));
         vm.serializeAddress(parent_object, "implementationAddress", address(liquidTokenImpl));
+        vm.serializeAddress(parent_object, "proxyAdminAddress", address(proxyAdmin));
         vm.serializeString(parent_object, "name", LIQUID_TOKEN_NAME);
         vm.serializeString(parent_object, "symbol", LIQUID_TOKEN_SYMBOL);
         vm.serializeAddress(parent_object, "avsAddress", AVS_ADDRESS);
+        vm.serializeAddress(parent_object, "baseAsset", BASE_ASSET);
         vm.serializeUint(parent_object, "chainId", block.chainid);
         vm.serializeUint(parent_object, "maxNodes", STAKER_NODE_COORDINATOR_MAX_NODES);
         vm.serializeUint(parent_object, "deploymentBlock", block.number);
@@ -795,7 +805,6 @@ contract Deploy is Script, Test {
 
         // Roles section
         string memory roles = "roles";
-        vm.serializeAddress(roles, "deployer", address(proxyAdmin));
         vm.serializeAddress(roles, "admin", admin);
         vm.serializeAddress(roles, "pauser", pauser);
         string memory roles_output = vm.serializeAddress(roles, "priceUpdater", priceUpdater);
@@ -846,24 +855,5 @@ contract Deploy is Script, Test {
             address(
                 uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)))
             );
-    }
-
-    function _getAddableTokens(TokenConfig[] memory tokens) internal pure returns (TokenConfig[] memory) {
-        uint256 count = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
-            if (tokens[i].oracle.sourceType == 0 && tokens[i].oracle.primarySource == address(0)) {
-                continue; // Skip native tokens (like Eigen)
-            }
-            count++;
-        }
-        TokenConfig[] memory filtered = new TokenConfig[](count);
-        uint256 j = 0;
-        for (uint256 i = 0; i < tokens.length; ++i) {
-            if (tokens[i].oracle.sourceType == 0 && tokens[i].oracle.primarySource == address(0)) {
-                continue;
-            }
-            filtered[j++] = tokens[i];
-        }
-        return filtered;
     }
 }
