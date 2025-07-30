@@ -295,9 +295,13 @@ contract BaseTest is Test {
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
 
-        liquidTokenManager = LiquidTokenManager(payable(
-            address(new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, ""))
-        ));
+        liquidTokenManager = LiquidTokenManager(
+            payable(
+                address(
+                    new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, "")
+                )
+            )
+        );
 
         liquidToken = LiquidToken(
             address(new TransparentUpgradeableProxy(address(_liquidTokenImplementation), proxyAdminAddress, ""))

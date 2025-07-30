@@ -25,7 +25,7 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
         address STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
         address RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
         address CBETH = 0xBe9895146f7AF43049ca1c1AE358B0541Ea49704;
-        
+
         // Set up default supported routes with 1:1 rates for testing
         _setMockRoute(ETH_ADDR, WETH, 1e18, Protocol.DirectMint, WETH);
         _setMockRoute(WETH, ETH_ADDR, 1e18, Protocol.DirectMint, WETH);
@@ -76,27 +76,34 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
         address tokenOut,
         uint256 amountIn,
         address recipient
-    ) external returns (
-        uint256 quotedAmount,
-        bytes memory executionData,
-        uint8 protocol,
-        address targetContract,
-        uint256 value
-    ) {
+    )
+        external
+        returns (
+            uint256 quotedAmount,
+            bytes memory executionData,
+            uint8 protocol,
+            address targetContract,
+            uint256 value
+        )
+    {
         require(routeExists[tokenIn][tokenOut], "Route not found");
-        
+
         quotedAmount = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
         protocol = uint8(routeProtocols[tokenIn][tokenOut]);
         targetContract = routeTargets[tokenIn][tokenOut];
         value = tokenIn == ETH_ADDR ? amountIn : 0;
-        
+
         // Simple mock execution data
         executionData = abi.encodeWithSignature("transfer(address,uint256)", recipient, quotedAmount);
     }
 
     function decodeComplexExecutionData(
         bytes calldata complexData
-    ) external pure returns (uint8 routeType, address firstTarget, bytes memory firstCalldata, bytes memory additionalData) {
+    )
+        external
+        pure
+        returns (uint8 routeType, address firstTarget, bytes memory firstCalldata, bytes memory additionalData)
+    {
         routeType = 0;
         firstTarget = address(0);
         firstCalldata = "";
@@ -135,9 +142,9 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
         address recipient
     ) external returns (uint256 totalQuotedAmount, MultiStepExecutionPlan memory plan) {
         require(routeExists[tokenIn][tokenOut], "Route not found");
-        
+
         totalQuotedAmount = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
-        
+
         SwapStep[] memory steps = new SwapStep[](1);
         steps[0] = SwapStep({
             tokenIn: tokenIn,
@@ -149,24 +156,16 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
             value: tokenIn == ETH_ADDR ? amountIn : 0,
             protocol: routeProtocols[tokenIn][tokenOut]
         });
-        
-        plan = MultiStepExecutionPlan({
-            steps: steps,
-            expectedFinalAmount: totalQuotedAmount
-        });
+
+        plan = MultiStepExecutionPlan({steps: steps, expectedFinalAmount: totalQuotedAmount});
     }
 
     // Mock execution function for testing
-    function executeSwap(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        address recipient
-    ) external payable {
+    function executeSwap(address tokenIn, address tokenOut, uint256 amountIn, address recipient) external payable {
         require(routeExists[tokenIn][tokenOut], "Route not found");
-        
+
         uint256 amountOut = (amountIn * mockRates[tokenIn][tokenOut]) / 1e18;
-        
+
         // Handle input tokens
         if (tokenIn == ETH_ADDR) {
             require(msg.value >= amountIn, "Insufficient ETH");
@@ -187,5 +186,4 @@ contract MockLSTSwapRouter is ILSTSwapRouter {
 }
 
 // Type alias for backward compatibility
-contract MockLSR is MockLSTSwapRouter {
-}
+contract MockLSR is MockLSTSwapRouter {}

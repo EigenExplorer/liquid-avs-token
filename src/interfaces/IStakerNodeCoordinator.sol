@@ -7,6 +7,7 @@ import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationMa
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 
 /// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract
@@ -18,6 +19,7 @@ interface IStakerNodeCoordinator {
     /// @notice Initialization parameters for StakerNodeCoordinator
     struct Init {
         ILiquidTokenManager liquidTokenManager;
+        IWithdrawalManager withdrawalManager;
         IDelegationManager delegationManager;
         IStrategyManager strategyManager;
         uint256 maxNodes;
@@ -63,9 +65,6 @@ interface IStakerNodeCoordinator {
 
     /// @notice Error for unsupported asset
     error UnsupportedAsset(IERC20 asset);
-
-    /// @notice Error for unauthorized access
-    error Unauthorized();
 
     /// @notice Error for insufficient funds
     error InsufficientFunds();
@@ -148,6 +147,10 @@ interface IStakerNodeCoordinator {
     /// @notice Gets the liquid token manager contract
     /// @return The ILiquidTokenManager interface
     function liquidTokenManager() external view returns (ILiquidTokenManager);
+
+    /// @notice Gets the withdrawal manager contract
+    /// @return The IWithdrawalManager interface
+    function withdrawalManager() external view returns (IWithdrawalManager);
 
     /// @notice Gets the maximum number of nodes allowed
     /// @return The maximum number of nodes

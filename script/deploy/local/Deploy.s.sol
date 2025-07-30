@@ -24,6 +24,8 @@ import {ILSTSwapRouter} from "../../../src/interfaces/ILSTSwapRouter.sol";
 import {StakerNode} from "../../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../../src/core/StakerNodeCoordinator.sol";
 import {IStakerNodeCoordinator} from "../../../src/interfaces/IStakerNodeCoordinator.sol";
+import {WithdrawalManager} from "../../../src/core/WithdrawalManager.sol";
+import {IWithdrawalManager} from "../../../src/interfaces/IWithdrawalManager.sol";
 
 /// @dev To load env file:
 // source .env
@@ -90,6 +92,7 @@ contract Deploy is Script, Test {
     TokenRegistryOracle tokenRegistryOracleImpl;
     LiquidTokenManager liquidTokenManagerImpl;
     StakerNodeCoordinator stakerNodeCoordinatorImpl;
+    WithdrawalManager withdrawalManagerImpl;
     StakerNode stakerNodeImpl;
 
     // Proxy contracts
@@ -97,6 +100,7 @@ contract Deploy is Script, Test {
     TokenRegistryOracle tokenRegistryOracle;
     LiquidTokenManager liquidTokenManager;
     StakerNodeCoordinator stakerNodeCoordinator;
+    WithdrawalManager withdrawalManager;
 
     // Deployment blocks and timestamps
     uint256 public proxyAdminDeployBlock;
@@ -110,6 +114,8 @@ contract Deploy is Script, Test {
     uint256 public liquidTokenManagerImplDeployTimestamp;
     uint256 public stakerNodeCoordinatorImplDeployBlock;
     uint256 public stakerNodeCoordinatorImplDeployTimestamp;
+    uint256 public withdrawalManagerImplDeployBlock;
+    uint256 public withdrawalManagerImplDeployTimestamp;
     uint256 public stakerNodeImplDeployBlock;
     uint256 public stakerNodeImplDeployTimestamp;
 
@@ -121,6 +127,8 @@ contract Deploy is Script, Test {
     uint256 public liquidTokenManagerProxyDeployTimestamp;
     uint256 public stakerNodeCoordinatorProxyDeployBlock;
     uint256 public stakerNodeCoordinatorProxyDeployTimestamp;
+    uint256 public withdrawalManagerProxyDeployBlock;
+    uint256 public withdrawalManagerProxyDeployTimestamp;
 
     // Initialization timestamps and blocks
     uint256 public tokenRegistryOracleInitBlock;
@@ -131,6 +139,8 @@ contract Deploy is Script, Test {
     uint256 public liquidTokenManagerInitTimestamp;
     uint256 public stakerNodeCoordinatorInitBlock;
     uint256 public stakerNodeCoordinatorInitTimestamp;
+    uint256 public withdrawalManagerInitBlock;
+    uint256 public withdrawalManagerInitTimestamp;
     uint256 public oracleSalt;
 
     function run(string memory deployConfigFileName, string memory chain) external {
@@ -157,7 +167,7 @@ contract Deploy is Script, Test {
     }
 
     // Helper function to count array entries
-    function _countTokens(string memory deployConfigData) internal returns (uint256) {
+    function _countTokens(string memory deployConfigData) internal view returns (uint256) {
         uint256 i = 0;
         while (true) {
             string memory prefix = string.concat(".tokens[", vm.toString(i), "].addresses.token");
@@ -264,6 +274,10 @@ contract Deploy is Script, Test {
         stakerNodeCoordinatorImplDeployTimestamp = block.timestamp;
         stakerNodeCoordinatorImpl = new StakerNodeCoordinator();
 
+        withdrawalManagerImplDeployBlock = block.number;
+        withdrawalManagerImplDeployTimestamp = block.timestamp;
+        withdrawalManagerImpl = new WithdrawalManager();
+
         stakerNodeImplDeployBlock = block.number;
         stakerNodeImplDeployTimestamp = block.timestamp;
         stakerNodeImpl = new StakerNode();
@@ -293,6 +307,12 @@ contract Deploy is Script, Test {
         liquidToken = LiquidToken(
             address(new TransparentUpgradeableProxy(address(liquidTokenImpl), address(proxyAdmin), ""))
         );
+
+        withdrawalManagerProxyDeployBlock = block.number;
+        withdrawalManagerProxyDeployTimestamp = block.timestamp;
+        withdrawalManager = WithdrawalManager(
+            address(new TransparentUpgradeableProxy(address(withdrawalManagerImpl), address(proxyAdmin), ""))
+        );
     }
 
     function initializeProxies() internal {
@@ -300,6 +320,7 @@ contract Deploy is Script, Test {
         _initializeLiquidTokenManager();
         _initializeStakerNodeCoordinator();
         _initializeLiquidToken();
+        _initializeWithdrawalManager();
     }
 
     function _initializeTokenRegistryOracle() internal {
@@ -328,6 +349,7 @@ contract Deploy is Script, Test {
                 delegationManager: IDelegationManager(delegationManager),
                 stakerNodeCoordinator: stakerNodeCoordinator,
                 tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+                withdrawalManager: withdrawalManager,
                 lstSwapRouter: ILSTSwapRouter(address(0)), // Will be set later
                 initialOwner: msg.sender, // burner, will transfer to admin
                 strategyController: admin,
@@ -342,6 +364,7 @@ contract Deploy is Script, Test {
         stakerNodeCoordinator.initialize(
             IStakerNodeCoordinator.Init({
                 liquidTokenManager: liquidTokenManager,
+                withdrawalManager: withdrawalManager,
                 strategyManager: IStrategyManager(strategyManager),
                 delegationManager: IDelegationManager(delegationManager),
                 maxNodes: STAKER_NODE_COORDINATOR_MAX_NODES,
@@ -364,7 +387,22 @@ contract Deploy is Script, Test {
                 initialOwner: admin,
                 pauser: pauser,
                 liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),
-                tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle))
+                tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+                withdrawalManager: withdrawalManager
+            })
+        );
+    }
+
+    function _initializeWithdrawalManager() internal {
+        withdrawalManagerInitBlock = block.number;
+        withdrawalManagerInitTimestamp = block.timestamp;
+        withdrawalManager.initialize(
+            IWithdrawalManager.Init({
+                initialOwner: admin,
+                delegationManager: IDelegationManager(delegationManager),
+                liquidToken: liquidToken,
+                liquidTokenManager: liquidTokenManager,
+                stakerNodeCoordinator: stakerNodeCoordinator
             })
         );
     }
@@ -462,6 +500,12 @@ contract Deploy is Script, Test {
             _getImplementationFromProxy(address(tokenRegistryOracle)) == address(tokenRegistryOracleImpl),
             "TokenRegistryOracle proxy implementation mismatch"
         );
+
+        // WithdrawalManager
+        require(
+            _getImplementationFromProxy(address(withdrawalManager)) == address(withdrawalManagerImpl),
+            "WithdrawalManager proxy implementation mismatch"
+        );
     }
 
     function _verifyContractConnections() internal view {
@@ -511,6 +555,24 @@ contract Deploy is Script, Test {
         require(
             address(tokenRegistryOracle.liquidTokenManager()) == address(liquidTokenManager),
             "TokenRegistryOracle: wrong liquidTokenManager"
+        );
+
+        // WithdrawalManager
+        require(
+            address(withdrawalManager.delegationManager()) == address(delegationManager),
+            "WithdrawalManager: wrong delegationManager"
+        );
+        require(
+            address(withdrawalManager.liquidToken()) == address(liquidToken),
+            "WithdrawalManager: wrong liquidToken"
+        );
+        require(
+            address(withdrawalManager.liquidTokenManager()) == address(liquidTokenManager),
+            "WithdrawalManager: wrong liquidTokenManager"
+        );
+        require(
+            address(withdrawalManager.stakerNodeCoordinator()) == address(stakerNodeCoordinator),
+            "WithdrawalManager: wrong stakerNodeCoordinator"
         );
 
         // Assets and strategies
@@ -596,11 +658,13 @@ contract Deploy is Script, Test {
             tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), priceUpdater),
             "Rate Updater role not assigned to priceUpdater in TokenRegistryOracle"
         );
-
         require(
             tokenRegistryOracle.hasRole(tokenRegistryOracle.RATE_UPDATER_ROLE(), address(liquidToken)),
             "Rate Updater role not assigned to LiquidToken in TokenRegistryOracle"
         );
+
+        // WithdrawalManager
+        require(withdrawalManager.hasRole(adminRole, admin), "Admin role not assigned in WithdrawalManager");
     }
 
     function writeDeploymentOutput() internal {
@@ -665,9 +729,20 @@ contract Deploy is Script, Test {
             tokenRegistryOracleImplDeployTimestamp * 1000
         );
 
+        // WithdrawalManager implementation
+        string memory withdrawalManagerImpl_obj = "withdrawalManager";
+        vm.serializeAddress(withdrawalManagerImpl_obj, "address", address(withdrawalManagerImpl));
+        vm.serializeUint(withdrawalManagerImpl_obj, "block", withdrawalManagerImplDeployBlock);
+        string memory withdrawalManagerImpl_output = vm.serializeUint(
+            withdrawalManagerImpl_obj,
+            "timestamp",
+            withdrawalManagerImplDeployTimestamp * 1000
+        );
+
         // Combine all implementation objects
         vm.serializeString(implementation, "liquidTokenManager", liquidTokenManagerImpl_output);
         vm.serializeString(implementation, "stakerNodeCoordinator", stakerNodeCoordinatorImpl_output);
+        vm.serializeString(implementation, "withdrawalManager", withdrawalManagerImpl_output);
         vm.serializeString(implementation, "stakerNode", stakerNodeImpl_output);
         string memory implementation_output = vm.serializeString(
             implementation,
@@ -708,10 +783,21 @@ contract Deploy is Script, Test {
             tokenRegistryOracleProxyDeployTimestamp * 1000
         );
 
+        // WithdrawalManager proxy
+        string memory withdrawalManager_obj = "withdrawalManager";
+        vm.serializeAddress(withdrawalManager_obj, "address", address(withdrawalManager));
+        vm.serializeUint(withdrawalManager_obj, "block", withdrawalManagerProxyDeployBlock);
+        string memory withdrawalManager_output = vm.serializeUint(
+            withdrawalManager_obj,
+            "timestamp",
+            withdrawalManagerProxyDeployTimestamp * 1000
+        );
+
         // Combine all proxy objects
         vm.serializeString(proxy, "liquidTokenManager", liquidTokenManager_output);
         vm.serializeString(proxy, "stakerNodeCoordinator", stakerNodeCoordinator_output);
-        string memory proxy_output = vm.serializeString(proxy, "tokenRegistryOracle", tokenRegistryOracle_output);
+        vm.serializeString(proxy, "tokenRegistryOracle", tokenRegistryOracle_output);
+        string memory proxy_output = vm.serializeString(proxy, "withdrawalManager", withdrawalManager_output);
 
         // Combine implementation and proxy under contractDeployments
         vm.serializeString(contractDeployments, "implementation", implementation_output);

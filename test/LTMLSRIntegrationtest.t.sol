@@ -156,7 +156,7 @@ contract LTMLSRIntegrationTest is Test {
         // LSR initialization commented out - not needed for LAT integration testing
         // LSR.initialize(tokens, types, decimals, pools, tokenCounts, interfaces, slippages);
     }
-        
+
     // Route configuration commented out - not needed for LAT integration testing
     /*
     // Configure routes matching your config exactly
@@ -732,7 +732,7 @@ contract LTMLSRIntegrationTest is Test {
 
         vm.expectRevert();
         ltm.swapAndStakeAssetsToNode(1, assetsToSwap, amountsToSwap, assetsToStake);
-        
+
         console.log("ETH as tokenIn correctly rejected");
     }
 
@@ -749,15 +749,15 @@ contract LTMLSRIntegrationTest is Test {
 
         vm.expectRevert();
         ltm.swapAndStakeAssetsToNode(1, assetsToSwap, amountsToSwap, assetsToStake);
-        
+
         console.log("ETH as tokenOut correctly rejected");
     }
 
     function testSwapAndStakeAssetsToNodes_RevertsOnETHInMultipleAllocations() public {
         console.log("\n=== Test: ETH Validation - Multiple Allocations ===");
 
-        MockLiquidTokenManager.NodeAllocationWithSwap[] memory allocations = 
-            new MockLiquidTokenManager.NodeAllocationWithSwap[](2);
+        MockLiquidTokenManager.NodeAllocationWithSwap[]
+            memory allocations = new MockLiquidTokenManager.NodeAllocationWithSwap[](2);
 
         // First allocation - valid
         allocations[0].nodeId = 1;
@@ -779,7 +779,7 @@ contract LTMLSRIntegrationTest is Test {
 
         vm.expectRevert();
         ltm.swapAndStakeAssetsToNodes(allocations);
-        
+
         console.log("ETH in multiple allocations correctly rejected");
     }
 
@@ -826,7 +826,7 @@ contract LTMLSRIntegrationTest is Test {
 
         // STEP 1: VERIFY LSR INTEGRATION
         console.log("\n--- Step 1: Verify LSR Integration ---");
-        
+
         // Check that LTM has the correct LSR address
         address lsrAddress = address(ltm.LSTswaprouter());
         assertEq(lsrAddress, address(LSR), "LTM should have correct LSR address");
@@ -835,13 +835,13 @@ contract LTMLSRIntegrationTest is Test {
 
         //STEP 2: VERIFY FUNCTION SIGNATURES
         console.log("\n--- Step 2: Verify All Required Functions Exist ---");
-        
+
         // Test that all required functions exist and are callable
         IERC20[] memory testAssets = new IERC20[](1);
         uint256[] memory testAmounts = new uint256[](1);
         testAssets[0] = IERC20(WETH);
         testAmounts[0] = 1 ether;
-        
+
         // These calls will fail due to token balance issues, but they prove the functions exist
         console.log("+ swapAndStakeAssetsToNode() - function signature verified");
         console.log("+ swapAndStakeAssetsToNodes() - function signature verified");
@@ -851,12 +851,15 @@ contract LTMLSRIntegrationTest is Test {
 
         // STEP 3: VERIFY LSR MOCK BEHAVIOR
         console.log("\n--- Step 3: Verify LSR Mock Integration ---");
-        
+
         // Test that LSR mock provides execution plans
         (uint256 quotedAmount, ILSTSwapRouter.MultiStepExecutionPlan memory plan) = LSR.getCompleteMultiStepPlan(
-            WETH, STETH, 1 ether, address(ltm)
+            WETH,
+            STETH,
+            1 ether,
+            address(ltm)
         );
-        
+
         assertTrue(quotedAmount > 0, "LSR should provide quoted amount");
         assertTrue(plan.steps.length > 0, "LSR should provide execution steps");
         console.log("+ LSR provides execution plans with quoted amount:", quotedAmount);
@@ -864,16 +867,16 @@ contract LTMLSRIntegrationTest is Test {
 
         // STEP 4: VERIFY ETH VALIDATION
         console.log("\n--- Step 4: Verify ETH Validation Logic ---");
-        
+
         // These tests should pass as they just validate function behavior
         IERC20[] memory ethAssets = new IERC20[](1);
         uint256[] memory ethAmounts = new uint256[](1);
         IERC20[] memory stakeAssets = new IERC20[](1);
-        
+
         ethAssets[0] = IERC20(ETH_ADDRESS);
         ethAmounts[0] = 1 ether;
         stakeAssets[0] = IERC20(STETH);
-        
+
         // This should revert due to ETH validation
         vm.expectRevert();
         ltm.swapAndStakeAssetsToNode(1, ethAssets, ethAmounts, stakeAssets);
@@ -881,14 +884,14 @@ contract LTMLSRIntegrationTest is Test {
 
         // STEP 5: VERIFY UPDATE FUNCTIONALITY
         console.log("\n--- Step 5: Verify LSR Update Functionality ---");
-        
+
         // Deploy new mock LSR and test update
         MockLSR newLSR = new MockLSR();
         address oldLSRAddress = address(ltm.LSTswaprouter());
-        
+
         ltm.updateLSTSwapRouter(address(newLSR));
         address currentLSRAddress = address(ltm.LSTswaprouter());
-        
+
         assertEq(currentLSRAddress, address(newLSR), "LSR should be updated");
         assertNotEq(currentLSRAddress, oldLSRAddress, "LSR address should change");
         console.log("+ LSR update functionality verified");
@@ -897,41 +900,40 @@ contract LTMLSRIntegrationTest is Test {
 
         // STEP 6: VERIFY ARCHITECTURE COMPLIANCE
         console.log("\n--- Step 6: Verify T2 Architecture Compliance ---");
-        
+
         console.log("+ Architecture verification:");
         console.log("  - LTM integrates with external LSR via interface");
         console.log("  - All required swap and stake functions implemented");
         console.log("  - LSR address configurable via initialize() and update()");
         console.log("  - ETH validation prevents direct ETH token usage");
         console.log("  - Multi-step execution supported via LSR plans");
-
     }
 
     // ================================================================================================
-    // Test LSR Router Update Functionality 
+    // Test LSR Router Update Functionality
     // ================================================================================================
-    
+
     function testUpdateLSTSwapRouter() public {
         console.log("\n=== Test: Update LST Swap Router ===");
         console.log("Testing the updateLSTSwapRouter admin function");
-        
+
         // Deploy a new mock LSR
         MockLSR newLSR = new MockLSR();
         address oldLSRAddress = address(ltm.LSTswaprouter());
-        
+
         console.log("Old LSR address:", oldLSRAddress);
         console.log("New LSR address:", address(newLSR));
-        
+
         // Update the LSR (should work as we're the admin)
         ltm.updateLSTSwapRouter(address(newLSR));
-        
+
         // Verify the update
         address currentLSRAddress = address(ltm.LSTswaprouter());
         assertEq(currentLSRAddress, address(newLSR), "LSR address should be updated");
-        
+
         console.log("+ LSR address updated successfully");
         console.log("Current LSR address:", currentLSRAddress);
-        
+
         console.log("+ updateLSTSwapRouter function working correctly");
     }
 

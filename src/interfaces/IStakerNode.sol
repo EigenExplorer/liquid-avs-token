@@ -4,6 +4,8 @@ pragma solidity ^0.8.27;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 
@@ -58,6 +60,9 @@ interface IStakerNode {
     /// @notice Error for undelegating node when not delegated
     error NodeIsNotDelegated();
 
+    /// @notice Error thrown when array lengths don't match in function parameters
+    error LengthMismatch(uint256 length1, uint256 length2);
+
     // ============================================================================
     // FUNCTIONS
     // ============================================================================
@@ -86,10 +91,30 @@ interface IStakerNode {
         IStrategy[] calldata strategies
     ) external;
 
-    /// @dev Out OF SCOPE FOR V1
-    /**
-    function undelegate() external;
-    */
+    /// @notice Creates a withdrawal request of EL for a set of strategies
+    /// @dev EL creates one withdrawal request regardless of the number of strategies
+    /// @param strategies The set of strategies to withdraw from
+    /// @param shareAmounts The amount of shares (unscaled `depositShares`) to withdraw per strategy
+    /// @return The withdrawal root hash from Eigenlayer
+    function withdrawAssets(
+        IStrategy[] calldata strategies,
+        uint256[] calldata shareAmounts
+    ) external returns (bytes32);
+
+    /// @notice Completes a set of withdrawal requests on EL and retrieves funds
+    /// @dev The funds are always withdrawn in tokens and sent to `LiquidTokenManager`, ie the node never keeps unstaked assets
+    /// @param withdrawals The set of EL withdrawals to complete and associated data
+    /// @param tokens The set of tokens to receive funds in
+    /// @return Array of token addresses that were received from the withdrawal
+    function completeWithdrawals(
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens
+    ) external returns (IERC20[] memory);
+
+    /// @notice Undelegates the node from the current operator and withdraws all shares from all strategies
+    /// @dev EL creates one withdrawal request per strategy in the case of undelegation
+    /// @return Array of withdrawal root hashes from Eigenlayer
+    function undelegate() external returns (bytes32[] memory);
 
     /// @notice Returns the address of the current implementation contract
     /// @return The address of the implementation contract

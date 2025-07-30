@@ -18,7 +18,7 @@ contract MockLiquidTokenManager is ReentrancyGuard {
     // Constants
     address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address constant STETH_ADDRESS = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
-    
+
     // Errors
     error ETHNotSupportedAsDirectToken(address token);
 
