@@ -1,5 +1,6 @@
 import { getPendingProposals, isContractOurs, LIQUID_TOKEN_ADDRESS, AVS_ADDRESS } from '../utils/forge'
 import { type NodeAllocation, stakeAssetsToNodes } from '../tasks/stakeAssetsToNodes'
+import { sharesToTvl } from '../utils/strategyShares'
 
 interface LatResponse {
     address: string
@@ -11,7 +12,7 @@ interface LatResponse {
     }
 }
 
-interface TokenInfo {
+export interface TokenInfo {
     address: string
     symbol: string
     strategyAddress: string
@@ -27,7 +28,9 @@ interface StakerNode {
     nodeId: number
     operatorDelegation: string
     assets: {
+        asset: string
         strategy: string
+        stakedAmount: string
     }[]
 }
 
@@ -98,17 +101,27 @@ interface AvsResponse {
     }
 }
 
-interface AllocationResult {
+interface UserWithdrawal {
+    requestId: string
+    user: string
+    assets: string[]
+    requestedElShares: string[]
+    sharedDeposited: string[]
+}
+
+interface UserWithdrawalsResponse {
+    data: UserWithdrawal[]
+    meta: {
+        count: number
+        skip: number
+        take: number
+    }
+}
+
+interface OptimalAllocation {
     strategyAddress: string
     operatorAddress: string
     aTvlBase: bigint
-}
-
-interface NodeAllocationWithSwap {
-    nodeId: number
-    assetsToSwap: string[]
-    amountsToSwap: bigint[]
-    assetsToStake: string[]
 }
 
 interface ApiUpdate {
@@ -118,13 +131,32 @@ interface ApiUpdate {
     warningSev: number | null
 }
 
-interface StrategyCategories {
-    sev1Strategies: string[]
-    sev2Strategies: string[]
-    sev3Strategies: string[]
+interface UserWithdrawalsSettlement {
+    requestIds: string[]
+    ltAssets: string[]
+    ltAmounts: string[]
+    nodeIds: number[]
+    elAssets: string[][]
+    elAmounts: string[][]
 }
 
+interface NodeAllocationWithSwap {
+    nodeId: number
+    assetsToSwap: string[]
+    amountsToSwap: bigint[]
+    assetsToStake: string[]
+}
+
+/*
+interface NodeWithdrawals {
+    nodeIds: number[]
+    assets: string[][]
+    amounts: string[][]
+}
+*/
+
 const LAT_API_URL = process.env.LAT_API_URL
+const LAT_API_TOKEN = process.env.LAT_API_TOKEN
 const EE_API_URL = process.env.EE_API_URL
 const EE_API_TOKEN = process.env.EE_API_TOKEN
 
@@ -151,7 +183,8 @@ export async function stakeUnstakedAssets() {
         }
 
         // Gather required data
-        const { nodesData, tokensData, operatorProspectStrategies, avsData, latData } = await fetchLatState()
+        const { nodesData, tokensData, operatorProspectStrategies, avsData, latData, userWithdrawals } =
+            await fetchLatState()
 
         const tokenInfo = new Map(tokensData.data.map((token) => [token.address.toLowerCase(), token]))
         const baseAssetSymbol = tokenInfo.get(latData.baseAsset.toLowerCase())?.symbol
@@ -163,19 +196,24 @@ export async function stakeUnstakedAssets() {
             tokenInfo
         )
 
-        const withdrawalTvlBase = 1n // TODO: Fetch withdrawals and calc its total tvl in base asset
+        const withdrawalAmounts = await getWithdrawalAmounts(userWithdrawals, tokenInfo)
+        const withdrawalTvlBase = await calcTvlBaseFromNative(
+            Array.from(withdrawalAmounts.keys()),
+            Array.from(withdrawalAmounts.values().map((value) => value.toString())),
+            tokenInfo
+        )
         const restakeableTvlBase = unstakedTvlBase > withdrawalTvlBase ? unstakedTvlBase - withdrawalTvlBase : 0n
 
         const delegatedNodes = nodesData.stakerNodes.filter(
             (node) => node.operatorDelegation !== '0x0000000000000000000000000000000000000000'
         )
 
-        const assetsAvailable = new Map<string, bigint>()
+        const unstakedAssetsAvailable = new Map<string, bigint>()
         for (const asset of latData.assets) {
-            assetsAvailable.set(asset.asset.toLowerCase(), BigInt(asset.balance))
+            unstakedAssetsAvailable.set(asset.asset.toLowerCase(), BigInt(asset.balance))
         }
 
-        // Construct optimal allocations constained by strategy warnings
+        // Construct optimal allocations constrained by strategy warnings
         // With this, create a set of node allocations for `LTM.swapAndStakeAssetsToNodes`
         const constrainedEligibleOps = operatorProspectStrategies.data.filter((ops) => {
             // The OperatorProspect should be delegated and not be in warning
@@ -206,7 +244,7 @@ export async function stakeUnstakedAssets() {
             baseAssetSymbol
         )
 
-        // Construct optimal allocations NOT constained by strategy warnings
+        // Construct optimal allocations NOT constrained by strategy warnings
         // This helps us decide any pref/warn actions for strategies, we do not use these results for actual allocation
         const unconstrainedEligibleOps = operatorProspectStrategies.data.filter((ops) => {
             // The OperatorProspect should be delegated and not be in warning
@@ -227,25 +265,48 @@ export async function stakeUnstakedAssets() {
             tokenInfo,
             baseAssetSymbol
         )
-        const { apiUpdates, strategyCategories } = constructPrefWarnActions(
-            unconstrainedOptimalAllocations,
-            unconstrainedEligibleOps
+        const apiUpdates = constructPrefWarnActions(unconstrainedOptimalAllocations, unconstrainedEligibleOps)
+
+        // Construct optimal allocations NOT constrained by any warnings
+        // This helps us decide the preference of Operators to withdraw from (in reverse order of preference)
+        const hyptoheticalEligibleOps = operatorProspectStrategies.data.filter((ops) => {
+            // The OperatorProspect should be delegated as undelegated Operators will have no staked funds
+            const operatorProspect = ops.operatorProspect
+            const operatorProspectQualified = operatorProspect.isDelegated
+
+            return operatorProspectQualified // Consider all strategies to be qualified
+        })
+
+        const hypotheticalAllocations = await calculateOptimalAllocations(
+            restakeableTvlBase,
+            hyptoheticalEligibleOps,
+            avsData,
+            quantum,
+            tokenInfo,
+            baseAssetSymbol
+        )
+        const { withdrawalSettlement, remainingUnstakedAssetsAvailable } = constructUserWithdrawalSettlement(
+            userWithdrawals,
+            hypotheticalAllocations,
+            delegatedNodes,
+            unstakedAssetsAvailable,
+            withdrawalAmounts
         )
 
-        // TODO (After withdrawals finalized)
-        // Construct withdrawals with swaps and return remaining available assets
-
-        // Construct node allocations with swaps fromt the remaining available assets
+        // Construct node allocations with swaps from the remaining available assets
         const nodeAllocations = constructNodeAllocations(
             delegatedNodes,
             constrainedOptimalAllocations,
-            assetsAvailable, // TODO: Use the remaining assets available after withdrawals allocatiosn
+            remainingUnstakedAssetsAvailable,
             tokenInfo
         )
 
+        // TODO: Construct node withdrawals for portfolio rebalancing if any
+
         await sendApiUpdates(apiUpdates)
-        // if (withdrawalAllocations.length) await swapAndSettleUserWithdrawals(withdrawalAllocations)
+        // if (withdrawalSettlement) await settleUserWithdrawals(withdrawalSettlement)
         // if (nodeAllocations.length) await swapAndStakeAssetsToNodes(nodeAllocations)
+        // if (nodeWithdrawals.length) await withdrawNodeAssets(nodeWithdrawals)
 
         console.log('[Manager] Stake unstaked assets complete')
     } catch (error) {
@@ -262,6 +323,7 @@ async function fetchLatState(): Promise<{
     operatorProspectStrategies: OperatorInsightsResponse
     avsData: AvsResponse
     latData: LatResponse
+    userWithdrawals: UserWithdrawal[]
 }> {
     // Fetch staker nodes and their delegations
     const nodesResponse = await fetch(`${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/staker-nodes`)
@@ -305,21 +367,52 @@ async function fetchLatState(): Promise<{
         return response.json()
     })
 
+    const userWithdrawalsPromise = fetch(
+        `${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/user-withdrawals?redemption=pending&take=100`
+    ).then((response) => {
+        if (!response.ok) {
+            throw new Error(`Failed to fetch LAT data: ${response.status} ${response.statusText}`)
+        }
+        return response.json()
+    }) // TODO: re-fetch if total > take - skip and construct UserWithdrawal[]
+
     // Fetch remaining data
-    const [tokensData, operatorProspectStrategies, avsData, latData] = await Promise.all([
+    const [tokensData, operatorProspectStrategies, avsData, latData, userWithdrawalsData] = await Promise.all([
         tokenPromise,
         operatorInsightsPromise,
         avsPromise,
-        latPromise
+        latPromise,
+        userWithdrawalsPromise
     ])
+
+    const userWithdrawals = (userWithdrawalsData as UserWithdrawalsResponse).data as UserWithdrawal[] // TODO: remove and attach to the re-fetch logic
 
     return {
         nodesData,
         tokensData,
         operatorProspectStrategies,
         avsData,
-        latData
+        latData,
+        userWithdrawals
     }
+}
+
+async function getWithdrawalAmounts(userWithdrawals: UserWithdrawal[], tokenInfo: Map<string, TokenInfo>) {
+    const assetShares = new Map<string, bigint>()
+
+    for (const withdrawal of userWithdrawals) {
+        for (let i = 0; i < withdrawal.assets.length; i++) {
+            const address = tokenInfo.get(withdrawal.assets[i])?.address
+            const sharesRequested = BigInt(withdrawal.requestedElShares[i])
+
+            if (address) {
+                const existingAmount = assetShares.get(address) || 0n
+                assetShares.set(address, existingAmount + sharesRequested)
+            }
+        }
+    }
+
+    return await sharesToTvl(assetShares, tokenInfo)
 }
 
 async function calculateOptimalAllocations(
@@ -329,7 +422,7 @@ async function calculateOptimalAllocations(
     quantum: bigint,
     tokenInfo: Map<string, TokenInfo>,
     baseAssetSymbol?: string
-): Promise<AllocationResult[]> {
+): Promise<OptimalAllocation[]> {
     if (operatorProspectStrategies.length === 0) {
         return []
     }
@@ -362,7 +455,7 @@ async function calculateOptimalAllocations(
     )
 
     // Calculate the optimal set of allocations
-    const allocations: AllocationResult[] = []
+    const allocations: OptimalAllocation[] = []
     const steps = ceilDiv(totalTvlBase, quantum)
 
     // For every `quantum` of base asset, we find the best (strategy, operator) such that P is maximised
@@ -398,7 +491,7 @@ async function calculateOptimalAllocations(
 function p(
     strategy: string,
     metrics: OperatorAvsStrategyMetrics,
-    allocations: AllocationResult[],
+    allocations: OptimalAllocation[],
     quantum: bigint,
     commonStakeTvlBase: number,
     operatorSetStakeTvlBase: number // Unused for now
@@ -429,19 +522,8 @@ function p(
     return bias * weights.bias + purity * weights.purity + fees * weights.fees + totalApy * weights.totalApy
 }
 
-function constructPrefWarnActions(
-    allocations: AllocationResult[],
-    ops: OperatorProspectStrategy[]
-): {
-    apiUpdates: ApiUpdate[]
-    strategyCategories: StrategyCategories
-} {
+function constructPrefWarnActions(allocations: OptimalAllocation[], ops: OperatorProspectStrategy[]) {
     const apiUpdates: ApiUpdate[] = []
-    const strategyCategories: StrategyCategories = {
-        sev1Strategies: [],
-        sev2Strategies: [],
-        sev3Strategies: []
-    }
 
     // Create a map for quick allocation lookup
     const allocationMap = new Map<string, bigint>()
@@ -466,21 +548,12 @@ function constructPrefWarnActions(
             if (newDaysInWarning >= MAX_DAYS_IN_WARN_SEV1) {
                 newDaysInWarning++
                 newWarningSev = 1
-                if (!strategyCategories.sev1Strategies.includes(o.operatorStrategy.strategyAddress)) {
-                    strategyCategories.sev1Strategies.push(o.operatorStrategy.strategyAddress)
-                }
             } else if (newDaysInWarning >= MAX_DAYS_IN_WARN_SEV2) {
                 newDaysInWarning++
                 newWarningSev = 2
-                if (!strategyCategories.sev2Strategies.includes(o.operatorStrategy.strategyAddress)) {
-                    strategyCategories.sev2Strategies.push(o.operatorStrategy.strategyAddress)
-                }
             } else {
                 newDaysInWarning++
                 newWarningSev = 3
-                if (!strategyCategories.sev3Strategies.includes(o.operatorStrategy.strategyAddress)) {
-                    strategyCategories.sev3Strategies.push(o.operatorStrategy.strategyAddress)
-                }
             }
         } else {
             // Strategy has allocation -- reduce warning until zero then begin preference
@@ -523,18 +596,46 @@ function constructPrefWarnActions(
         }
     }
 
-    return { apiUpdates, strategyCategories }
+    return apiUpdates
+}
+
+// TODO
+function constructUserWithdrawalSettlement(
+    userWithdrawals: UserWithdrawal[],
+    optimalAllocations: OptimalAllocation[],
+    stakerNodes: StakerNode[],
+    unstakedAssetsAvailable: Map<string, bigint>,
+    requestedWithdrawalAmounts: Map<string, bigint>
+) {
+    const withdrawalSettlement: UserWithdrawalsSettlement = {
+        requestIds: [],
+        ltAssets: [],
+        ltAmounts: [],
+        nodeIds: [],
+        elAssets: [],
+        elAmounts: []
+    }
+
+    const remainingUnstakedAssetsAvailable = new Map<string, bigint>()
+    for (const [asset, amount] of unstakedAssetsAvailable) {
+        remainingUnstakedAssetsAvailable.set(asset, amount)
+    }
+
+    // TODO: Allocate withdrawals from unstakedAssetsAvailable and update remainingUnstakedAssetsAvailable
+    // TODO: For the remainder, for each strategy, choose the operators delegation in reverse order of optimalAllocations
+
+    return { withdrawalSettlement, remainingUnstakedAssetsAvailable }
 }
 
 function constructNodeAllocations(
     stakerNodes: StakerNode[],
-    allocations: AllocationResult[],
+    allocations: OptimalAllocation[],
     assetsAvailable: Map<string, bigint>,
     tokenInfo: Map<string, TokenInfo>
 ) {
     const nodeAllocations: NodeAllocationWithSwap[] = []
 
-    const allocationMap = new Map<string, AllocationResult>()
+    const allocationMap = new Map<string, OptimalAllocation>()
     for (const allocation of allocations) {
         allocationMap.set(allocation.strategyAddress, allocation)
     }
@@ -612,7 +713,8 @@ async function sendApiUpdates(apiUpdates: ApiUpdate[]): Promise<void> {
     const response = await fetch(`${LAT_API_URL}/lat/${LIQUID_TOKEN_ADDRESS}/operator-prospects/batch-update`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-API-Token': `${LAT_API_TOKEN}`
         },
         body: JSON.stringify({ updates: apiUpdates })
     })
