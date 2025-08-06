@@ -200,7 +200,7 @@ export async function stakeUnstakedAssets() {
             unstakedAssetsAvailable
         } = await fetchLatState()
 
-        // We want to accomplish the following whilst maximising P = p(total apy, avs purity, operator bias, operator fees):
+        // We want to accomplish the following whilst maximising P = p(operator bias, avs purity, apy):
         //
         //   Action i    -  allocate funds (unstaked / staked only if required) for user withdrawals
         //   Action ii   -  allocate remaining funds to nodes for staking
@@ -825,7 +825,7 @@ async function calculateOptimalAllocations(
         baseAssetSymbol
     )
 
-    // Calculate the optimal set of allocations
+    // Calculate the optimal set of allocations given that APY dilutes with every quantum of TVL increase
     const allocations: OptimalAllocation[] = []
     const steps = Number((totalTvlBase + quantum - 1n) / quantum)
 
@@ -1139,10 +1139,9 @@ function p(
     operatorSetStakeTvlBase: number // TODO after API Slashing upgrade
 ): number {
     const weights = {
-        bias: 0.15,
-        purity: 0.25,
-        fees: 0.1,
-        totalApy: 0.2
+        bias: 0.1,
+        purity: 0.45,
+        apy: 0.45
     }
 
     const bias = metrics.bias
@@ -1156,12 +1155,13 @@ function p(
         }
     }
 
-    const totalApy =
+    const netCommonStakeApy = metrics.commonStakeApy * (1 - metrics.feesBps / 10000)
+    const netApy =
         metrics.baseApy +
         metrics.elApy +
-        metrics.commonStakeApy * (commonStakeTvlBase / (commonStakeTvlBase + Number(quantum) + allocatedTvlBase)) // Dilution of APY given existing allocations and potentially new allocation
+        netCommonStakeApy * (commonStakeTvlBase / (commonStakeTvlBase + Number(quantum) + allocatedTvlBase)) // Dilution of APY given existing allocations and potentially new allocation
 
-    return bias * weights.bias + purity * weights.purity + fees * weights.fees + totalApy * weights.totalApy
+    return bias * weights.bias + purity * weights.purity + netApy * weights.apy
 }
 
 /**
