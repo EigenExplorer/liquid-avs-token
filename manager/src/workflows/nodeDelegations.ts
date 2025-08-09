@@ -44,7 +44,8 @@ interface StakerNodesResponse {
 const LAT_API_URL = process.env.LAT_API_URL
 
 const MIN_DAYS_IN_PREF = 30
-const MAX_DAYS_IN_WARN_SEV1 = 30
+const MAX_DAYS_IN_WARN_SEV2 = 30
+const MAX_DAYS_IN_WARN_SEV1 = 7
 
 // --- Core functions ---
 
@@ -70,7 +71,10 @@ export async function nodeDelegations() {
 
         // Undelegate nodes from problematic operators
         const operatorsToUndelegate = operatorProspectsData.data.filter(
-            (op) => op.warningSev === 1 && op.daysInWarning > MAX_DAYS_IN_WARN_SEV1
+            (op) =>
+                op.bias === 0 &&
+                ((op.warningSev === 1 && op.daysInWarning > MAX_DAYS_IN_WARN_SEV1) ||
+                    (op.warningSev === 2 && op.daysInWarning > MAX_DAYS_IN_WARN_SEV2))
         )
 
         const nodesToUndelegate = nodesData.stakerNodes.filter((node) =>
@@ -141,7 +145,7 @@ export async function nodeDelegations() {
 // --- Helper functions ---
 
 /**
- * Structures and returns all relevant data from EE & LAT APIs
+ * Structures and returns all relevant data from LAT API
  *
  * @returns
  */
