@@ -2,6 +2,8 @@ import 'dotenv/config'
 
 import { refreshDeployment } from './workflows/refreshDeployment'
 import { stakeUnstakedAssets } from './workflows/stakeUnstakedAssets'
+import { completeRedemptions } from './workflows/completeRedemptions'
+import { nodeDelegations } from './workflows/nodeDelegations'
 
 console.log('Initializing Restaking Manager ...')
 
@@ -22,8 +24,8 @@ async function dailyResponsibilities(retryCount = 0) {
 
         await refreshDeployment()
         await stakeUnstakedAssets()
-        // TODO: trigger withdrawal redemption completions
-        // TODO: trigger node undelegations/delegations
+        await completeRedemptions()
+        await nodeDelegations()
         // TODO: trigger el reward claims
 
         console.timeEnd('[Manager] Completed all responsibilities in')

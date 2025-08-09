@@ -114,6 +114,7 @@ interface UserWithdrawal {
 interface UserWithdrawalsResponse {
     data: UserWithdrawal[]
     meta: {
+        total: number
         count: number
         skip: number
         take: number
@@ -200,7 +201,7 @@ export async function stakeUnstakedAssets() {
             unstakedAssetsAvailable
         } = await fetchLatState()
 
-        // We want to accomplish the following whilst maximising P = p(operator bias, avs purity, apy):
+        // We want to accomplish the following whilst maximising system-wide P = p(operator bias, avs purity, apy):
         //
         //   Action i    -  allocate funds (unstaked / staked only if required) for user withdrawals
         //   Action ii   -  allocate remaining funds to nodes for staking
@@ -385,6 +386,7 @@ async function fetchLatState(): Promise<{
 
     const userWithdrawalsPromise = (async (): Promise<UserWithdrawalsResponse> => {
         const allWithdrawals: UserWithdrawal[] = []
+        let total = 0
         let skip = 0
         const take = 100
 
@@ -400,8 +402,9 @@ async function fetchLatState(): Promise<{
             const data = (await response.json()) as UserWithdrawalsResponse
             allWithdrawals.push(...data.data)
 
-            // If we got less than `take` results, we've fetched all available data
-            if (data.data.length < take) {
+            // Check if we've paginated through `total` records
+            if (skip + take >= data.meta.total) {
+                total = data.meta.total
                 break
             }
 
@@ -411,6 +414,7 @@ async function fetchLatState(): Promise<{
         return {
             data: allWithdrawals,
             meta: {
+                total,
                 count: allWithdrawals.length,
                 skip: 0,
                 take: allWithdrawals.length
@@ -1146,7 +1150,6 @@ function p(
 
     const bias = metrics.bias
     const purity = metrics.purityBps / 100
-    const fees = metrics.feesBps / 100
 
     let allocatedTvlBase = 0
     for (const allocation of allocations) {
