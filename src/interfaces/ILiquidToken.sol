@@ -125,19 +125,19 @@ interface ILiquidToken {
     /// @param amounts The amount of tokens to withdraw for each asset
     function previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) external view returns (bool);
 
-    /// @notice Credits queued balances for a given set of assets
+    /// @notice Credits queued balances for a given set of assets denoted in their corresponding EL shares
     /// @param assets The assets to credit
-    /// @param amounts The credit amounts expressed in native token
-    function creditQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external;
+    /// @param amounts The credit amounts expressed in EL shares
+    function creditQueuedAssetElShares(IERC20[] calldata assets, uint256[] calldata amounts) external;
 
-    /// @notice Debits queued balances for a given set of assets
+    /// @notice Debits queued balances for a given set of assets denoted in their corresponding EL shares
     /// @param assets The assets to debit
-    /// @param amounts The debit amounts expressed in native token
-    /// @param sharesToBurn Escrow LAT shares to burn along with this debit (is non-zero only for user withdrawal fulfilment)
-    function debitQueuedAssetBalances(
+    /// @param amounts The debit amounts expressed in EL shares
+    /// @param latSharesToBurn Escrow LAT shares to burn along with this debit (is non-zero only for user withdrawal fulfilment)
+    function debitQueuedAssetElShares(
         IERC20[] calldata assets,
         uint256[] calldata amounts,
-        uint256 sharesToBurn
+        uint256 latSharesToBurn
     ) external;
 
     /// @notice Credits asset balances for a given set of assets

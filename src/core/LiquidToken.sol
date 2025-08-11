@@ -13,6 +13,7 @@ import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 /**
  * @title LiquidToken
@@ -41,8 +42,8 @@ contract LiquidToken is
     /// @notice Mapping of assets to their corresponding unstaked balances (held in this contract)
     mapping(address => uint256) public assetBalances;
 
-    /// @notice Mapping of tokens to their corresponding queued balances
-    mapping(address => uint256) public queuedAssetBalances;
+    /// @notice Mapping of tokens to their corresponding queued withdrawable shares (post-slashing)
+    mapping(address => uint256) public queuedAssetElShares;
 
     /// @notice v2 LAT contracts
     IWithdrawalManager public withdrawalManager;
@@ -210,38 +211,38 @@ contract LiquidToken is
     }
 
     /// @inheritdoc ILiquidToken
-    function creditQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
+    function creditQueuedAssetElShares(IERC20[] calldata assets, uint256[] calldata shares) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager) && msg.sender != address(withdrawalManager))
             revert UnauthorizedAccess(msg.sender);
 
-        if (assets.length != amounts.length) revert ArrayLengthMismatch();
+        if (assets.length != shares.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < assets.length; i++) {
-            queuedAssetBalances[address(assets[i])] += amounts[i];
+            queuedAssetElShares[address(assets[i])] += shares[i];
         }
     }
 
     /// @inheritdoc ILiquidToken
-    function debitQueuedAssetBalances(
+    function debitQueuedAssetElShares(
         IERC20[] calldata assets,
-        uint256[] calldata amounts,
-        uint256 sharesToBurn
+        uint256[] calldata shares,
+        uint256 latSharesToBurn
     ) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager) && msg.sender != address(withdrawalManager))
             revert UnauthorizedAccess(msg.sender);
 
-        if (assets.length != amounts.length) revert ArrayLengthMismatch();
+        if (assets.length != shares.length) revert ArrayLengthMismatch();
 
-        if (sharesToBurn > 0 && balanceOf(address(this)) < sharesToBurn) {
-            revert InsufficientBalance(IERC20(address(this)), sharesToBurn, balanceOf(address(this)));
+        if (latSharesToBurn > 0 && balanceOf(address(this)) < latSharesToBurn) {
+            revert InsufficientBalance(IERC20(address(this)), latSharesToBurn, balanceOf(address(this)));
         }
 
         for (uint256 i = 0; i < assets.length; i++) {
-            queuedAssetBalances[address(assets[i])] -= amounts[i];
+            queuedAssetElShares[address(assets[i])] -= shares[i];
         }
 
-        if (sharesToBurn > 0) {
-            _burn(address(this), sharesToBurn);
+        if (latSharesToBurn > 0) {
+            _burn(address(this), latSharesToBurn);
         }
     }
 
@@ -283,6 +284,7 @@ contract LiquidToken is
             asset.safeTransfer(receiver, amount);
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this)))
+                // Note: allow for 10bps tolerance and reset the assetBalances amount
                 revert AssetBalanceOutOfSync(
                     assetsToRetrieve[i],
                     assetBalances[address(asset)],
@@ -325,7 +327,7 @@ contract LiquidToken is
             );
 
             // Staked withdrawable asset balances
-            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i]);
+            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false);
         }
 
         return total;
@@ -386,7 +388,10 @@ contract LiquidToken is
 
     /// @dev Called by `balanceQueuedAssets` and `totalAssets`
     function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
-        return queuedAssetBalances[address(asset)];
+        uint256 shares = queuedAssetElShares[address(asset)];
+        if (shares == 0) return 0;
+
+        return liquidTokenManager.assetSharesToUnderlying(asset, shares);
     }
 
     /// @dev Called by `initiateWithdrawal` and `previewWithdrawal`
@@ -395,7 +400,7 @@ contract LiquidToken is
         for (uint256 i = 0; i < assets.length; i++) {
             IERC20 asset = assets[i];
             if (
-                (assetBalances[address(asset)] + liquidTokenManager.getDepositAssetBalance(asset)) < amounts[i] // Preview with pre-slashing balances
+                (assetBalances[address(asset)] + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
             ) {
                 isPossible = false;
                 break;

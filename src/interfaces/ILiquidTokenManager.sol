@@ -75,11 +75,13 @@ interface ILiquidTokenManager {
     /// @param requestIds Array of request IDs associated with this redemption
     /// @param withdrawalRoots Array of withdrawal roots from EigenLayer withdrawals
     /// @param receiver Contract that will receive the withdrawn funds (`LiquidToken` or `WithdrawalManager`)
+    /// @param assets Array of token addresses being withdrawn
+    /// @param elWithdrawableShares Array of EL shares withdrawable per asset (after any slashing)
     struct Redemption {
         bytes32[] requestIds;
         bytes32[] withdrawalRoots;
         IERC20[] assets;
-        uint256[] withdrawableAmounts;
+        uint256[] elWithdrawableShares;
         address receiver;
     }
 
@@ -188,7 +190,7 @@ interface ILiquidTokenManager {
     event RedemptionCompleted(
         bytes32 indexed redemptionId,
         IERC20[] assets,
-        uint256[] requestedAmounts,
+        uint256[] requestedElShares,
         uint256[] receivedAmounts
     );
 
@@ -367,34 +369,28 @@ interface ILiquidTokenManager {
     /// @dev Strategies are always withdrawn into their respective assets, they are never converted
     /// @param nodeIds The ID of the nodes to withdraw from
     /// @param assets The array of assets to withdraw for each node
-    /// @param amounts The amounts for `assets`
+    /// @param elDepositShares The EL deposit shares for `assets` (unscaled, pre-slashing shares)
     function withdrawNodeAssets(
         uint256[] calldata nodeIds,
         IERC20[][] calldata assets,
-        uint256[][] calldata amounts
+        uint256[][] calldata elDepositShares
     ) external;
 
     /// @notice Enables a set of user withdrawal requests to be fulfillable after 14 days by the respective users
-    /// @dev The caller can allocate funds from both, unstaked and staked balances in the proportion it deems fit
-    /// @dev This function accepts a settlement only if it will actually allocate enough funds per token to settle ALL user withdrawal requests
-    /// @dev If any part of the settlement draws from unstaked balances, funds are transferred right away from `LiquidToken` to `WithdrawalManager`
-    /// @dev If any part of the settlement draws from staked balances, a redemption is created on completion of which, funds are transferred to `WithdrawalManager`
+    /// @dev This function only uses staked balances from EigenLayer to ensure fair slashing distribution
+    /// @dev This function accepts a settlement only if it will actually allocate enough EL shares per token to settle ALL user withdrawal requests
+    /// @dev A redemption is created and on completion, funds are transferred to `WithdrawalManager`
     /// @dev Caller should index the `RedemptionCreatedForUserWithdrawals` event to have the required data for redemption completion
-    /// @dev The function is not concerned with actual amounts withdrawn from EL after slashing, if any
-    /// @dev The caller is free to decide how much of slashing loss to pass on to users --  more allocation from unstaked balances => less slashing impact
+    /// @dev All users share the same post-slashing conversion rate, ensuring fair loss distribution
     /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
-    /// @param ltAssets The assets that will be drawn from `LiquidToken`
-    /// @param ltAmounts The amounts for `ltAssets`
     /// @param nodeIds The node IDs from which funds will be withdrawn
     /// @param elAssets The array of assets to be withdrawn for a given node from EigenLayer
-    /// @param elAmounts The amounts for `elAssets`
+    /// @param elDepositShares The EL deposit shares for `elAssets` (unscaled, pre-slashing shares)
     function settleUserWithdrawals(
         bytes32[] calldata requestIds,
-        IERC20[] calldata ltAssets,
-        uint256[] calldata ltAmounts,
         uint256[] calldata nodeIds,
         IERC20[][] calldata elAssets,
-        uint256[][] calldata elAmounts
+        uint256[][] calldata elDepositShares
     ) external;
 
     /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
@@ -439,28 +435,36 @@ interface ILiquidTokenManager {
     function getStrategyToken(IStrategy strategy) external view returns (IERC20);
 
     /// @notice Gets the staked deposits balance of an asset for all nodes
-    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
+    /// @param inElShares Whether to return EL shares (true) or underlying amount (false)
     /// @return The total staked balance of the asset across all nodes
-    function getDepositAssetBalance(IERC20 asset) external view returns (uint256);
+    function getDepositAssetBalance(IERC20 asset, bool inElShares) external view returns (uint256);
 
     /// @notice Gets the staked deposits balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `depositShares` which does not factor in any slashing
+    /// @dev This corresponds to the value of `depositShares` which does not factor in any slashing
     /// @param asset The asset to check the balance for
     /// @param nodeId The ID of the node
+    /// @param inElShares Whether to return EL shares (true) or underlying amount (false)
     /// @return The staked balance of the asset for the specific node
-    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+    function getDepositAssetBalanceNode(IERC20 asset, uint256 nodeId, bool inElShares) external view returns (uint256);
 
     /// @notice Gets the withdrawable balance of an asset for all nodes
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @dev This corresponds to the value of `withdrawableShares` which is `depositShares` minus slashing if any
     /// @param asset The asset token address
-    function getWithdrawableAssetBalance(IERC20 asset) external view returns (uint256);
+    /// @param inElShares Whether to return EL shares (true) or underlying amount (false)
+    function getWithdrawableAssetBalance(IERC20 asset, bool inElShares) external view returns (uint256);
 
     /// @notice Gets the withdrawable balance of an asset for a specific node
-    /// @dev This corresponds to the asset value of `withdrawableShares` which is `depositShares` minus slashing if any
+    /// @dev This corresponds to the value of `withdrawableShares` which is `depositShares` minus slashing if any
     /// @param asset The asset token address
     /// @param nodeId The ID of the node
-    function getWithdrawableAssetBalanceNode(IERC20 asset, uint256 nodeId) external view returns (uint256);
+    /// @param inElShares Whether to return EL shares (true) or underlying amount (false)
+    function getWithdrawableAssetBalanceNode(
+        IERC20 asset,
+        uint256 nodeId,
+        bool inElShares
+    ) external view returns (uint256);
 
     /// @notice Checks if a token is supported
     /// @param token Address of the token to check
@@ -483,6 +487,18 @@ interface ILiquidTokenManager {
     /// @param strategy The strategy address
     /// @return True if the strategy is supported
     function isStrategySupported(IStrategy strategy) external view returns (bool);
+
+    /// @notice Convert a given amount EL shares of a token to its underlying value
+    /// @param asset Address of the token
+    /// @param amount Amount of shares
+    /// @return Underlying asset value
+    function assetSharesToUnderlying(IERC20 asset, uint256 amount) external view returns (uint256);
+
+    /// @notice Convert a given amount of a token to EL shares amount
+    /// @param asset Address of the token
+    /// @param amount Amount of token
+    /// @return EL shares amount
+    function assetUnderlyingToShares(IERC20 asset, uint256 amount) external view returns (uint256);
 
     /// @notice Returns the token registry oracle contract
     /// @return The ITokenRegistryOracle interface

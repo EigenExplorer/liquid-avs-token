@@ -36,7 +36,7 @@ interface IWithdrawalManager {
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
     /// @param requestedAmounts Array of amounts being withdrawn per asset (in the unit of the asset)
-    /// @param withdrawableAmounts Array of amounts withdrawable per asset after any slashing (in the unit of the asset)
+    /// @param elWithdrawableShares Array of EL shares withdrawable per asset (after any slashing)
     /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param requestTime Timestamp when the withdrawal was requested
     /// @param canFulfill Whether the withdrawal can be fulfilled by the user (set to true after redemption completion)
@@ -44,7 +44,7 @@ interface IWithdrawalManager {
         address user;
         IERC20[] assets;
         uint256[] requestedAmounts;
-        uint256[] withdrawableAmounts;
+        uint256[] elWithdrawableShares;
         uint256 sharesDeposited;
         uint256 requestTime;
         bool canFulfill;
@@ -59,6 +59,7 @@ interface IWithdrawalManager {
     /// @param user Address of the user requesting withdrawal
     /// @param assets Array of token addresses being withdrawn
     /// @param amounts Array of amounts being withdrawn per asset
+    /// @param withdrawableElShares Array of withdrawable EL shares per asset
     /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param timestamp Block timestamp when the request was made
     event WithdrawalInitiated(
@@ -66,6 +67,7 @@ interface IWithdrawalManager {
         address indexed user,
         IERC20[] assets,
         uint256[] amounts,
+        uint256[] withdrawableElShares,
         uint256 sharesDeposited,
         uint256 timestamp
     );
@@ -191,11 +193,11 @@ interface IWithdrawalManager {
     /// @dev If there was any slashing during the withdrawal queue period, its accounting is handled here
     /// @param redemptionId The ID of the redemption
     /// @param receivedAssets The set of assets that received from all EL withdrawals
-    /// @param receivedAmounts Total amounts per for `receivedAssets` (after any slashing)
+    /// @param receivedElShares Total EL shares received per `receivedAssets` (converted from underlying amounts)
     function recordRedemptionCompleted(
         bytes32 redemptionId,
         IERC20[] calldata receivedAssets,
-        uint256[] calldata receivedAmounts
+        uint256[] calldata receivedElShares
     ) external returns (uint256[] memory);
 
     /// @notice Updates the withdrawal delay period
