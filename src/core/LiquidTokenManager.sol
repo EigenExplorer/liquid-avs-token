@@ -1045,19 +1045,27 @@ contract LiquidTokenManager is
         }
 
         // Keep track of the actual amounts received
-        // This may differ from the original requested amounts in the `Withdrawal` struct due to slashing
+        // This may differ from the original requested shares in the `Withdrawal` struct due to slashing
         uint256[] memory receivedAmounts = new uint256[](supportedTokens.length);
         uint256[] memory receivedElShares = new uint256[](supportedTokens.length);
 
         // Transfer all withdrawn assets to `receiver`, either `LiquidToken` or `WithdrawalManager`
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
             IERC20 token = receivedTokens[i];
-            uint256 balance = token.balanceOf(address(this));
-            receivedAmounts[i] = balance;
-            receivedElShares[i] = tokenStrategies[token].underlyingToSharesView(balance);
+            uint256 balanceBefore = token.balanceOf(address(this));
 
-            if (balance > 0) {
-                token.safeTransfer(receiver, balance);
+            if (balanceBefore > 0) {
+                uint256 receiverBalanceBefore = token.balanceOf(receiver);
+                token.safeTransfer(receiver, balanceBefore);
+                uint256 receiverBalanceAfter = token.balanceOf(receiver);
+
+                // Calculate actual net amount transferred
+                uint256 netTransferredAmount = receiverBalanceAfter - receiverBalanceBefore;
+                receivedAmounts[i] = netTransferredAmount;
+                receivedElShares[i] = tokenStrategies[token].underlyingToSharesView(netTransferredAmount);
+            } else {
+                receivedAmounts[i] = 0;
+                receivedElShares[i] = 0;
             }
         }
 
