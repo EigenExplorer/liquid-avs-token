@@ -28,7 +28,16 @@ import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
 import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
 import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
 import {ILSTSwapRouter} from "../../src/interfaces/ILSTSwapRouter.sol";
+// Import the V1 interface with alias to avoid conflicts
+import {IWithdrawalManager as IWithdrawalManagerV1} from "../../src/interfaces/IWithdrawalManager.sol";
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
+
+// Mock withdrawal manager for BaseTest
+contract MockWithdrawalManager {
+    // Minimal mock implementation for BaseTest
+    function initialize(bytes memory) external {}
+    function createWithdrawalRequest(IERC20[] memory, uint256[] memory, uint256, address, bytes32) external {}
+}
 
 contract BaseTest is Test {
     // Source type constants
@@ -52,6 +61,9 @@ contract BaseTest is Test {
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
+
+    // Mock withdrawal manager for BaseTest
+    MockWithdrawalManager public mockWithdrawalManager;
 
     // Mock LSR contract for testing - Added
     ILSTSwapRouter public mockLSTSwapRouter;
@@ -200,7 +212,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _renounceAllRoles() private {
+    function _renounceAllRoles() internal virtual {
         vm.startPrank(deployer);
 
         // LiquidTokenManager
@@ -259,7 +271,7 @@ contract BaseTest is Test {
         mETHToETHSelector = bytes4(keccak256("mETHToETH(uint256)"));
     }
 
-    function _setupELContracts() private {
+    function _setupELContracts() internal virtual {
         uint256 chainId = block.chainid;
         NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
 
@@ -267,8 +279,11 @@ contract BaseTest is Test {
         delegationManager = IDelegationManager(addresses.delegationManager);
     }
 
-    function _deployMockContracts() private {
-        // Base test tokens
+    function _deployMockContracts() internal virtual {
+        // Deploy mock withdrawal manager first
+        mockWithdrawalManager = new MockWithdrawalManager();
+
+        // Base test tokens - Fix: MockERC20 expects 3 parameters (name, symbol, decimals)
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
         mockStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
@@ -282,7 +297,7 @@ contract BaseTest is Test {
         mockLSTSwapRouter = ILSTSwapRouter(address(0xDEAD)); // Placeholder address for now
     }
 
-    function _deployMainContracts() private {
+    function _deployMainContracts() internal virtual {
         _tokenRegistryOracleImplementation = new TokenRegistryOracle();
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
@@ -290,7 +305,7 @@ contract BaseTest is Test {
         stakerNodeImplementation = new StakerNode();
     }
 
-    function _deployProxies() private {
+    function _deployProxies() internal virtual {
         tokenRegistryOracle = TokenRegistryOracle(
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
@@ -313,7 +328,7 @@ contract BaseTest is Test {
         );
     }
 
-    function _setupOracleSources() private {
+    function _setupOracleSources() internal virtual {
         console.log("Setting up oracle sources...");
 
         // Grant TOKEN_CONFIGURATOR_ROLE to admin
@@ -359,7 +374,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeTokenRegistryOracle() private {
+    function _initializeTokenRegistryOracle() internal virtual {
         console.log("Initializing TokenRegistryOracle...");
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
             initialOwner: deployer,
@@ -388,15 +403,17 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeLiquidTokenManager() private {
+    function _initializeLiquidTokenManager() internal virtual {
         console.log("Initializing LiquidTokenManager...");
+        // Use mock withdrawal manager instead of address(0)
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
-            lstSwapRouter: mockLSTSwapRouter, // Use mock LSR for testing
+            lstSwapRouter: mockLSTSwapRouter,
+            withdrawalManager: IWithdrawalManagerV1(address(mockWithdrawalManager)), // Use mock instead of address(0)
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
@@ -418,10 +435,12 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeStakerNodeCoordinator() private {
+    function _initializeStakerNodeCoordinator() internal virtual {
         console.log("Initializing StakerNodeCoordinator...");
+        // Use mock withdrawal manager instead of address(0)
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: IWithdrawalManagerV1(address(mockWithdrawalManager)), // Use mock instead of address(0)
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             maxNodes: 10,
@@ -443,15 +462,17 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeLiquidToken() private {
+    function _initializeLiquidToken() internal virtual {
         console.log("Initializing LiquidToken...");
+        // Use mock withdrawal manager instead of address(0)
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
             symbol: "LST",
             initialOwner: deployer,
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),
-            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle))
+            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+            withdrawalManager: IWithdrawalManagerV1(address(mockWithdrawalManager)) // Use mock instead of address(0)
         });
 
         vm.prank(deployer);
@@ -464,7 +485,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _setupTestTokens() private {
+    function _setupTestTokens() internal virtual {
         testToken.mint(user1, 100 ether);
         testToken.mint(user2, 100 ether);
         testToken2.mint(user1, 100 ether);
@@ -502,7 +523,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Chainlink as the primary price source
      */
-    function _setupChainlinkToken(address token, address feed) internal {
+    function _setupChainlinkToken(address token, address feed) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -517,7 +538,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Protocol rate as the primary price source
      */
-    function _setupProtocolToken(address token, address contract_, bytes4 selector, bool needsArg) internal {
+    function _setupProtocolToken(address token, address contract_, bytes4 selector, bool needsArg) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -532,7 +553,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Curve pool as the primary price source
      */
-    function _setupCurveToken(address token, address curvePool) internal {
+    function _setupCurveToken(address token, address curvePool) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -554,7 +575,7 @@ contract BaseTest is Test {
         uint8 needsArg,
         address fallbackSource,
         bytes4 fallbackFn
-    ) internal {
+    ) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(token, primaryType, primarySource, needsArg, fallbackSource, fallbackFn);
     }
@@ -562,53 +583,53 @@ contract BaseTest is Test {
     /**
      * @dev Gets the price of a token directly from TokenRegistryOracle
      */
-    function _getTokenPrice(address token) internal returns (uint256) {
+    function _getTokenPrice(address token) internal virtual returns (uint256) {
         return tokenRegistryOracle.getTokenPrice(token);
     }
 
     // Helper functions for inheriting contracts to use
-    function _actAsAdmin(function() internal fn) internal {
+    function _actAsAdmin(function() internal fn) internal virtual {
         vm.startPrank(admin);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsDeployer(function() internal fn) internal {
+    function _actAsDeployer(function() internal fn) internal virtual {
         vm.startPrank(deployer);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsUser1(function() internal fn) internal {
+    function _actAsUser1(function() internal fn) internal virtual {
         vm.startPrank(user1);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsUser2(function() internal fn) internal {
+    function _actAsUser2(function() internal fn) internal virtual {
         vm.startPrank(user2);
         fn();
         vm.stopPrank();
     }
 
     // Helper to create a new price source mock for a token - updated to use int256
-    function _createMockPriceFeed(int256 price, uint8 decimals) internal returns (MockChainlinkFeed) {
+    function _createMockPriceFeed(int256 price, uint8 decimals) internal virtual returns (MockChainlinkFeed) {
         return new MockChainlinkFeed(price, decimals);
     }
 
-    function _createMockProtocolToken(uint256 exchangeRate) internal returns (MockProtocolToken) {
+    function _createMockProtocolToken(uint256 exchangeRate) internal virtual returns (MockProtocolToken) {
         MockProtocolToken token = new MockProtocolToken();
         token.setExchangeRate(exchangeRate);
         return token;
     }
 
-    function _createMockCurvePool(uint256 virtualPrice) internal returns (MockCurvePool) {
+    function _createMockCurvePool(uint256 virtualPrice) internal virtual returns (MockCurvePool) {
         MockCurvePool pool = new MockCurvePool();
         pool.setVirtualPrice(virtualPrice);
         return pool;
     }
 
-    function _createMockFailingOracle() internal returns (MockFailingOracle) {
+    function _createMockFailingOracle() internal virtual returns (MockFailingOracle) {
         return new MockFailingOracle();
     }
 
@@ -617,7 +638,7 @@ contract BaseTest is Test {
     /**
      * @dev Sets a mock LSR contract for testing swap functionality
      */
-    function _setMockLSTSwapRouter(address mockLSR) internal {
+    function _setMockLSTSwapRouter(address mockLSR) internal virtual {
         mockLSTSwapRouter = ILSTSwapRouter(mockLSR);
 
         // Update in LiquidTokenManager if it's already initialized
@@ -635,7 +656,7 @@ contract BaseTest is Test {
         IERC20[] memory assetsToSwap,
         uint256[] memory amountsToSwap,
         IERC20[] memory assetsToStake
-    ) internal {
+    ) internal virtual {
         // This would be overridden in actual test contracts that set up proper mocks
         vm.startPrank(deployer);
         liquidTokenManager.swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
@@ -645,7 +666,36 @@ contract BaseTest is Test {
     /**
      * @dev Helper to get current LSR address
      */
-    function _getLSTSwapRouterAddress() internal view returns (address) {
+    function _getLSTSwapRouterAddress() internal view virtual returns (address) {
         return address(liquidTokenManager.lstSwapRouter());
+    }
+
+    // ================= WITHDRAWAL MANAGER INTEGRATION HELPERS =================
+    // Note: These helpers are generic and don't depend on a specific interface version
+
+    /**
+     * @dev Helper to simulate user deposit for withdrawal testing
+     */
+    function _simulateUserDeposit(
+        address user,
+        address token,
+        uint256 amount
+    ) internal virtual returns (uint256 shares) {
+        // Mint tokens to user if needed
+        MockERC20(token).mint(user, amount);
+
+        // Approve LiquidToken
+        vm.prank(user);
+        IERC20(token).approve(address(liquidToken), amount);
+
+        // Deposit
+        IERC20[] memory assets = new IERC20[](1);
+        uint256[] memory amounts = new uint256[](1);
+        assets[0] = IERC20(token);
+        amounts[0] = amount;
+
+        vm.prank(user);
+        uint256[] memory sharesArray = liquidToken.deposit(assets, amounts, user);
+        shares = sharesArray[0];
     }
 }

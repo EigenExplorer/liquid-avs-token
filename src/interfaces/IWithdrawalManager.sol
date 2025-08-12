@@ -105,6 +105,12 @@ interface IWithdrawalManager {
     /// @param newDelay Newly updated withdrawal delay value
     event WithdrawalDelayUpdated(uint256 oldDelay, uint256 newDelay);
 
+    /// @notice Emitted when an asset was not received in redemption completion
+    /// @param requestId The withdrawal request ID
+    /// @param asset The asset that was not received
+    /// @param expectedShares The expected shares that were not received
+    event AssetNotReceived(bytes32 indexed requestId, IERC20 indexed asset, uint256 expectedShares);
+
     // ============================================================================
     // CUSTOM ERRORS
     // ============================================================================
@@ -157,6 +163,29 @@ interface IWithdrawalManager {
     /// @param required The amount required
     /// @param available The amount available
     error InsufficientBalance(IERC20 asset, uint256 required, uint256 available);
+
+    /// @notice Error thrown when assets array exceeds maximum allowed
+    error ExceedsMaxAssets();
+
+    /// @notice Error thrown when a withdrawal request already exists
+    error RequestAlreadyExists();
+
+    /// @notice Error thrown when duplicate assets are provided
+    /// @param asset The duplicate asset address
+    error DuplicateAsset(address asset);
+
+    /// @notice Error thrown when an unsupported asset is provided
+    /// @param asset The unsupported asset
+    error UnsupportedAsset(IERC20 asset);
+
+    /// @notice Error thrown when a request is being processed
+    error RequestBeingProcessed();
+
+    /// @notice Error thrown when a redemption already exists
+    error RedemptionAlreadyExists();
+
+    /// @notice Error thrown when a reentrant call is detected
+    error ReentrantCall();
 
     // ============================================================================
     // FUNCTIONS
