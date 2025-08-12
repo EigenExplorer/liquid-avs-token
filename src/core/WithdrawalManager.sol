@@ -96,11 +96,17 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         if (msg.sender != address(liquidToken)) revert NotLiquidToken(msg.sender);
         if (sharesDeposited == 0) revert ZeroAmount();
 
+        uint256[] memory elWithdrawableShares = new uint256[](assets.length);
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            elWithdrawableShares[i] = liquidTokenManager.assetUnderlyingToShares(assets[i], amounts[i]);
+        }
+
         WithdrawalRequest memory request = WithdrawalRequest({
             user: user,
             assets: assets,
             requestedAmounts: amounts,
-            withdrawableAmounts: amounts,
+            elWithdrawableShares: elWithdrawableShares,
             sharesDeposited: sharesDeposited,
             requestTime: block.timestamp,
             canFulfill: false
@@ -109,7 +115,15 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         withdrawalRequests[requestId] = request;
         userWithdrawalRequests[user].push(requestId);
 
-        emit WithdrawalInitiated(requestId, user, assets, amounts, sharesDeposited, block.timestamp);
+        emit WithdrawalInitiated(
+            requestId,
+            user,
+            assets,
+            amounts,
+            elWithdrawableShares,
+            sharesDeposited,
+            block.timestamp
+        );
     }
 
     /// @inheritdoc IWithdrawalManager
@@ -121,19 +135,20 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         if (block.timestamp <= request.requestTime + withdrawalDelay) revert WithdrawalDelayNotMet();
         if (request.canFulfill == false) revert WithdrawalNotReadyToFulfill();
 
+        // Build the amounts array from the user's withdrawable shares
+        uint256[] memory amounts = new uint256[](request.assets.length);
         for (uint256 i = 0; i < request.assets.length; i++) {
             IERC20 asset = request.assets[i];
-            uint256 amount = request.withdrawableAmounts[i];
+            amounts[i] = liquidTokenManager.assetSharesToUnderlying(asset, request.elWithdrawableShares[i]);
 
-            if (asset.balanceOf(address(this)) < amount) {
-                revert InsufficientBalance(asset, amount, asset.balanceOf(address(this)));
+            if (asset.balanceOf(address(this)) < amounts[i]) {
+                revert InsufficientBalance(asset, amounts[i], asset.balanceOf(address(this)));
+                // Note: allow for 10bps tolerance and reset the amounts[i]
             }
         }
 
         address user = request.user;
         IERC20[] memory assets = request.assets;
-        uint256[] memory amounts = request.withdrawableAmounts;
-        uint256 sharesDeposited = request.sharesDeposited;
 
         delete withdrawalRequests[requestId];
         bytes32[] storage userRequests = userWithdrawalRequests[user];
@@ -144,9 +159,6 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
                 break;
             }
         }
-
-        // Fulfillment is complete
-        liquidToken.debitQueuedAssetBalances(assets, amounts, sharesDeposited);
 
         for (uint256 i = 0; i < assets.length; i++) {
             assets[i].safeTransfer(msg.sender, amounts[i]);
@@ -170,10 +182,10 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
     function recordRedemptionCompleted(
         bytes32 redemptionId,
         IERC20[] calldata receivedAssets,
-        uint256[] calldata receivedAmounts
+        uint256[] calldata receivedElShares
     ) external override returns (uint256[] memory) {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
-        if (receivedAmounts.length != receivedAssets.length) revert LengthMismatch();
+        if (receivedElShares.length != receivedAssets.length) revert LengthMismatch();
 
         ILiquidTokenManager.Redemption memory redemption = redemptions[redemptionId];
 
@@ -181,80 +193,81 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         // Now we compare the received amounts with the original withdrawable amounts (recorded during withdrawal request creation)
         // to check for any slashing during the withdrawal queue period
         uint256[] memory slashedFactors = new uint256[](receivedAssets.length);
-        uint256[] memory slashedAmounts = new uint256[](receivedAssets.length);
 
         for (uint256 i = 0; i < receivedAssets.length; i++) {
-            uint256 originalWithdrawableAmount = 0;
+            uint256 originalElWithdrawableShares = 0;
             bool assetFound = false;
 
             for (uint256 j = 0; j < redemption.assets.length; j++) {
                 if (address(receivedAssets[i]) == address(redemption.assets[j])) {
-                    originalWithdrawableAmount = redemption.withdrawableAmounts[j];
+                    originalElWithdrawableShares = redemption.elWithdrawableShares[j];
                     assetFound = true;
                     break;
                 }
             }
 
-            if (receivedAmounts[i] < originalWithdrawableAmount && originalWithdrawableAmount != 0) {
-                slashedFactors[i] = (receivedAmounts[i] * 1e18) / originalWithdrawableAmount;
-
-                slashedAmounts[i] = originalWithdrawableAmount - receivedAmounts[i];
+            if (receivedElShares[i] < originalElWithdrawableShares && originalElWithdrawableShares != 0) {
+                slashedFactors[i] = (receivedElShares[i] * 1e18) / originalElWithdrawableShares;
             } else {
                 slashedFactors[i] = 1e18;
-                slashedAmounts[i] = 0;
             }
         }
 
         // Track the aggregated requested amounts per asset
-        uint256[] memory redemptionRequestedAmounts = new uint256[](receivedAssets.length);
+        uint256[] memory redemptionRequestedElShares = new uint256[](receivedAssets.length);
+        uint256 latEscrowShares = 0;
 
-        // If the redemption is for user withdrawal, slash their withdrawable amounts by the slashing factor
-        if (
-            redemption.requestIds.length > 0 && withdrawalRequests[redemption.requestIds[0]].user != address(0) // If one user withdrawal is found, all requests are for user withdrawals
-        ) {
-            for (uint256 i = 0; i < redemption.requestIds.length; i++) {
-                bytes32 requestId = redemption.requestIds[i];
-                WithdrawalRequest storage request = withdrawalRequests[requestId];
+        // If one user withdrawal is found, all requests are for user withdrawals
+        bool isUserWithdrawal = redemption.requestIds.length > 0 &&
+            withdrawalRequests[redemption.requestIds[0]].user != address(0);
 
-                for (uint256 j = 0; j < request.assets.length; j++) {
-                    for (uint256 k = 0; k < receivedAssets.length; k++) {
-                        if (address(request.assets[j]) == address(receivedAssets[k])) {
-                            uint256 originalAmount = request.requestedAmounts[j];
-                            redemptionRequestedAmounts[k] += originalAmount;
+        for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+            bytes32 requestId = redemption.requestIds[i];
+            WithdrawalRequest storage request = withdrawalRequests[requestId];
 
-                            // Slash the user's withdrawable amount by applying the slashed factor
-                            request.withdrawableAmounts[j] = Math.mulDiv(originalAmount, slashedFactors[k], 1e18);
+            for (uint256 j = 0; j < request.assets.length; j++) {
+                for (uint256 k = 0; k < receivedAssets.length; k++) {
+                    if (address(request.assets[j]) == address(receivedAssets[k])) {
+                        uint256 originalShares = request.elWithdrawableShares[j];
+                        redemptionRequestedElShares[k] += originalShares;
+                        latEscrowShares += request.sharesDeposited;
 
-                            // Emit slashing event if amount was actually slashed
+                        // For user withdrawals, slash the user's withdrawable shares by applying the slashed factor
+                        if (isUserWithdrawal) {
+                            request.elWithdrawableShares[j] = Math.mulDiv(originalShares, slashedFactors[k], 1e18);
+
                             if (slashedFactors[k] < 1e18) {
                                 emit UserSlashed(
                                     requestId,
                                     request.user,
                                     request.assets[j],
-                                    originalAmount,
-                                    request.withdrawableAmounts[j]
+                                    originalShares,
+                                    request.elWithdrawableShares[j]
                                 );
                             }
                             break;
                         }
                     }
                 }
-                // Mark withdrawal as ready to fulfill
-                request.canFulfill = true;
             }
+
+            // Mark withdrawal as ready to fulfill
+            request.canFulfill = true;
         }
 
         // Delete the redemption
         delete redemptions[redemptionId];
 
-        // Account for withdrawal period slashing in queued withdrawal balances
-        // If the redemption is for rebalancing or undelegation, all internal accounting will now be complete after this
-        // If the redemption is for user withdrawals,
-        //  - the queued balances will still contain the withdrawable amounts
-        //  - the deposited escrow LAT shares are still to be burnt
-        liquidToken.debitQueuedAssetBalances(receivedAssets, slashedAmounts, 0);
+        // Clear the queued shares accounting
+        // If the redemption is for rebalancing or undelegation, a corresponding credit to asset balances will be done in `completeRedemption`
+        // If the redemption is for user withdrawals, we burn the escrow shares deposited by the user
+        if (isUserWithdrawal) {
+            liquidToken.debitQueuedAssetElShares(receivedAssets, redemptionRequestedElShares, latEscrowShares);
+        } else {
+            liquidToken.debitQueuedAssetElShares(receivedAssets, redemptionRequestedElShares, 0);
+        }
 
-        return redemptionRequestedAmounts;
+        return redemptionRequestedElShares;
     }
 
     /// @inheritdoc IWithdrawalManager
