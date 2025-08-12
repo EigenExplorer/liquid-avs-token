@@ -26,6 +26,17 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
     using Math for uint256;
 
     // ------------------------------------------------------------------------------
+    // Constants
+    // ------------------------------------------------------------------------------
+
+    /// @notice Maximum number of assets allowed in a single withdrawal request
+    uint256 public constant MAX_WITHDRAWAL_ASSETS = 32;
+
+    /// @notice Lock to prevent concurrent redemption completions
+    uint256 private constant NOT_ENTERED = 1;
+    uint256 private constant ENTERED = 2;
+
+    // ------------------------------------------------------------------------------
     // State
     // ------------------------------------------------------------------------------
 
@@ -46,6 +57,12 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
 
     /// @notice The delay between user withdrawal request and ability to withdraw from this contract
     uint256 public withdrawalDelay;
+
+    /// @notice Reentrancy guard for redemption completion
+    uint256 private _redemptionCompletionStatus;
+
+    /// @notice Tracks if a withdrawal request is currently being processed
+    mapping(bytes32 => bool) private _processingRequest;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -79,6 +96,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         stakerNodeCoordinator = init.stakerNodeCoordinator;
 
         withdrawalDelay = 14 days;
+        _redemptionCompletionStatus = NOT_ENTERED;
     }
 
     // ------------------------------------------------------------------------------
@@ -95,11 +113,31 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
     ) external override nonReentrant {
         if (msg.sender != address(liquidToken)) revert NotLiquidToken(msg.sender);
         if (sharesDeposited == 0) revert ZeroAmount();
+        if (assets.length != amounts.length) revert LengthMismatch();
+        if (assets.length == 0) revert ZeroAmount();
+        if (assets.length > MAX_WITHDRAWAL_ASSETS) revert ExceedsMaxAssets();
+        if (user == address(0)) revert ZeroAddress();
+        if (withdrawalRequests[requestId].user != address(0)) revert RequestAlreadyExists();
 
         uint256[] memory elWithdrawableShares = new uint256[](assets.length);
 
+        // Check for duplicate assets and validate each asset
         for (uint256 i = 0; i < assets.length; i++) {
+            if (address(assets[i]) == address(0)) revert ZeroAddress();
+            if (amounts[i] == 0) revert ZeroAmount();
+
+            // Check for duplicates
+            for (uint256 j = 0; j < i; j++) {
+                if (assets[i] == assets[j]) revert DuplicateAsset(address(assets[i]));
+            }
+
+            // Validate asset is supported
+            if (!liquidTokenManager.tokenIsSupported(assets[i])) {
+                revert UnsupportedAsset(assets[i]);
+            }
+
             elWithdrawableShares[i] = liquidTokenManager.assetUnderlyingToShares(assets[i], amounts[i]);
+            if (elWithdrawableShares[i] == 0) revert ZeroAmount();
         }
 
         WithdrawalRequest memory request = WithdrawalRequest({
@@ -128,12 +166,16 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
 
     /// @inheritdoc IWithdrawalManager
     function fulfillWithdrawal(bytes32 requestId) external override nonReentrant {
-        WithdrawalRequest storage request = withdrawalRequests[requestId];
+        WithdrawalRequest memory request = withdrawalRequests[requestId];
 
         if (request.user == address(0)) revert InvalidWithdrawalRequest();
         if (request.user != msg.sender) revert UnauthorizedAccess(msg.sender);
         if (block.timestamp <= request.requestTime + withdrawalDelay) revert WithdrawalDelayNotMet();
         if (request.canFulfill == false) revert WithdrawalNotReadyToFulfill();
+
+        // Prevent concurrent processing
+        if (_processingRequest[requestId]) revert RequestBeingProcessed();
+        _processingRequest[requestId] = true;
 
         // Build the amounts array from the user's withdrawable shares
         uint256[] memory amounts = new uint256[](request.assets.length);
@@ -149,7 +191,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
                 // Minor shortfalls shouldn't block withdrawals
                 // Allow for 10bps tolerance to handle rounding differences
                 uint256 tolerance = Math.mulDiv(requestedAmount, 10, 10000, Math.Rounding.Up);
-                uint256 minAcceptableAmount = requestedAmount - tolerance;
+                uint256 minAcceptableAmount = requestedAmount > tolerance ? requestedAmount - tolerance : 0;
 
                 if (availableBalance < minAcceptableAmount) {
                     revert InsufficientBalance(asset, requestedAmount, availableBalance);
@@ -165,18 +207,26 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         address user = request.user;
         IERC20[] memory assets = request.assets;
 
+        // Delete withdrawal request first to prevent reentrancy
         delete withdrawalRequests[requestId];
+        delete _processingRequest[requestId];
+
+        // Remove from user's request list
         bytes32[] storage userRequests = userWithdrawalRequests[user];
-        for (uint256 i = 0; i < userRequests.length; i++) {
+        uint256 requestsLength = userRequests.length;
+        for (uint256 i = 0; i < requestsLength; i++) {
             if (userRequests[i] == requestId) {
-                userRequests[i] = userRequests[userRequests.length - 1];
+                userRequests[i] = userRequests[requestsLength - 1];
                 userRequests.pop();
                 break;
             }
         }
 
+        // Transfer assets to user
         for (uint256 i = 0; i < assets.length; i++) {
-            assets[i].safeTransfer(msg.sender, amounts[i]);
+            if (amounts[i] > 0) {
+                assets[i].safeTransfer(user, amounts[i]);
+            }
         }
 
         emit WithdrawalFulfilled(requestId, user, assets, amounts, block.timestamp);
@@ -188,6 +238,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         ILiquidTokenManager.Redemption calldata redemption
     ) external override {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
+        if (redemptions[redemptionId].requestIds.length > 0) revert RedemptionAlreadyExists();
 
         // Record the redemption
         redemptions[redemptionId] = redemption;
@@ -199,10 +250,24 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         IERC20[] calldata receivedAssets,
         uint256[] calldata receivedElShares
     ) external override returns (uint256[] memory) {
-        if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
-        if (receivedElShares.length != receivedAssets.length) revert LengthMismatch();
+        // Prevent concurrent redemption completions
+        if (_redemptionCompletionStatus == ENTERED) revert ReentrantCall();
+        _redemptionCompletionStatus = ENTERED;
+
+        if (msg.sender != address(liquidTokenManager)) {
+            _redemptionCompletionStatus = NOT_ENTERED;
+            revert NotLiquidTokenManager(msg.sender);
+        }
+        if (receivedElShares.length != receivedAssets.length) {
+            _redemptionCompletionStatus = NOT_ENTERED;
+            revert LengthMismatch();
+        }
 
         ILiquidTokenManager.Redemption memory redemption = redemptions[redemptionId];
+        if (redemption.requestIds.length == 0) {
+            _redemptionCompletionStatus = NOT_ENTERED;
+            revert RedemptionNotFound(redemptionId);
+        }
 
         // Check if this is a user withdrawal by checking if the first requestId corresponds to a user withdrawal request
         bool isUserWithdrawal = redemption.requestIds.length > 0 &&
@@ -214,18 +279,33 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         // Aggregate the total requested shares across all assets
         // For user withdrawals, we also aggregate the total escrow shares so that we can burn them
         if (isUserWithdrawal) {
+            // First pass: calculate total LAT escrow shares
+            for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+                bytes32 requestId = redemption.requestIds[i];
+                WithdrawalRequest storage request = withdrawalRequests[requestId];
+                if (request.user != address(0)) {
+                    latEscrowShares += request.sharesDeposited;
+                }
+            }
+
+            // Second pass: aggregate shares per asset
             for (uint256 i = 0; i < redemption.requestIds.length; i++) {
                 bytes32 requestId = redemption.requestIds[i];
                 WithdrawalRequest storage request = withdrawalRequests[requestId];
 
                 for (uint256 j = 0; j < request.assets.length; j++) {
+                    bool assetFound = false;
                     for (uint256 k = 0; k < receivedAssets.length; k++) {
                         if (address(request.assets[j]) == address(receivedAssets[k])) {
                             uint256 originalShares = request.elWithdrawableShares[j];
                             redemptionRequestedElShares[k] += originalShares;
-                            latEscrowShares += request.sharesDeposited;
+                            assetFound = true;
                             break;
                         }
+                    }
+                    // Track if any assets were not found in receivedAssets
+                    if (!assetFound && request.elWithdrawableShares[j] > 0) {
+                        emit AssetNotReceived(requestId, request.assets[j], request.elWithdrawableShares[j]);
                     }
                 }
             }
@@ -248,6 +328,8 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
             for (uint256 i = 0; i < redemption.requestIds.length; i++) {
                 bytes32 requestId = redemption.requestIds[i];
                 WithdrawalRequest storage request = withdrawalRequests[requestId];
+                if (request.user == address(0)) continue; // Skip if request was already fulfilled
+
                 bool isLastRequest = (i == redemption.requestIds.length - 1);
 
                 for (uint256 j = 0; j < request.assets.length; j++) {
@@ -259,9 +341,11 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
 
                             uint256 newShares;
                             if (totalOriginalShares > 0) {
-                                if (isLastRequest) {
-                                    // For the last request, assign remaining shares to ensure exact accounting
-                                    newShares = totalReceivedShares - distributedShares[k];
+                                if (isLastRequest && j == request.assets.length - 1) {
+                                    // For the last asset of the last request, assign remaining shares to ensure exact accounting
+                                    newShares = totalReceivedShares > distributedShares[k]
+                                        ? totalReceivedShares - distributedShares[k]
+                                        : 0;
                                 } else {
                                     // Calculate proportional share: (originalShares * totalReceived) / totalOriginal
                                     newShares = Math.mulDiv(originalShares, totalReceivedShares, totalOriginalShares);
@@ -298,6 +382,7 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
             liquidToken.debitQueuedAssetElShares(receivedAssets, redemptionRequestedElShares, 0);
         }
 
+        _redemptionCompletionStatus = NOT_ENTERED;
         return redemptionRequestedElShares;
     }
 
