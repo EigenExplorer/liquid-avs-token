@@ -139,11 +139,26 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
         uint256[] memory amounts = new uint256[](request.assets.length);
         for (uint256 i = 0; i < request.assets.length; i++) {
             IERC20 asset = request.assets[i];
-            amounts[i] = liquidTokenManager.assetSharesToUnderlying(asset, request.elWithdrawableShares[i]);
+            uint256 requestedAmount = liquidTokenManager.assetSharesToUnderlying(
+                asset,
+                request.elWithdrawableShares[i]
+            );
+            uint256 availableBalance = asset.balanceOf(address(this));
 
-            if (asset.balanceOf(address(this)) < amounts[i]) {
-                revert InsufficientBalance(asset, amounts[i], asset.balanceOf(address(this)));
-                // Note: allow for 10bps tolerance and reset the amounts[i]
+            if (availableBalance < requestedAmount) {
+                // Minor shortfalls shouldn't block withdrawals
+                // Allow for 10bps tolerance to handle rounding differences
+                uint256 tolerance = Math.mulDiv(requestedAmount, 10, 10000, Math.Rounding.Up);
+                uint256 minAcceptableAmount = requestedAmount - tolerance;
+
+                if (availableBalance < minAcceptableAmount) {
+                    revert InsufficientBalance(asset, requestedAmount, availableBalance);
+                }
+
+                // Use available balance if within tolerance
+                amounts[i] = availableBalance;
+            } else {
+                amounts[i] = requestedAmount;
             }
         }
 
@@ -189,76 +204,92 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
 
         ILiquidTokenManager.Redemption memory redemption = redemptions[redemptionId];
 
-        // We have already accounted for slashing up until the point of creating the withdrawal request on EL
-        // Now we compare the received amounts with the original withdrawable amounts (recorded during withdrawal request creation)
-        // to check for any slashing during the withdrawal queue period
-        uint256[] memory slashedFactors = new uint256[](receivedAssets.length);
-
-        for (uint256 i = 0; i < receivedAssets.length; i++) {
-            uint256 originalElWithdrawableShares = 0;
-            bool assetFound = false;
-
-            for (uint256 j = 0; j < redemption.assets.length; j++) {
-                if (address(receivedAssets[i]) == address(redemption.assets[j])) {
-                    originalElWithdrawableShares = redemption.elWithdrawableShares[j];
-                    assetFound = true;
-                    break;
-                }
-            }
-
-            if (receivedElShares[i] < originalElWithdrawableShares && originalElWithdrawableShares != 0) {
-                slashedFactors[i] = (receivedElShares[i] * 1e18) / originalElWithdrawableShares;
-            } else {
-                slashedFactors[i] = 1e18;
-            }
-        }
-
-        // Track the aggregated requested amounts per asset
-        uint256[] memory redemptionRequestedElShares = new uint256[](receivedAssets.length);
-        uint256 latEscrowShares = 0;
-
-        // If one user withdrawal is found, all requests are for user withdrawals
+        // Check if this is a user withdrawal by checking if the first requestId corresponds to a user withdrawal request
         bool isUserWithdrawal = redemption.requestIds.length > 0 &&
             withdrawalRequests[redemption.requestIds[0]].user != address(0);
 
-        for (uint256 i = 0; i < redemption.requestIds.length; i++) {
-            bytes32 requestId = redemption.requestIds[i];
-            WithdrawalRequest storage request = withdrawalRequests[requestId];
+        uint256[] memory redemptionRequestedElShares = new uint256[](receivedAssets.length);
+        uint256 latEscrowShares = 0;
 
-            for (uint256 j = 0; j < request.assets.length; j++) {
-                for (uint256 k = 0; k < receivedAssets.length; k++) {
-                    if (address(request.assets[j]) == address(receivedAssets[k])) {
-                        uint256 originalShares = request.elWithdrawableShares[j];
-                        redemptionRequestedElShares[k] += originalShares;
-                        latEscrowShares += request.sharesDeposited;
+        // Aggregate the total requested shares across all assets
+        // For user withdrawals, we also aggregate the total escrow shares so that we can burn them
+        if (isUserWithdrawal) {
+            for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+                bytes32 requestId = redemption.requestIds[i];
+                WithdrawalRequest storage request = withdrawalRequests[requestId];
 
-                        // For user withdrawals, slash the user's withdrawable shares by applying the slashed factor
-                        if (isUserWithdrawal) {
-                            request.elWithdrawableShares[j] = Math.mulDiv(originalShares, slashedFactors[k], 1e18);
-
-                            if (slashedFactors[k] < 1e18) {
-                                emit UserSlashed(
-                                    requestId,
-                                    request.user,
-                                    request.assets[j],
-                                    originalShares,
-                                    request.elWithdrawableShares[j]
-                                );
-                            }
+                for (uint256 j = 0; j < request.assets.length; j++) {
+                    for (uint256 k = 0; k < receivedAssets.length; k++) {
+                        if (address(request.assets[j]) == address(receivedAssets[k])) {
+                            uint256 originalShares = request.elWithdrawableShares[j];
+                            redemptionRequestedElShares[k] += originalShares;
+                            latEscrowShares += request.sharesDeposited;
                             break;
                         }
                     }
                 }
             }
+        } else {
+            for (uint256 i = 0; i < redemption.assets.length; i++) {
+                for (uint256 k = 0; k < receivedAssets.length; k++) {
+                    if (address(redemption.assets[i]) == address(receivedAssets[k])) {
+                        redemptionRequestedElShares[k] = redemption.elWithdrawableShares[i];
+                        break;
+                    }
+                }
+            }
+        }
 
-            // Mark withdrawal as ready to fulfill
-            request.canFulfill = true;
+        // For user withdrawals, we apply any slashing that may have occurred during the withdrawal queue period
+        if (isUserWithdrawal) {
+            // Track distributed shares per asset to handle rounding and prevent any shares being "missed"
+            uint256[] memory distributedShares = new uint256[](receivedAssets.length);
+
+            for (uint256 i = 0; i < redemption.requestIds.length; i++) {
+                bytes32 requestId = redemption.requestIds[i];
+                WithdrawalRequest storage request = withdrawalRequests[requestId];
+                bool isLastRequest = (i == redemption.requestIds.length - 1);
+
+                for (uint256 j = 0; j < request.assets.length; j++) {
+                    for (uint256 k = 0; k < receivedAssets.length; k++) {
+                        if (address(request.assets[j]) == address(receivedAssets[k])) {
+                            uint256 originalShares = request.elWithdrawableShares[j];
+                            uint256 totalOriginalShares = redemptionRequestedElShares[k];
+                            uint256 totalReceivedShares = receivedElShares[k];
+
+                            uint256 newShares;
+                            if (totalOriginalShares > 0) {
+                                if (isLastRequest) {
+                                    // For the last request, assign remaining shares to ensure exact accounting
+                                    newShares = totalReceivedShares - distributedShares[k];
+                                } else {
+                                    // Calculate proportional share: (originalShares * totalReceived) / totalOriginal
+                                    newShares = Math.mulDiv(originalShares, totalReceivedShares, totalOriginalShares);
+                                    distributedShares[k] += newShares;
+                                }
+                            } else {
+                                newShares = 0;
+                            }
+
+                            request.elWithdrawableShares[j] = newShares;
+
+                            if (newShares < originalShares) {
+                                emit UserSlashed(requestId, request.user, request.assets[j], originalShares, newShares);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Mark withdrawal as ready to fulfill
+                request.canFulfill = true;
+            }
         }
 
         // Delete the redemption
         delete redemptions[redemptionId];
 
-        // Clear the queued shares accounting
+        // Clear the queued shares accounting -- here we don't apply the latest slashing as it was not part of the original credit
         // If the redemption is for rebalancing or undelegation, a corresponding credit to asset balances will be done in `completeRedemption`
         // If the redemption is for user withdrawals, we burn the escrow shares deposited by the user
         if (isUserWithdrawal) {
