@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
 
 /// @title ILiquidToken Interface
 /// @notice Interface for the LiquidToken contract
@@ -20,6 +21,7 @@ interface ILiquidToken {
         ILiquidTokenManager liquidTokenManager;
         ITokenRegistryOracle tokenRegistryOracle;
         IWithdrawalManager withdrawalManager;
+        IRewardsManager rewardsManager;
         address initialOwner;
         address pauser;
     }
