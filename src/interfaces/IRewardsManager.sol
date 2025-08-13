@@ -21,6 +21,7 @@ interface IRewardsManager {
         ILiquidToken liquidToken;
         ILiquidTokenManager liquidTokenManager;
         address initialOwner;
+        address pauser;
     }
 
     // ============================================================================

@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {Initializable} from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
 import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 import {IRewardsCoordinatorTypes} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -15,13 +16,22 @@ import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 
 /// @title RewardsManager
-contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradeable, ReentrancyGuardUpgradeable {
+contract RewardsManager is
+    IRewardsManager,
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable
+{
     using SafeERC20 for IERC20;
     using Math for uint256;
 
     // ------------------------------------------------------------------------------
     // State
     // ------------------------------------------------------------------------------
+
+    /// @notice Role identifier for pausing the contract
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice EigenLayer contracts
     IRewardsCoordinator public rewardsCoordinator;
@@ -54,6 +64,7 @@ contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradea
 
         if (
             address(init.initialOwner) == address(0) ||
+            address(init.pauser) == address(0) ||
             address(init.liquidToken) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
             address(init.rewardsCoordinator) == address(0)
@@ -62,6 +73,7 @@ contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradea
         }
 
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
+        _grantRole(PAUSER_ROLE, init.pauser);
 
         liquidToken = init.liquidToken;
         liquidTokenManager = init.liquidTokenManager;
@@ -80,14 +92,14 @@ contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradea
     /// @inheritdoc IRewardsManager
     function processClaim(
         IRewardsCoordinatorTypes.RewardsMerkleClaim calldata claim
-    ) external override nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external override nonReentrant whenNotPaused {
         _processClaim(claim);
     }
 
     /// @inheritdoc IRewardsManager
     function processClaims(
         IRewardsCoordinatorTypes.RewardsMerkleClaim[] calldata claims
-    ) external override nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external override nonReentrant whenNotPaused {
         for (uint256 i = 0; i < claims.length; i++) {
             _processClaim(claims[i]);
         }
@@ -95,7 +107,7 @@ contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradea
 
     /// @notice For rewards that are in unsupported assets, swaps into supported assets and transfers over to LT
     /// @dev OUT OF SCOPE FOR V2
-    /// function swapAndTransferRewards() external override nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {}
+    /// function swapAndTransferRewards() external override nonReentrant whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     // ------------------------------------------------------------------------------
     // Getter functions
