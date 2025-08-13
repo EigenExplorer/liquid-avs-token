@@ -251,7 +251,25 @@ contract RewardsManager is IRewardsManager, Initializable, AccessControlUpgradea
     /// @dev Called by `_processClaim`
     function _transferRewards(IERC20[] memory assets, uint256[] memory amounts) internal {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
-        liquidToken.receiveAssets(assets, amounts);
+
+        // Transfer to `LiquidToken` and calculate actual net amounts received
+        uint256[] memory netTransferredAmounts = new uint256[](assets.length);
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            uint256 liquidTokenBalanceBefore = assets[i].balanceOf(address(liquidToken));
+            uint256 rewardsManagerBalanceBefore = amounts[i];
+
+            if (rewardsManagerBalanceBefore > 0) {
+                assets[i].safeTransfer(address(liquidToken), rewardsManagerBalanceBefore);
+                uint256 liquidTokenBalanceAfter = assets[i].balanceOf(address(liquidToken));
+                netTransferredAmounts[i] = liquidTokenBalanceAfter - liquidTokenBalanceBefore;
+            } else {
+                netTransferredAmounts[i] = 0;
+            }
+        }
+
+        // Credit `LiquidToken` asset balances with the actual net amounts recieved
+        liquidToken.creditAssetBalances(assets, netTransferredAmounts);
     }
 
     /// @dev Called by `balanceAssets`

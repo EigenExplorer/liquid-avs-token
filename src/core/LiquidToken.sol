@@ -13,6 +13,7 @@ import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 /**
@@ -47,6 +48,7 @@ contract LiquidToken is
 
     /// @notice v2 LAT contracts
     IWithdrawalManager public withdrawalManager;
+    IRewardsManager public rewardsManager;
 
     /// @notice Mapping of user addresses to their corresponding withdrawal nonces
     mapping(address => uint256) private _withdrawalNonce;
@@ -72,7 +74,8 @@ contract LiquidToken is
             address(init.pauser) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
             address(init.tokenRegistryOracle) == address(0) ||
-            address(init.withdrawalManager) == address(0)
+            address(init.withdrawalManager) == address(0) ||
+            address(init.rewardsManager) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -83,6 +86,7 @@ contract LiquidToken is
         liquidTokenManager = init.liquidTokenManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
         withdrawalManager = init.withdrawalManager;
+        rewardsManager = init.rewardsManager;
     }
 
     // ------------------------------------------------------------------------------
@@ -248,7 +252,8 @@ contract LiquidToken is
 
     /// @inheritdoc ILiquidToken
     function creditAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
-        if (msg.sender != address(liquidTokenManager)) revert UnauthorizedAccess(msg.sender);
+        if (msg.sender != address(liquidTokenManager) && msg.sender != address(rewardsManager))
+            revert UnauthorizedAccess(msg.sender);
 
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
@@ -284,7 +289,6 @@ contract LiquidToken is
             asset.safeTransfer(receiver, amount);
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this)))
-                // Note: allow for 10bps tolerance and reset the assetBalances amount
                 revert AssetBalanceOutOfSync(
                     assetsToRetrieve[i],
                     assetBalances[address(asset)],
