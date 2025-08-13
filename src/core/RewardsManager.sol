@@ -137,10 +137,10 @@ contract RewardsManager is
         // Record current balances of all expected assets from this claim
         IERC20[] memory expectedSupportedAssets = new IERC20[](claim.tokenLeaves.length);
         IERC20[] memory expectedUnsupportedAssets = new IERC20[](claim.tokenLeaves.length);
-        uint256[] memory supportedAssetBalances = new uint256[](claim.tokenLeaves.length);
-        uint256[] memory unsupportedAssetBalances = new uint256[](claim.tokenLeaves.length);
+        uint256[] memory supportedBalances = new uint256[](claim.tokenLeaves.length);
+        uint256[] memory unsupportedBalances = new uint256[](claim.tokenLeaves.length);
 
-        IERC20[] allSupportedAssets = liquidTokenManager.getSupportedTokens();
+        IERC20[] memory allSupportedAssets = liquidTokenManager.getSupportedTokens();
         uint256 supportedCount = 0;
         uint256 unsupportedCount = 0;
 
@@ -176,11 +176,11 @@ contract RewardsManager is
 
                 if (isSupported) {
                     expectedSupportedAssets[supportedCount] = currentToken;
-                    supportedAssetBalances[supportedCount] = currentToken.balanceOf(address(this));
+                    supportedBalances[supportedCount] = currentToken.balanceOf(address(this));
                     supportedCount++;
                 } else {
                     expectedUnsupportedAssets[unsupportedCount] = currentToken;
-                    unsupportedAssetBalances[unsupportedCount] = currentToken.balanceOf(address(this));
+                    unsupportedBalances[unsupportedCount] = currentToken.balanceOf(address(this));
                     unsupportedCount++;
                 }
             }
@@ -190,16 +190,16 @@ contract RewardsManager is
         assembly {
             mstore(expectedSupportedAssets, supportedCount)
             mstore(expectedUnsupportedAssets, unsupportedCount)
-            mstore(supportedAssetBalances, supportedCount)
-            mstore(unsupportedAssetBalances, unsupportedCount)
+            mstore(supportedBalances, supportedCount)
+            mstore(unsupportedBalances, unsupportedCount)
         }
 
         // Update balances for unsupported tokens
         // These tokens will stay in the contract until `swapAndTransferRewards` is called
-        _setAssetBalances(expectedUnsupportedAssets, unsupportedAssetBalances);
+        _setAssetBalances(expectedUnsupportedAssets, unsupportedBalances);
 
         // Transfer all supported assets to `LiquidToken`
-        uint256[] netTransferredAmounts = _transferRewards(expectedSupportedAssets, supportedAssetBalances);
+        uint256[] memory netTransferredAmounts = _transferRewards(expectedSupportedAssets, supportedBalances);
 
         emit RewardsClaimed(
             claim.rootIndex,
@@ -207,7 +207,7 @@ contract RewardsManager is
             expectedSupportedAssets,
             netTransferredAmounts,
             expectedUnsupportedAssets,
-            unsupportedAssetBalances
+            unsupportedBalances
         );
     }
 
@@ -261,7 +261,7 @@ contract RewardsManager is
     }
 
     /// @dev Called by `_processClaim`
-    function _transferRewards(IERC20[] memory assets, uint256[] memory amounts) internal {
+    function _transferRewards(IERC20[] memory assets, uint256[] memory amounts) internal returns (uint256[] memory) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
         // Transfer to `LiquidToken` and calculate actual net amounts received
