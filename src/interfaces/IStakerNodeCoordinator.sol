@@ -4,10 +4,12 @@ pragma solidity ^0.8.27;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 
 import {IStakerNode} from "./IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
 
 /// @title IStakerNodeCoordinator Interface
 /// @notice Interface for the StakerNodeCoordinator contract
@@ -20,8 +22,10 @@ interface IStakerNodeCoordinator {
     struct Init {
         ILiquidTokenManager liquidTokenManager;
         IWithdrawalManager withdrawalManager;
+        IRewardsManager rewardsManager;
         IDelegationManager delegationManager;
         IStrategyManager strategyManager;
+        IRewardsCoordinator rewardsCoordinator;
         uint256 maxNodes;
         address initialOwner;
         address pauser;
@@ -144,6 +148,10 @@ interface IStakerNodeCoordinator {
     /// @return The IStrategyManager interface
     function strategyManager() external view returns (IStrategyManager);
 
+    /// @notice Gets the rewards coordinator contract
+    /// @return The IRewardsCoordinator interface
+    function rewardsCoordinator() external view returns (IRewardsCoordinator);
+
     /// @notice Gets the liquid token manager contract
     /// @return The ILiquidTokenManager interface
     function liquidTokenManager() external view returns (ILiquidTokenManager);
@@ -151,6 +159,10 @@ interface IStakerNodeCoordinator {
     /// @notice Gets the withdrawal manager contract
     /// @return The IWithdrawalManager interface
     function withdrawalManager() external view returns (IWithdrawalManager);
+
+    /// @notice Gets the rewards manager contract
+    /// @return The IRewardsManager interface
+    function rewardsManager() external view returns (IRewardsManager);
 
     /// @notice Gets the maximum number of nodes allowed
     /// @return The maximum number of nodes

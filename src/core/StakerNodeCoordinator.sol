@@ -6,11 +6,13 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
 
 /**
  * @title StakerNodeCoordinator
@@ -38,8 +40,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
 
     uint256 public override maxNodes;
 
-    /// @notice v2 LAT contracts
+    /// @notice v2 contracts
     IWithdrawalManager public override withdrawalManager;
+    IRewardsManager public override rewardsManager;
+    IRewardsCoordinator public override rewardsCoordinator;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -62,8 +66,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
             address(init.stakerNodesDelegator) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
             address(init.withdrawalManager) == address(0) ||
+            address(init.rewardsManager) == address(0) ||
             address(init.strategyManager) == address(0) ||
-            address(init.delegationManager) == address(0)
+            address(init.delegationManager) == address(0) ||
+            address(init.rewardsCoordinator) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -78,8 +84,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
 
         liquidTokenManager = init.liquidTokenManager;
         withdrawalManager = init.withdrawalManager;
+        rewardsManager = init.rewardsManager;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
+        rewardsCoordinator = init.rewardsCoordinator;
         maxNodes = init.maxNodes;
         _registerStakerNodeImplementation(init.stakerNodeImplementation);
     }

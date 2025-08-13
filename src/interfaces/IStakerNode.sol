@@ -71,6 +71,9 @@ interface IStakerNode {
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
+    /// @notice Initializes V2 where the rewards claiming is delegated to the RewardsManager contract
+    function initializeV2() external;
+
     /// @notice Delegates the StakerNode's assets to an operator
     /// @param operator Address of the operator to delegate to
     /// @param signature Signature authorizing the delegation

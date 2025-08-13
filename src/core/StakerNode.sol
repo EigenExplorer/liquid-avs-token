@@ -11,6 +11,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
@@ -54,6 +55,17 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         coordinator = IStakerNodeCoordinator(init.coordinator);
         id = init.id;
         operatorDelegation = address(0);
+    }
+
+    /// @inheritdoc IStakerNode
+    function initializeV2() public reinitializer(2) {
+        _delegateRewardsClaiming();
+    }
+
+    function _delegateRewardsClaiming() internal {
+        IRewardsCoordinator rewardsCoordinator = coordinator.rewardsCoordinator();
+        address rewardsManager = address(coordinator.rewardsManager());
+        rewardsCoordinator.setClaimerFor(rewardsManager);
     }
 
     // ------------------------------------------------------------------------------
