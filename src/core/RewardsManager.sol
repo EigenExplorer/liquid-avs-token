@@ -199,13 +199,13 @@ contract RewardsManager is
         _setAssetBalances(expectedUnsupportedAssets, unsupportedAssetBalances);
 
         // Transfer all supported assets to `LiquidToken`
-        _transferRewards(expectedSupportedAssets, supportedAssetBalances);
+        uint256[] netTransferredAmounts = _transferRewards(expectedSupportedAssets, supportedAssetBalances);
 
         emit RewardsClaimed(
             claim.rootIndex,
             earner,
             expectedSupportedAssets,
-            supportedAssetBalances,
+            netTransferredAmounts,
             expectedUnsupportedAssets,
             unsupportedAssetBalances
         );
@@ -282,6 +282,8 @@ contract RewardsManager is
 
         // Credit `LiquidToken` asset balances with the actual net amounts recieved
         liquidToken.creditAssetBalances(assets, netTransferredAmounts);
+
+        return netTransferredAmounts;
     }
 
     /// @dev Called by `balanceAssets`

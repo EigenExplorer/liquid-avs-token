@@ -29,13 +29,16 @@ interface IRewardsManager {
     // ============================================================================
 
     /// @notice Emitted when rewards are claimed
+    /// @dev These values tell us the actual tokens realized by the LAT after a process claim procedure
+    /// @dev The values may differ from the corresponding EL event due to rounding/transfer loss or unexepected token transfers to this contract
+    /// @dev We are only concerned with actual value accured to LAT, exact EL data can be found via corresponding EL events
     event RewardsClaimed(
         uint32 indexed rootIndex,
         address indexed earner,
         IERC20[] supportedAssets,
-        uint256[] supportedAmounts,
+        uint256[] supportedAssetAmounts,
         IERC20[] unsupportedAssets,
-        uint256[] unsupportedAmounts
+        uint256[] unsupportedAssetAmounts
     );
 
     /// @notice Emitted when a claimer is added for an earner
