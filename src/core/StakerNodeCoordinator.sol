@@ -105,6 +105,31 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc IStakerNodeCoordinator
+    function createStakerNodes(
+        uint256 number
+    )
+        public
+        override
+        notZeroAddress(address(upgradeableBeacon))
+        onlyRole(STAKER_NODE_CREATOR_ROLE)
+        returns (IStakerNode[] memory)
+    {
+        uint256 nodeId = stakerNodes.length;
+
+        if (nodeId + number > maxNodes) {
+            revert TooManyStakerNodes(maxNodes);
+        }
+
+        IStakerNode[] memory nodes = new IStakerNode[](number);
+
+        for (uint256 i = 0; i < number; i++) {
+            nodes[i] = _createStakerNode();
+        }
+
+        return nodes;
+    }
+
+    /// @inheritdoc IStakerNodeCoordinator
     function createStakerNode()
         public
         override
@@ -112,6 +137,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         onlyRole(STAKER_NODE_CREATOR_ROLE)
         returns (IStakerNode)
     {
+        return _createStakerNode();
+    }
+
+    function _createStakerNode() internal returns (IStakerNode) {
         uint256 nodeId = stakerNodes.length;
 
         if (nodeId >= maxNodes) {
