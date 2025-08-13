@@ -101,6 +101,11 @@ interface IStakerNodeCoordinator {
     /// @param init Initialization parameters
     function initialize(Init calldata init) external;
 
+    /// @notice Creates multiple staker nodes at once
+    /// @param number The number of staker nodes to create
+    /// @return An array of the newly created IStakerNode interfaces
+    function createStakerNodes(uint256 number) external returns (IStakerNode[] memory);
+
     /// @notice Creates a new staker node
     /// @return The IStakerNode interface of the newly created staker node
     function createStakerNode() external returns (IStakerNode);
