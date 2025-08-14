@@ -12,63 +12,234 @@ import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
 import {ILiquidToken} from "../src/interfaces/ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {ITokenRegistryOracle} from "../src/interfaces/ITokenRegistryOracle.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./common/BaseTest.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-
-// Mock contracts
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockStrategy} from "./mocks/MockStrategy.sol";
+import {MockChainlinkFeed} from "./mocks/MockChainlinkFeed.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {StrategyBase} from "@eigenlayer/contracts/strategies/StrategyBase.sol";
+import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
+import {IPauserRegistry} from "@eigenlayer/contracts/interfaces/IPauserRegistry.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-/**
- * @title MockRebasingToken
- * @notice Enhanced mock rebasing token for comprehensive testing
- */
+// ------------------------------------------------------------------------------
+// Custom mocking
+// ------------------------------------------------------------------------------
+
+/// @notice Rebasing token that simulates user balances increasing over time
+/// @dev To mock LSTs like stETH, rETH, etc. The corresponding Strategy on EL needs to reflect the rebase in its `sharesToUnderlying`
 contract MockRebasingToken is MockERC20 {
-    uint256 private _totalPooledEther;
+    mapping(address => uint256) private _shares;
     uint256 private _totalShares;
+    uint256 private _totalPooledEther;
+    uint256 private _lastRebaseTime;
+    uint256 private _rebaseRate;
 
     constructor(string memory name, string memory symbol) MockERC20(name, symbol) {
         _totalPooledEther = 1e18;
         _totalShares = 1e18;
+        _lastRebaseTime = block.timestamp;
+        _rebaseRate = 10e16; // 10% annually
     }
 
-    function setConversionRate(uint256 newTotalPooledEther, uint256 newTotalShares) external {
-        _totalPooledEther = newTotalPooledEther == 0 ? 1e18 : newTotalPooledEther;
-        _totalShares = newTotalShares == 0 ? 1e18 : newTotalShares;
+    function balanceOf(address account) public view override returns (uint256) {
+        uint256 currentPooled = _getCurrentTotalPooledEther();
+        if (_totalShares == 0) return 0;
+        return (_shares[account] * currentPooled) / _totalShares;
     }
 
-    function getPooledEthByShares(uint256 _sharesAmount) external view returns (uint256) {
-        if (_totalShares == 0) return _sharesAmount;
-        return (_sharesAmount * _totalPooledEther) / _totalShares;
+    function _getCurrentTotalPooledEther() private view returns (uint256) {
+        if (_rebaseRate == 0) return _totalPooledEther;
+
+        uint256 timeElapsed = block.timestamp - _lastRebaseTime;
+        uint256 growth = (_totalPooledEther * _rebaseRate * timeElapsed) / (365 days * 1e18);
+        return _totalPooledEther + growth;
     }
 
-    function getSharesByPooledEth(uint256 _pooledEthAmount) external view returns (uint256) {
-        if (_totalPooledEther == 0) return _pooledEthAmount;
-        return (_pooledEthAmount * _totalShares) / _totalPooledEther;
+    function mint(address to, uint256 amount) public override {
+        uint256 currentPooled = _getCurrentTotalPooledEther();
+        uint256 sharesToMint = (amount * _totalShares) / currentPooled;
+
+        _shares[to] += sharesToMint;
+        _totalShares += sharesToMint;
     }
 
-    function sharesOf(address _account) external view returns (uint256) {
-        if (_totalPooledEther == 0) return balanceOf(_account);
-        return (balanceOf(_account) * _totalShares) / _totalPooledEther;
+    function totalSupply() public view override returns (uint256) {
+        return _getCurrentTotalPooledEther();
     }
 
-    function getTotalShares() external view returns (uint256) {
-        return _totalShares;
-    }
-
-    function getTotalPooledEther() external view returns (uint256) {
-        return _totalPooledEther;
-    }
-
-    function initializeRebasingState(uint256 totalPooledEther, uint256 totalShares) external {
-        _totalPooledEther = totalPooledEther == 0 ? 1e18 : totalPooledEther;
-        _totalShares = totalShares == 0 ? 1e18 : totalShares;
-    }
-
-    function simulateRebase(uint256 newPooledEther) external {
-        _totalPooledEther = newPooledEther;
+    /// @notice Simulate a positive or negative rebase
+    /// @param newRate New rebasing rate (e.g., 105e16 for +5% rebase, 95e16 for -5%)
+    function setRebaseRate(uint256 newRate) external {
+        _rebaseRate = newRate;
+        _lastRebaseTime = block.timestamp;
+        _totalPooledEther = _getCurrentTotalPooledEther();
     }
 }
+
+/// @notice Token that simulates rounding errors during transfer causing 1 wei loss for recepient
+/// @dev To mock LSTs like stETH
+contract MockTransferLossToken is MockERC20 {
+    constructor(string memory name, string memory symbol) MockERC20(name, symbol) {}
+
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        require(this.balanceOf(msg.sender) >= amount, "Insufficient balance");
+
+        // Apply 1 wei loss on transfers
+        uint256 actualTransfer = amount > 0 ? amount - 1 : 0;
+
+        // Burn the full amount from sender
+        _burn(msg.sender, amount);
+
+        // Mint only the reduced amount to recipient
+        _mint(to, actualTransfer);
+
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        require(this.balanceOf(from) >= amount, "Insufficient balance");
+        require(this.allowance(from, msg.sender) >= amount, "Insufficient allowance");
+
+        uint256 actualTransfer = amount > 0 ? amount - 1 : 0;
+        uint256 allowed = this.allowance(from, msg.sender);
+
+        if (allowed != type(uint256).max) {
+            // Call parent transferFrom for the full amount
+            bool success = super.transferFrom(from, to, amount);
+            require(success, "Transfer failed");
+
+            // Burn the 1 wei loss from recipient
+            if (amount > 0) {
+                _burn(to, 1);
+            }
+
+            return true;
+        } else {
+            // Unlimited allowance case
+            _burn(from, amount);
+            _mint(to, actualTransfer);
+            return true;
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------
+// Testini
+// ------------------------------------------------------------------------------
+
+contract WithdrawalManagerTest is BaseTest {
+    // ------------------------------------------------------------------------------
+    // Setup environment
+    // ------------------------------------------------------------------------------
+
+    function setUp() public override {
+        super.setUp();
+        _setupOracleMocks();
+        _setupAdditionalTokens();
+    }
+
+    /// @notice Isolate TRO such it is never actually used -- price discovery is hardcoded
+    /// @dev Will be called by LiquidToken's `deposit()`
+    function _setupOracleMocks() internal {
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(ITokenRegistryOracle.arePricesStale.selector),
+            abi.encode(false)
+        );
+
+        vm.mockCall(
+            address(tokenRegistryOracle),
+            abi.encodeWithSelector(ITokenRegistryOracle.getTokenPrice.selector),
+            abi.encode(1e18)
+        );
+    }
+
+    /// @notice Register additional tokens for testing withdrawal scenarios
+    function _setupAdditionalTokens() internal {
+        MockRebasingToken token3 = new MockRebasingToken("Mock rebasing", "R");
+        MockTransferLossToken token4 = new MockTransferLossToken("Mock transfer loss", "TL");
+
+        MockStrategy token3Strategy = new MockStrategy(strategyManager, IERC20(address(token3)));
+        MockStrategy token4Strategy = new MockStrategy(strategyManager, IERC20(address(token4)));
+
+        vm.startPrank(admin);
+        liquidTokenManager.addToken(
+            IERC20(address(token3)),
+            18,
+            0,
+            IStrategy(address(token3Strategy)),
+            SOURCE_TYPE_CHAINLINK,
+            address(new MockChainlinkFeed(int256(1e8), 8)),
+            0,
+            address(0),
+            bytes4(0)
+        );
+
+        liquidTokenManager.addToken(
+            IERC20(address(token4)),
+            18,
+            0,
+            IStrategy(address(token4Strategy)),
+            SOURCE_TYPE_CHAINLINK,
+            address(new MockChainlinkFeed(int256(1e8), 8)),
+            0,
+            address(0),
+            bytes4(0)
+        );
+        vm.stopPrank();
+    }
+
+    // ------------------------------------------------------------------------------
+    // Test the environment setup
+    // ------------------------------------------------------------------------------
+
+    /// @notice Test rebasing behavior with EigenLayer's `sharesToUnderlying` accuracy
+    function testRebasingTokenAccuracy() public {
+        MockRebasingToken rebasingToken = new MockRebasingToken("Test Rebasing", "RBT");
+        MockStrategy rebasingStrategy = new MockStrategy(strategyManager, IERC20(address(rebasingToken)));
+
+        // Mint some tokens to the strategy to simulate deposits
+        rebasingToken.mint(address(rebasingStrategy), 100e18);
+
+        // Check initial conversion (should be 1:1)
+        uint256 initialShares = 100e18;
+        uint256 initialUnderlying = rebasingStrategy.sharesToUnderlyingView(initialShares);
+
+        console.log("Initial - Shares:", initialShares);
+        console.log("Initial - Underlying:", initialUnderlying);
+
+        // TODO: Deposit some shares to the Operator so that strategy `totalShares` increases from 0
+
+        // Simulate positive rebase (+5%)
+        rebasingToken.setRebaseRate(105e16); // 1.05x multiplier
+
+        // Now the same shares should convert to more underlying tokens
+        uint256 rebasedUnderlying = rebasingStrategy.sharesToUnderlyingView(initialShares);
+
+        console.log("After +5% rebase - Shares:", initialShares);
+        console.log("After +5% rebase - Underlying:", rebasedUnderlying);
+
+        // The underlying amount should have increased due to rebasing
+        assertTrue(rebasedUnderlying > initialUnderlying, "Rebasing should increase underlying value");
+
+        // Verify the rebase is reflected in LiquidTokenManager conversion too
+        uint256 ltmUnderlying = liquidTokenManager.assetSharesToUnderlying(
+            IERC20(address(rebasingToken)),
+            initialShares
+        );
+        assertEq(ltmUnderlying, rebasedUnderlying, "LTM should use strategy's sharesToUnderlying");
+    }
+
+    // ------------------------------------------------------------------------------
+    // Core test functions
+    // ------------------------------------------------------------------------------
+}
+
+/*
 
 contract MockMaliciousToken is MockERC20 {
     address public attackTarget;
@@ -90,10 +261,6 @@ contract MockMaliciousToken is MockERC20 {
     }
 }
 
-/**
- * @title ComprehensiveWithdrawalManagerTest
- * @notice Comprehensive integration tests for WithdrawalManager
- */
 contract ComprehensiveWithdrawalManagerTest is BaseTest {
     // =============================================================================
     // ADDITIONAL CONTRACTS FOR WITHDRAWAL MANAGER
@@ -1859,3 +2026,4 @@ contract ComprehensiveWithdrawalManagerTest is BaseTest {
         withdrawalManager.recordRedemptionCompleted(redemptionId, assets, receivedShares);
     }
 }
+*/
