@@ -85,6 +85,18 @@ interface ILiquidTokenManager {
         address receiver;
     }
 
+    /// @notice Parameters for settling user withdrawals
+    /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
+    /// @param nodeIds The node IDs from which funds will be withdrawn
+    /// @param elAssets The array of assets to be withdrawn for a given node from EigenLayer
+    /// @param elDepositShares The EL deposit shares for `elAssets` (unscaled, pre-slashing shares)
+    struct UserWithdrawalsSettlement {
+        bytes32[] requestIds;
+        uint256[] nodeIds;
+        IERC20[][] elAssets;
+        uint256[][] elDepositShares;
+    }
+
     // ============================================================================
     // EVENTS
     // ============================================================================
@@ -382,16 +394,8 @@ interface ILiquidTokenManager {
     /// @dev A redemption is created and on completion, funds are transferred to `WithdrawalManager`
     /// @dev Caller should index the `RedemptionCreatedForUserWithdrawals` event to have the required data for redemption completion
     /// @dev All users share the same post-slashing conversion rate, ensuring fair loss distribution
-    /// @param requestIds The request IDs of the user withdrawal requests to be fulfilled
-    /// @param nodeIds The node IDs from which funds will be withdrawn
-    /// @param elAssets The array of assets to be withdrawn for a given node from EigenLayer
-    /// @param elDepositShares The EL deposit shares for `elAssets` (unscaled, pre-slashing shares)
-    function settleUserWithdrawals(
-        bytes32[] calldata requestIds,
-        uint256[] calldata nodeIds,
-        IERC20[][] calldata elAssets,
-        uint256[][] calldata elDepositShares
-    ) external;
+    /// @param settlement The proposed settlement
+    function settleUserWithdrawals(UserWithdrawalsSettlement calldata settlement) external;
 
     /// @notice Completes withdrawals on EigenLayer for a given redemption and transfers funds to the `receiver` of the redemption
     /// @dev The caller must make sure every `withdrawals[i][]` aligns with the corresponding `nodeIds[i]`

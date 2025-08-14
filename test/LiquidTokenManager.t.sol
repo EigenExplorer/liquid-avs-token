@@ -852,7 +852,7 @@ contract LiquidTokenManagerTest is BaseTest {
     function testGetDepositAssetBalanceInvalidStrategy() public {
         uint256 nodeId = 1;
         vm.expectRevert(abi.encodeWithSelector(ILiquidTokenManager.StrategyNotFound.selector, address(0x123)));
-        liquidTokenManager.getDepositAssetBalanceNode(IERC20(address(0x123)), nodeId);
+        liquidTokenManager.getDepositAssetBalanceNode(IERC20(address(0x123)), nodeId, false);
     }
 
     function testShareCalculation() public {
