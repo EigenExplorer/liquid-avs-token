@@ -356,11 +356,13 @@ contract LiquidTokenManager is
         // Transfer assets to node
         for (uint256 i = 0; i < assetsLength; i++) {
             depositAssets[i] = assets[i];
-            depositAmounts[i] = amounts[i];
-            assets[i].safeTransfer(address(node), amounts[i]);
+            uint256 balance = assets[i].balanceOf(address(this));
+            depositAmounts[i] = balance < amounts[i] ? balance : amounts[i];
+
+            assets[i].safeTransfer(address(node), depositAmounts[i]);
         }
 
-        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
+        emit AssetsStakedToNode(nodeId, depositAssets, depositAmounts, msg.sender);
 
         // Call for node to deposit assets into EigenLayer
         node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
@@ -864,6 +866,11 @@ contract LiquidTokenManager is
                     redemptionElDepositShares[i]
                 );
             }
+        }
+
+        // Trim arrays to actual sizes
+        assembly {
+            mstore(redemptionAssets, uniqueTokenCount)
         }
 
         // Credit queued asset shares with total withdrawable amounts, post slashing
