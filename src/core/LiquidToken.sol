@@ -177,16 +177,20 @@ contract LiquidToken is
     ) external nonReentrant whenNotPaused returns (bytes32) {
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        // Check if we have enough funds from staked and unstaked balances
-        if (!_previewWithdrawal(assets, amounts)) revert InvalidWithdrawalRequest();
+        // Check if we have enough funds from staked (pre-slashing) and unstaked balances
+        /// @dev Here we make a UX decision to check pre-slashing `depositShares` on EL, accept the amount but only "charge" the user for the actual redeemable amount
+        /// @dev This removes the burden from the user to track slashing on the LAT. The amount initially deposited can be asked backed here, and the fn takes care of the actual accounting
+        /// @dev This decision also removes the burden from the manager from tracking slashing when calling `settleUserWithdrawals`
+        (bool isPossible, uint256[] memory actualAmountsForShares) = _previewWithdrawal(assets, amounts);
+        if (!isPossible) revert InvalidWithdrawalRequest();
 
         // Calculate the amount of LAT shares to receive from the user in exchange for the
         // withdrawal request with the right to fulfill after a period delay
         uint256 totalShares = 0;
         for (uint256 i = 0; i < assets.length; i++) {
             if (!liquidTokenManager.tokenIsSupported(assets[i])) revert UnsupportedAsset(assets[i]);
-            if (amounts[i] == 0) revert ZeroAmount();
-            totalShares += calculateShares(assets[i], amounts[i]);
+            if (actualAmountsForShares[i] == 0) revert InvalidWithdrawalRequest();
+            totalShares += calculateShares(assets[i], actualAmountsForShares[i]); // Charge the user based on actual assets
         }
 
         if (totalShares == 0) revert ZeroAmount();
@@ -211,7 +215,8 @@ contract LiquidToken is
 
     /// @inheritdoc ILiquidToken
     function previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) external view override returns (bool) {
-        return _previewWithdrawal(assets, amounts);
+        (bool isPossible, ) = _previewWithdrawal(assets, amounts);
+        return isPossible;
     }
 
     /// @inheritdoc ILiquidToken
@@ -331,7 +336,7 @@ contract LiquidToken is
             );
 
             // Staked withdrawable asset balances
-            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false);
+            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false); // After any slashing
         }
 
         return total;
@@ -399,18 +404,29 @@ contract LiquidToken is
     }
 
     /// @dev Called by `initiateWithdrawal` and `previewWithdrawal`
-    function _previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) internal view returns (bool) {
+    function _previewWithdrawal(
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) internal view returns (bool, uint256[] memory) {
         bool isPossible = true;
+        uint256[] memory actualAmountsForShares = new uint256[](assets.length);
+
         for (uint256 i = 0; i < assets.length; i++) {
+            if (amounts[i] == 0) revert ZeroAmount();
             IERC20 asset = assets[i];
+            uint256 unstaked = assetBalances[address(asset)];
+
             if (
-                (assetBalances[address(asset)] + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
+                unstaked + liquidTokenManager.getDepositAssetBalance(asset, false) < amounts[i] // Preview with pre-slashing balances
             ) {
                 isPossible = false;
                 break;
             }
+
+            uint256 totalAvailable = unstaked + liquidTokenManager.getWithdrawableAssetBalance(asset, false); // Return post-slashing balances
+            actualAmountsForShares[i] = totalAvailable < amounts[i] ? totalAvailable : amounts[i];
         }
-        return isPossible;
+        return (isPossible, actualAmountsForShares);
     }
 
     // ------------------------------------------------------------------------------
