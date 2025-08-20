@@ -28,6 +28,9 @@ interface IRewardsManager {
     // EVENTS
     // ============================================================================
 
+    /// @notice Emitted when unsupported asset balance is updated
+    event UnsupportedAssetBalanceUpdated(address indexed asset, uint256 oldBalance, uint256 newBalance);
+    
     /// @notice Emitted when rewards are claimed
     /// @dev These values tell us the actual tokens realized by the LAT after a process claim procedure
     /// @dev The values may differ from the corresponding EL event due to rounding/transfer loss or unexepected token transfers to this contract
