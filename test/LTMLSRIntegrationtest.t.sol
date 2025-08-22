@@ -4,14 +4,15 @@ pragma solidity ^0.8.19;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 // Import contracts
-import "./mocks/MockLSR.sol";
+import "@lsr/src/LSTSwapRouter.sol";
 import "./mocks/MockLiquidTokenManager.sol";
 
 contract LTMLSRIntegrationTest is Test {
     // Contracts
-    MockLSR public LSR;
+    LSTSwapRouter public LSR;
     MockLiquidTokenManager public ltm;
 
     // Mainnet addresses
@@ -58,11 +59,11 @@ contract LTMLSRIntegrationTest is Test {
         // Initialize LSR
         _initializeLSR();
 
-        // Configure essential routes for auto-routing tests - commented out for T2 integration
-        // _configureMinimalRoutes();
+        // Configure essential routes for auto-routing tests
+        _configureMinimalRoutes();
 
-        // Get test assets - commented out for T2 integration
-        // _getTestAssets();
+        // Get test assets
+        _getTestAssets();
 
         console.log("=== SETUP COMPLETE ===\n");
     }
@@ -73,7 +74,16 @@ contract LTMLSRIntegrationTest is Test {
         bytes32 passwordHash = keccak256(abi.encode(PASSWORD, predictedLSRAddress));
 
         // Deploy LSR
-        LSR = new MockLSR();
+        LSR = new LSTSwapRouter(
+            WETH,
+            UNISWAP_V3_ROUTER,
+            UNISWAP_V3_QUOTER,
+            FRXETH_MINTER,
+            address(this),
+            passwordHash,
+            address(this),
+            false
+        );
 
         // Deploy Mock LTM
         ltm = new MockLiquidTokenManager();
@@ -93,7 +103,7 @@ contract LTMLSRIntegrationTest is Test {
         });
 
         ltm.initialize(ltmInit);
-        // LSR.grantOperatorRole(address(ltm)); // Not needed for mock
+        LSR.grantOperatorRole(address(ltm));
     }
 
     function _initializeLSR() internal {
@@ -108,11 +118,10 @@ contract LTMLSRIntegrationTest is Test {
         tokens[6] = WBTC;
         tokens[7] = UNIBTC;
 
-        // AssetType not needed for LAT integration testing
-        // LSTSwapRouter.AssetType[] memory types = new LSTSwapRouter.AssetType[](8);
-        // for (uint i = 0; i < 6; i++) types[i] = LSTSwapRouter.AssetType.ETH_LST;
-        // types[6] = LSTSwapRouter.AssetType.BTC_WRAPPED;
-        // types[7] = LSTSwapRouter.AssetType.BTC_WRAPPED;
+        LSTSwapRouter.AssetType[] memory types = new LSTSwapRouter.AssetType[](8);
+        for (uint i = 0; i < 6; i++) types[i] = LSTSwapRouter.AssetType.ETH_LST;
+        types[6] = LSTSwapRouter.AssetType.BTC_WRAPPED;
+        types[7] = LSTSwapRouter.AssetType.BTC_WRAPPED;
 
         uint8[] memory decimals = new uint8[](8);
         for (uint i = 0; i < 6; i++) decimals[i] = 18;
@@ -130,37 +139,33 @@ contract LTMLSRIntegrationTest is Test {
         uint256[] memory tokenCounts = new uint256[](5);
         for (uint i = 0; i < 5; i++) tokenCounts[i] = 2;
 
-        // CurveInterface not needed for LAT integration testing
-        // LSTSwapRouter.CurveInterface[] memory interfaces = new LSTSwapRouter.CurveInterface[](5);
-        // interfaces[0] = LSTSwapRouter.CurveInterface.Exchange; // ETH-stETH Curve
-        // interfaces[1] = LSTSwapRouter.CurveInterface.None; // UniswapV3
-        // interfaces[2] = LSTSwapRouter.CurveInterface.None; // UniswapV3
-        // interfaces[3] = LSTSwapRouter.CurveInterface.Exchange; // rETH-osETH Curve
-        // interfaces[4] = LSTSwapRouter.CurveInterface.None; // WETH-stETH UniswapV3
+        LSTSwapRouter.CurveInterface[] memory interfaces = new LSTSwapRouter.CurveInterface[](5);
+        interfaces[0] = LSTSwapRouter.CurveInterface.Exchange; // ETH-stETH Curve
+        interfaces[1] = LSTSwapRouter.CurveInterface.None; // UniswapV3
+        interfaces[2] = LSTSwapRouter.CurveInterface.None; // UniswapV3
+        interfaces[3] = LSTSwapRouter.CurveInterface.Exchange; // rETH-osETH Curve
+        interfaces[4] = LSTSwapRouter.CurveInterface.None; // WETH-stETH UniswapV3
 
-        // More conservative slippage configs - commented out for LAT integration
-        // LSTSwapRouter.SlippageConfig[] memory slippages = new LSTSwapRouter.SlippageConfig[](12);
-        // slippages[0] = LSTSwapRouter.SlippageConfig(ETH_ADDRESS, STETH, 500); // ETH->stETH
-        // slippages[1] = LSTSwapRouter.SlippageConfig(WETH, CBETH, 1000); // Increased from 700
-        // slippages[2] = LSTSwapRouter.SlippageConfig(WETH, RETH, 1500); // Increased from 1300
-        // slippages[3] = LSTSwapRouter.SlippageConfig(STETH, WETH, 1000); // Increased from 700
-        // slippages[4] = LSTSwapRouter.SlippageConfig(CBETH, WETH, 1000); // Increased from 700
-        // slippages[5] = LSTSwapRouter.SlippageConfig(RETH, WETH, 1500); // Increased from 1300
-        // slippages[6] = LSTSwapRouter.SlippageConfig(RETH, OSETH, 1200); // Increased from 800
-        // slippages[7] = LSTSwapRouter.SlippageConfig(OSETH, RETH, 1200); // Increased from 800
-        // slippages[8] = LSTSwapRouter.SlippageConfig(STETH, CBETH, 1500); // Multi-step
-        // slippages[9] = LSTSwapRouter.SlippageConfig(CBETH, RETH, 1500); // Multi-step
-        // slippages[10] = LSTSwapRouter.SlippageConfig(WETH, OSETH, 1500); // Multi-step
-        // slippages[11] = LSTSwapRouter.SlippageConfig(OSETH, WETH, 1500); // Multi-step
+        // More conservative slippage configs
+        LSTSwapRouter.SlippageConfig[] memory slippages = new LSTSwapRouter.SlippageConfig[](12);
+        slippages[0] = LSTSwapRouter.SlippageConfig(ETH_ADDRESS, STETH, 500); // ETH->stETH
+        slippages[1] = LSTSwapRouter.SlippageConfig(WETH, CBETH, 1000); // Increased from 700
+        slippages[2] = LSTSwapRouter.SlippageConfig(WETH, RETH, 1500); // Increased from 1300
+        slippages[3] = LSTSwapRouter.SlippageConfig(STETH, WETH, 1000); // Increased from 700
+        slippages[4] = LSTSwapRouter.SlippageConfig(CBETH, WETH, 1000); // Increased from 700
+        slippages[5] = LSTSwapRouter.SlippageConfig(RETH, WETH, 1500); // Increased from 1300
+        slippages[6] = LSTSwapRouter.SlippageConfig(RETH, OSETH, 1200); // Increased from 800
+        slippages[7] = LSTSwapRouter.SlippageConfig(OSETH, RETH, 1200); // Increased from 800
+        slippages[8] = LSTSwapRouter.SlippageConfig(STETH, CBETH, 1500); // Multi-step
+        slippages[9] = LSTSwapRouter.SlippageConfig(CBETH, RETH, 1500); // Multi-step
+        slippages[10] = LSTSwapRouter.SlippageConfig(WETH, OSETH, 1500); // Multi-step
+        slippages[11] = LSTSwapRouter.SlippageConfig(OSETH, WETH, 1500); // Multi-step
 
-        // LSR initialization commented out - not needed for LAT integration testing
-        // LSR.initialize(tokens, types, decimals, pools, tokenCounts, interfaces, slippages);
+        LSR.initialize(tokens, types, decimals, pools, tokenCounts, interfaces, slippages);
     }
 
-    // Route configuration commented out - not needed for LAT integration testing
-    /*
-    // Configure routes matching your config exactly
     function _configureMinimalRoutes() internal {
+        // Configure routes matching your config exactly
 
         // 1. WETH <-> stETH (UniswapV3 with fee 10000)
         LSR.configureRoute(
@@ -275,12 +280,8 @@ contract LTMLSRIntegrationTest is Test {
             PASSWORD
         );
     }
-    */
 
-    // Asset acquisition commented out - not needed for LAT integration testing
-    /*
     function _getTestAssets() internal {
-        
         vm.deal(address(this), 10 ether);
 
         // Get WETH
@@ -297,7 +298,6 @@ contract LTMLSRIntegrationTest is Test {
             fee: 500,
             recipient: address(this),
             deadline: block.timestamp + 3600,
-            
             amountIn: 1 ether,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
@@ -325,10 +325,7 @@ contract LTMLSRIntegrationTest is Test {
             ICurvePool(RETH_OSETH_POOL).exchange(1, 0, 0.5 ether, 0); // rETH index 1 -> osETH index 0
         }
     }
-    */
 
-    // TODO: Comment out for T5/T6 - uses outdated swapAndStake method
-    /* 
     // Test 1: Auto-routing stETH -> cbETH (should find WETH bridge)
     function testAutoRoutingStETHToCbETH() public {
         console.log("\n=== Test: stETH -> cbETH Auto-routing (Bridge via WETH) ===");
@@ -351,10 +348,7 @@ contract LTMLSRIntegrationTest is Test {
         console.log("Amount staked:", amountStaked);
         assertGe(amountStaked, minAmountOut, "Output too low");
     }
-    */
 
-    // TODO: Comment out for T5/T6 - uses outdated swapAndStake method
-    /*
     // Test 2: Auto-routing cbETH -> rETH (should find WETH bridge)
     function testAutoRoutingCbETHToRETH() public {
         console.log("\n=== Test: cbETH -> rETH Auto-routing (Bridge via WETH) ===");
@@ -376,10 +370,7 @@ contract LTMLSRIntegrationTest is Test {
         console.log("Amount staked:", amountStaked);
         assertGe(amountStaked, minAmountOut, "Output too low");
     }
-    */
 
-    // TODO: Comment out for T5/T6 - uses outdated swapAndStake method
-    /*
     // Test 3: Multi-step auto-routing stETH -> osETH (via WETH -> rETH)
     function testAutoRoutingStETHToOsETH() public {
         console.log("\n=== Test: stETH -> osETH Multi-step Auto-routing ===");
@@ -402,9 +393,6 @@ contract LTMLSRIntegrationTest is Test {
         console.log("Amount staked:", amountStaked);
         assertGe(amountStaked, minAmountOut, "Output too low");
     }
-    */
-    // TODO: Comment out for T5/T6 - uses outdated swapAndStake method
-    /*
     // Test 4: Reverse auto-routing osETH -> WETH
     function testAutoRoutingOsETHToWETH() public {
         console.log("\n=== Test: osETH -> WETH Reverse Auto-routing ===");
@@ -432,10 +420,7 @@ contract LTMLSRIntegrationTest is Test {
         console.log("Amount staked:", amountStaked);
         assertGe(amountStaked, minAmountOut, "Output too low");
     }
-    */
 
-    // TODO: Comment out for T5/T6 - All remaining functions that use outdated swapAndStake method
-    /*
     // Test 5: Complex multi-step cbETH -> osETH
     function testAutoRoutingCbETHToOsETH() public {
         console.log("\n=== Test: cbETH -> osETH Complex Auto-routing ===");
@@ -712,229 +697,6 @@ contract LTMLSRIntegrationTest is Test {
 
         console.log(string.concat("stETH received: ", Strings.toString(amountReceived)));
         assertGe(amountReceived, minAmountOut, "Output too low");
-    }
-    */
-
-    // ================================================================================================
-    // ETH Validation Tests for LSTSwapRouter Integration
-    // ================================================================================================
-
-    function testSwapAndStakeAssetsToNode_RevertsOnETHAsTokenIn() public {
-        console.log("\n=== Test: ETH Validation - ETH as tokenIn ===");
-
-        IERC20[] memory assetsToSwap = new IERC20[](1);
-        uint256[] memory amountsToSwap = new uint256[](1);
-        IERC20[] memory assetsToStake = new IERC20[](1);
-
-        assetsToSwap[0] = IERC20(ETH_ADDRESS); // ETH as tokenIn - should revert
-        amountsToSwap[0] = 1 ether;
-        assetsToStake[0] = IERC20(STETH);
-
-        vm.expectRevert();
-        ltm.swapAndStakeAssetsToNode(1, assetsToSwap, amountsToSwap, assetsToStake);
-
-        console.log("ETH as tokenIn correctly rejected");
-    }
-
-    function testSwapAndStakeAssetsToNode_RevertsOnETHAsTokenOut() public {
-        console.log("\n=== Test: ETH Validation - ETH as tokenOut ===");
-
-        IERC20[] memory assetsToSwap = new IERC20[](1);
-        uint256[] memory amountsToSwap = new uint256[](1);
-        IERC20[] memory assetsToStake = new IERC20[](1);
-
-        assetsToSwap[0] = IERC20(STETH);
-        amountsToSwap[0] = 1 ether;
-        assetsToStake[0] = IERC20(ETH_ADDRESS); // ETH as tokenOut - should revert
-
-        vm.expectRevert();
-        ltm.swapAndStakeAssetsToNode(1, assetsToSwap, amountsToSwap, assetsToStake);
-
-        console.log("ETH as tokenOut correctly rejected");
-    }
-
-    function testSwapAndStakeAssetsToNodes_RevertsOnETHInMultipleAllocations() public {
-        console.log("\n=== Test: ETH Validation - Multiple Allocations ===");
-
-        MockLiquidTokenManager.NodeAllocationWithSwap[]
-            memory allocations = new MockLiquidTokenManager.NodeAllocationWithSwap[](2);
-
-        // First allocation - valid
-        allocations[0].nodeId = 1;
-        allocations[0].assetsToSwap = new IERC20[](1);
-        allocations[0].amountsToSwap = new uint256[](1);
-        allocations[0].assetsToStake = new IERC20[](1);
-        allocations[0].assetsToSwap[0] = IERC20(WETH);
-        allocations[0].amountsToSwap[0] = 1 ether;
-        allocations[0].assetsToStake[0] = IERC20(STETH);
-
-        // Second allocation - has ETH (should revert)
-        allocations[1].nodeId = 2;
-        allocations[1].assetsToSwap = new IERC20[](1);
-        allocations[1].amountsToSwap = new uint256[](1);
-        allocations[1].assetsToStake = new IERC20[](1);
-        allocations[1].assetsToSwap[0] = IERC20(ETH_ADDRESS); // ETH here
-        allocations[1].amountsToSwap[0] = 1 ether;
-        allocations[1].assetsToStake[0] = IERC20(CBETH);
-
-        vm.expectRevert();
-        ltm.swapAndStakeAssetsToNodes(allocations);
-
-        console.log("ETH in multiple allocations correctly rejected");
-    }
-
-    // TODO: Comment out for T5/T6 - uses outdated swapAndStake method
-    /*
-    function testETHValidationWithBridgeAssetAllowed() public {
-        console.log("\n=== Test: ETH allowed as bridge asset in LSR ===");
-        
-        // This test verifies that ETH can still be used as a bridge asset
-        // within the LSR routing, just not as direct tokenIn/tokenOut in LTM
-        
-        // Test STETH -> CBETH which might use ETH as bridge
-        uint256 amountIn = 0.1 ether;
-        uint256 minAmountOut = 0.05 ether;
-        
-        IERC20(STETH).approve(address(ltm), amountIn);
-        
-        uint256 balanceBefore = ltm.mockStakedBalances(1, CBETH);
-        
-        // This should work even if ETH is used internally as bridge
-        ltm.swapAndStake(STETH, CBETH, amountIn, 1, minAmountOut);
-        
-        uint256 balanceAfter = ltm.mockStakedBalances(1, CBETH);
-        uint256 amountStaked = balanceAfter - balanceBefore;
-        
-        console.log("Amount staked via bridge:", amountStaked);
-        assertGe(amountStaked, minAmountOut, "Bridge routing should work");
-        console.log("ETH bridge routing works correctly");
-    }
-    */
-
-    // ================================================================================================
-    //  Workflow Test - Integration with External LST Swap Router
-    // ================================================================================================
-
-    function testFullWorkflowWithExternalLSTSwapRouter() public {
-        console.log("\n=== Test: Full Workflow with External LST Swap Router ===");
-        console.log("This test demonstrates the complete T2 integration workflow:");
-        console.log("1. LiquidTokenManager calls external LST-Swap-Router");
-        console.log("2. LSR provides swap execution plan");
-        console.log("3. LTM executes the plan step-by-step");
-        console.log("4. Assets are swapped and staked to nodes");
-        console.log("5. Proper event emission and state updates");
-
-        // STEP 1: VERIFY LSR INTEGRATION
-        console.log("\n--- Step 1: Verify LSR Integration ---");
-
-        // Check that LTM has the correct LSR address
-        address lsrAddress = address(ltm.LSTswaprouter());
-        assertEq(lsrAddress, address(LSR), "LTM should have correct LSR address");
-        console.log("+ LTM has correct LSR address:", lsrAddress);
-        console.log("+ LSR integration verified successfully");
-
-        //STEP 2: VERIFY FUNCTION SIGNATURES
-        console.log("\n--- Step 2: Verify All Required Functions Exist ---");
-
-        // Test that all required functions exist and are callable
-        IERC20[] memory testAssets = new IERC20[](1);
-        uint256[] memory testAmounts = new uint256[](1);
-        testAssets[0] = IERC20(WETH);
-        testAmounts[0] = 1 ether;
-
-        // These calls will fail due to token balance issues, but they prove the functions exist
-        console.log("+ swapAndStakeAssetsToNode() - function signature verified");
-        console.log("+ swapAndStakeAssetsToNodes() - function signature verified");
-        console.log("+ updateLSTSwapRouter() - function signature verified");
-        console.log("+ _swapAndStakeAssetsToNode() - internal function exists");
-        console.log("+ _executeLSRSwapPlan() - internal function exists");
-
-        // STEP 3: VERIFY LSR MOCK BEHAVIOR
-        console.log("\n--- Step 3: Verify LSR Mock Integration ---");
-
-        // Test that LSR mock provides execution plans
-        (uint256 quotedAmount, ILSTSwapRouter.MultiStepExecutionPlan memory plan) = LSR.getCompleteMultiStepPlan(
-            WETH,
-            STETH,
-            1 ether,
-            address(ltm)
-        );
-
-        assertTrue(quotedAmount > 0, "LSR should provide quoted amount");
-        assertTrue(plan.steps.length > 0, "LSR should provide execution steps");
-        console.log("+ LSR provides execution plans with quoted amount:", quotedAmount);
-        console.log("+ LSR provides", plan.steps.length, "execution steps");
-
-        // STEP 4: VERIFY ETH VALIDATION
-        console.log("\n--- Step 4: Verify ETH Validation Logic ---");
-
-        // These tests should pass as they just validate function behavior
-        IERC20[] memory ethAssets = new IERC20[](1);
-        uint256[] memory ethAmounts = new uint256[](1);
-        IERC20[] memory stakeAssets = new IERC20[](1);
-
-        ethAssets[0] = IERC20(ETH_ADDRESS);
-        ethAmounts[0] = 1 ether;
-        stakeAssets[0] = IERC20(STETH);
-
-        // This should revert due to ETH validation
-        vm.expectRevert();
-        ltm.swapAndStakeAssetsToNode(1, ethAssets, ethAmounts, stakeAssets);
-        console.log("+ ETH validation working - direct ETH usage rejected");
-
-        // STEP 5: VERIFY UPDATE FUNCTIONALITY
-        console.log("\n--- Step 5: Verify LSR Update Functionality ---");
-
-        // Deploy new mock LSR and test update
-        MockLSR newLSR = new MockLSR();
-        address oldLSRAddress = address(ltm.LSTswaprouter());
-
-        ltm.updateLSTSwapRouter(address(newLSR));
-        address currentLSRAddress = address(ltm.LSTswaprouter());
-
-        assertEq(currentLSRAddress, address(newLSR), "LSR should be updated");
-        assertNotEq(currentLSRAddress, oldLSRAddress, "LSR address should change");
-        console.log("+ LSR update functionality verified");
-        console.log("+ Old LSR:", oldLSRAddress);
-        console.log("+ New LSR:", currentLSRAddress);
-
-        // STEP 6: VERIFY ARCHITECTURE COMPLIANCE
-        console.log("\n--- Step 6: Verify T2 Architecture Compliance ---");
-
-        console.log("+ Architecture verification:");
-        console.log("  - LTM integrates with external LSR via interface");
-        console.log("  - All required swap and stake functions implemented");
-        console.log("  - LSR address configurable via initialize() and update()");
-        console.log("  - ETH validation prevents direct ETH token usage");
-        console.log("  - Multi-step execution supported via LSR plans");
-    }
-
-    // ================================================================================================
-    // Test LSR Router Update Functionality
-    // ================================================================================================
-
-    function testUpdateLSTSwapRouter() public {
-        console.log("\n=== Test: Update LST Swap Router ===");
-        console.log("Testing the updateLSTSwapRouter admin function");
-
-        // Deploy a new mock LSR
-        MockLSR newLSR = new MockLSR();
-        address oldLSRAddress = address(ltm.LSTswaprouter());
-
-        console.log("Old LSR address:", oldLSRAddress);
-        console.log("New LSR address:", address(newLSR));
-
-        // Update the LSR (should work as we're the admin)
-        ltm.updateLSTSwapRouter(address(newLSR));
-
-        // Verify the update
-        address currentLSRAddress = address(ltm.LSTswaprouter());
-        assertEq(currentLSRAddress, address(newLSR), "LSR address should be updated");
-
-        console.log("+ LSR address updated successfully");
-        console.log("Current LSR address:", currentLSRAddress);
-
-        console.log("+ updateLSTSwapRouter function working correctly");
     }
 
     receive() external payable {}
