@@ -64,14 +64,8 @@ contract RewardsManagerTest is BaseTest {
 
         // Create mock coordinator
         MockRewardsCoordinator mockCoordinator = new MockRewardsCoordinator();
-
-        // Replace the coordinator code
         vm.etch(realCoordinator, address(mockCoordinator).code);
-
-        // Set up storage for mock coordinator
         setupMockCoordinatorStorage(earner1, testToken, 75 ether);
-
-        // Fund the coordinator
         testToken.mint(realCoordinator, 75 ether);
 
         uint256 liquidTokenBalanceBefore = testToken.balanceOf(address(liquidToken));
@@ -82,8 +76,9 @@ contract RewardsManagerTest is BaseTest {
         uint256 liquidTokenBalanceAfter = testToken.balanceOf(address(liquidToken));
         uint256 transferred = liquidTokenBalanceAfter - liquidTokenBalanceBefore;
 
-        assertEq(transferred, 75 ether, "Should transfer only actual received amount");
-        assertEq(testToken.balanceOf(address(rewardsManager)), existingBalance);
+        // CHANGED: Should transfer FULL balance (existing + new)
+        assertEq(transferred, 125 ether, "Should transfer full balance");
+        assertEq(testToken.balanceOf(address(rewardsManager)), 0, "RewardsManager should have 0 balance");
     }
 
     function test_ProcessClaim_LiquidTokenIntegration() public {
@@ -491,7 +486,6 @@ contract RewardsManagerTest is BaseTest {
     function test_ProcessClaim_BalanceCalculationWithExistingBalance() public {
         // Pre-fund RewardsManager with existing balance
         testToken.mint(address(rewardsManager), 200 ether);
-        uint256 existingBalance = testToken.balanceOf(address(rewardsManager));
 
         IRewardsCoordinatorTypes.TokenTreeMerkleLeaf[]
             memory tokenLeaves = new IRewardsCoordinatorTypes.TokenTreeMerkleLeaf[](1);
@@ -515,9 +509,9 @@ contract RewardsManagerTest is BaseTest {
         uint256 liquidTokenBalanceAfter = testToken.balanceOf(address(liquidToken));
         uint256 transferred = liquidTokenBalanceAfter - liquidTokenBalanceBefore;
 
-        // Should only transfer the newly received amount, not existing balance
-        assertEq(transferred, 100 ether);
-        assertEq(testToken.balanceOf(address(rewardsManager)), existingBalance);
+        // CHANGED: Should transfer FULL balance
+        assertEq(transferred, 300 ether, "Should transfer full balance");
+        assertEq(testToken.balanceOf(address(rewardsManager)), 0, "RewardsManager should have 0 balance");
     }
 
     function test_ProcessClaim_UnsupportedTokenAccumulation() public {
@@ -541,7 +535,7 @@ contract RewardsManagerTest is BaseTest {
 
         assertEq(rewardsManager.unsupportedAssetBalances(address(unsupportedToken1)), 50 ether);
 
-        // Second claim - should accumulate
+        // Second claim - balance is set, not accumulated
         setupMockCoordinatorStorage(earner1, unsupportedToken1, 30 ether);
         unsupportedToken1.mint(realCoordinator, 30 ether);
 
@@ -557,7 +551,7 @@ contract RewardsManagerTest is BaseTest {
         vm.prank(earner1);
         rewardsManager.processClaim(claim2);
 
-        // Should accumulate to 80 ether
+        // CHANGED: Should set to full balance (80 ether), not accumulate separately
         assertEq(rewardsManager.unsupportedAssetBalances(address(unsupportedToken1)), 80 ether);
     }
 
