@@ -336,7 +336,10 @@ contract LiquidToken is
             );
 
             // Staked withdrawable asset balances
-            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false); // After any slashing
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false) // After any slashing
+            );
         }
 
         return total;
@@ -417,7 +420,7 @@ contract LiquidToken is
             uint256 unstaked = assetBalances[address(asset)];
 
             if (
-                unstaked + liquidTokenManager.getDepositAssetBalance(asset, false) < amounts[i] // Preview with pre-slashing balances
+                (unstaked + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
             ) {
                 isPossible = false;
                 break;
