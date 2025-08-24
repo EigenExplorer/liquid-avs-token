@@ -46,17 +46,11 @@ contract RewardsManager is
 
     /// @notice Unsupported rewards which remain in the contract until swapped out
     mapping(address => uint256) public unsupportedAssetBalances;
-    address[] public unsupportedAssets;
+    EnumerableSetUpgradeable.AddressSet private _unsupportedAssets;
 
-    /// @notice Claimer for earners on EL - using EnumerableSet for efficient operations
+    /// @notice Claimer for earners on EL
     mapping(address => bool) public isClaimerFor;
     EnumerableSetUpgradeable.AddressSet private _claimerForSet;
-
-    // ------------------------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------------------------
-
-    // Events inherited from IRewardsManager interface
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -118,6 +112,10 @@ contract RewardsManager is
         }
     }
 
+    /// @notice For rewards that are in unsupported assets, swaps into supported assets and transfers over to LT
+    /// @dev OUT OF SCOPE FOR V2
+    /// function swapAndTransferRewards() external override nonReentrant whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) {}
+
     /// @inheritdoc IRewardsManager
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
@@ -141,34 +139,40 @@ contract RewardsManager is
         return balances;
     }
 
-    /// @notice Get all claimers as an array (for backward compatibility)
+    /// @inheritdoc IRewardsManager
     function claimerFor() external view returns (address[] memory) {
         return _claimerForSet.values();
     }
 
-    /// @notice Get number of claimers
+    /// @inheritdoc IRewardsManager
     function claimerForLength() external view returns (uint256) {
         return _claimerForSet.length();
+    }
+
+    /// @inheritdoc IRewardsManager
+    function unsupportedAssets() external view returns (address[] memory) {
+        return _unsupportedAssets.values();
+    }
+
+    function unsupportedAssetsLength() external view returns (uint256) {
+        return _unsupportedAssets.length();
     }
 
     // ------------------------------------------------------------------------------
     // Internal functions
     // ------------------------------------------------------------------------------
 
-    /// @dev Process a single claim - transfers all token balances to LAT
-    /// @dev These values tell us the actual tokens realized by the LAT after a process claim procedure
-    /// @dev The values may differ from the corresponding EL event due to rounding/transfer loss or unexpected token transfers to this contract
-    /// @dev We are only concerned with actual value accrued to LAT, exact EL data can be found via corresponding EL events
+    /// @dev Called by `processClaim` and `processClaims`
     function _processClaim(IRewardsCoordinatorTypes.RewardsMerkleClaim calldata claim) internal {
         address earner = claim.earnerLeaf.earner;
         if (!_verifyAndUpdateClaimerFor(earner)) revert NotClaimerFor(earner);
 
         // Get unique tokens from the claim
         IERC20[] memory uniqueTokens = _getUniqueTokensFromClaim(claim);
-        
+
         // Categorize tokens into supported and unsupported
         IERC20[] memory allSupportedAssets = liquidTokenManager.getSupportedTokens();
-        
+
         IERC20[] memory supportedTokens = new IERC20[](uniqueTokens.length);
         IERC20[] memory unsupportedTokens = new IERC20[](uniqueTokens.length);
         uint256 supportedCount = 0;
@@ -194,56 +198,51 @@ contract RewardsManager is
         // Process the claim on EigenLayer
         rewardsCoordinator.processClaim(claim, address(this));
 
-        // Transfer ALL balances of supported tokens to LiquidToken
-        uint256[] memory supportedAmounts = new uint256[](supportedCount);
-        for (uint256 i = 0; i < supportedCount; i++) {
-            uint256 fullBalance = supportedTokens[i].balanceOf(address(this));
-            if (fullBalance > 0) {
-                supportedTokens[i].safeTransfer(address(liquidToken), fullBalance);
-                supportedAmounts[i] = fullBalance;
-            }
-        }
+        // Update balances for unsupported tokens
+        // These tokens will stay in the contract until `swapAndTransferRewards` is called
+        uint256[] memory unsupportedAmounts = _setAssetBalances(unsupportedTokens);
 
-        // Record full balances for unsupported tokens (not additive - we set the full balance)
-        uint256[] memory unsupportedAmounts = new uint256[](unsupportedCount);
-        for (uint256 i = 0; i < unsupportedCount; i++) {
-            address assetAddr = address(unsupportedTokens[i]);
-            uint256 fullBalance = unsupportedTokens[i].balanceOf(address(this));
-            unsupportedAmounts[i] = fullBalance;
-            
-            // Update storage
-            uint256 oldBalance = unsupportedAssetBalances[assetAddr];
-            
-            // Add to unsupported assets array if new
-            if (oldBalance == 0 && fullBalance > 0) {
-                unsupportedAssets.push(assetAddr);
-            }
-            
-            // Set the full balance (not additive)
-            unsupportedAssetBalances[assetAddr] = fullBalance;
-            
-            // Emit event if balance changed
-            if (oldBalance != fullBalance) {
-                emit UnsupportedAssetBalanceUpdated(assetAddr, oldBalance, fullBalance);
-            }
-        }
-
-        // Credit LiquidToken with the transferred amounts
-        if (supportedCount > 0 && supportedAmounts.length > 0) {
-            liquidToken.creditAssetBalances(supportedTokens, supportedAmounts);
-        }
+        // Transfer all supported assets to `LiquidToken`
+        uint256[] memory netTransferredAmounts = _transferRewards(supportedTokens);
 
         emit RewardsClaimed(
             claim.rootIndex,
             earner,
             supportedTokens,
-            supportedAmounts,
+            netTransferredAmounts,
             unsupportedTokens,
             unsupportedAmounts
         );
     }
 
+    /// @dev Verify and update claimer status for an earner
+    /// @dev Called by `_processClaim`
+    function _verifyAndUpdateClaimerFor(address earner) internal returns (bool) {
+        if (address(earner) == address(0)) revert ZeroAddress();
+
+        // Check on EL if this contract is set as a claimer for the earner
+        bool isClaimerOnEl = (rewardsCoordinator.claimerFor(earner) == address(this));
+
+        // Update claimer storage vars if required
+        if (isClaimerOnEl) {
+            if (!isClaimerFor[earner]) {
+                isClaimerFor[earner] = true;
+                _claimerForSet.add(earner);
+                emit ClaimerForAdded(earner);
+            }
+        } else {
+            if (isClaimerFor[earner]) {
+                isClaimerFor[earner] = false;
+                _claimerForSet.remove(earner);
+                emit ClaimerForRemoved(earner);
+            }
+        }
+
+        return isClaimerOnEl;
+    }
+
     /// @dev Get unique tokens from claim to avoid processing duplicates
+    /// @dev Called by `_processClaim`
     function _getUniqueTokensFromClaim(
         IRewardsCoordinatorTypes.RewardsMerkleClaim calldata claim
     ) internal pure returns (IERC20[] memory) {
@@ -272,6 +271,7 @@ contract RewardsManager is
     }
 
     /// @dev Helper to check if token is supported
+    /// @dev Called by `_processClaim`
     function _isTokenSupported(IERC20 token, IERC20[] memory supportedTokens) internal pure returns (bool) {
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             if (supportedTokens[i] == token) {
@@ -282,6 +282,7 @@ contract RewardsManager is
     }
 
     /// @dev Resize token array to actual size
+    /// @dev Called by `_processClaim`
     function _resizeTokenArray(IERC20[] memory arr, uint256 newSize) internal pure returns (IERC20[] memory) {
         IERC20[] memory resized = new IERC20[](newSize);
         for (uint256 i = 0; i < newSize; i++) {
@@ -290,32 +291,55 @@ contract RewardsManager is
         return resized;
     }
 
-    /// @dev Verify and update claimer status for an earner
-    function _verifyAndUpdateClaimerFor(address earner) internal returns (bool) {
-        if (address(earner) == address(0)) revert ZeroAddress();
+    /// @dev Called by `_processClaim`
+    function _setAssetBalances(IERC20[] memory assets) internal returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](assets.length);
+        for (uint256 i = 0; i < assets.length; i++) {
+            IERC20 asset = assets[i];
+            uint256 oldBalance = unsupportedAssetBalances[address(asset)];
+            uint256 newBalance = asset.balanceOf(address(this));
 
-        // Check on EL if this contract is set as a claimer for the earner
-        bool isClaimerOnEl = (rewardsCoordinator.claimerFor(earner) == address(this));
-
-        // Update claimer storage vars if required
-        if (isClaimerOnEl) {
-            if (!isClaimerFor[earner]) {
-                isClaimerFor[earner] = true;
-                _claimerForSet.add(earner);
-                emit ClaimerForAdded(earner);
+            if (!_unsupportedAssets.contains(address(asset)) && newBalance > 0) {
+                // Asset doesn't exist in set yet
+                _unsupportedAssets.add(address(asset));
             }
-        } else {
-            if (isClaimerFor[earner]) {
-                isClaimerFor[earner] = false;
-                _claimerForSet.remove(earner);
-                emit ClaimerForRemoved(earner);
+            if (oldBalance != newBalance) {
+                unsupportedAssetBalances[address(asset)] = newBalance;
+                amounts[i] = newBalance;
+                emit UnsupportedAssetBalanceUpdated(address(asset), oldBalance, newBalance);
             }
         }
 
-        return isClaimerOnEl;
+        return amounts;
+    }
+
+    /// @dev Called by `_processClaim`
+    function _transferRewards(IERC20[] memory assets) internal returns (uint256[] memory) {
+        // Transfer to `LiquidToken` and calculate actual net amounts received
+        uint256[] memory netTransferredAmounts = new uint256[](assets.length);
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            IERC20 asset = assets[i];
+            uint256 rewardsManagerBalanceBefore = asset.balanceOf(address(this));
+
+            if (rewardsManagerBalanceBefore > 0) {
+                uint256 liquidTokenBalanceBefore = asset.balanceOf(address(liquidToken));
+                assets[i].safeTransfer(address(liquidToken), rewardsManagerBalanceBefore);
+                uint256 liquidTokenBalanceAfter = assets[i].balanceOf(address(liquidToken));
+                netTransferredAmounts[i] = liquidTokenBalanceAfter - liquidTokenBalanceBefore;
+            } else {
+                netTransferredAmounts[i] = 0;
+            }
+        }
+
+        // Credit `LiquidToken` asset balances with the actual net amounts recieved
+        liquidToken.creditAssetBalances(assets, netTransferredAmounts);
+
+        return netTransferredAmounts;
     }
 
     /// @dev Get balance of unsupported asset
+    /// @dev Called by `balanceAssets`
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
         return unsupportedAssetBalances[address(asset)];
     }

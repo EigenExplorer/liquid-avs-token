@@ -88,6 +88,22 @@ interface IRewardsManager {
     /// @return An array of asset balances
     function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
 
+    /// @notice Get all claimers as an array
+    /// @return Array of all claimer addresses
+    function claimerFor() external view returns (address[] memory);
+
+    /// @notice Get number of claimers
+    /// @return The total number of claimers
+    function claimerForLength() external view returns (uint256);
+
+    /// @notice Get all unsupported assets as an array
+    /// @return Array of all unsupported assets addresses
+    function unsupportedAssets() external view returns (address[] memory);
+
+    /// @notice Get number of unsupported assets
+    /// @return The total number of unsupported assets
+    function unsupportedAssetsLength() external view returns (uint256);
+
     /// @notice Pauses the contract
     function pause() external;
 
