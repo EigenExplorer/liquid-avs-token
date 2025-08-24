@@ -28,10 +28,13 @@ interface IRewardsManager {
     // EVENTS
     // ============================================================================
 
+    /// @notice Emitted when unsupported asset balance is updated
+    event UnsupportedAssetBalanceUpdated(address indexed asset, uint256 oldBalance, uint256 newBalance);
+
     /// @notice Emitted when rewards are claimed
     /// @dev These values tell us the actual tokens realized by the LAT after a process claim procedure
-    /// @dev The values may differ from the corresponding EL event due to rounding/transfer loss or unexepected token transfers to this contract
-    /// @dev We are only concerned with actual value accured to LAT, exact EL data can be found via corresponding EL events
+    /// @dev The values may differ from the corresponding EL event due to rounding/transfer loss or unexpected token transfers to this contract
+    /// @dev We are only concerned with actual value accrued to LAT, exact EL data can be found via corresponding EL events
     event RewardsClaimed(
         uint32 indexed rootIndex,
         address indexed earner,
@@ -84,4 +87,26 @@ interface IRewardsManager {
     /// @param assetList The list of assets to get balances for
     /// @return An array of asset balances
     function balanceAssets(IERC20[] calldata assetList) external view returns (uint256[] memory);
+
+    /// @notice Get all claimers as an array
+    /// @return Array of all claimer addresses
+    function claimerFor() external view returns (address[] memory);
+
+    /// @notice Get number of claimers
+    /// @return The total number of claimers
+    function claimerForLength() external view returns (uint256);
+
+    /// @notice Get all unsupported assets as an array
+    /// @return Array of all unsupported assets addresses
+    function unsupportedAssets() external view returns (address[] memory);
+
+    /// @notice Get number of unsupported assets
+    /// @return The total number of unsupported assets
+    function unsupportedAssetsLength() external view returns (uint256);
+
+    /// @notice Pauses the contract
+    function pause() external;
+
+    /// @notice Unpauses the contract
+    function unpause() external;
 }
