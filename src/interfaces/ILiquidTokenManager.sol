@@ -470,6 +470,13 @@ interface ILiquidTokenManager {
         bool inElShares
     ) external view returns (uint256);
 
+    /// @notice Gets the withdrawable balance (after slashing) of an asset for a given amount
+    /// @dev This checks the balances across all nodes and factors in slashing across the system
+    /// @param asset The asset token address
+    /// @param amount The amount of asset to calculate corresponding withdrawable amount
+    /// @param inElShares Whether to return EL shares (true) or underlying amount (false)
+    function getWithdrawableAssetAmount(IERC20 asset, uint256 amount, bool inElShares) external view returns (uint256);
+
     /// @notice Checks if a token is supported
     /// @param token Address of the token to check
     /// @return bool indicating whether the token is supported

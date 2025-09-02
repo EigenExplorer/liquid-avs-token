@@ -1350,6 +1350,27 @@ contract LiquidTokenManager is
     }
 
     /// @inheritdoc ILiquidTokenManager
+    function getWithdrawableAssetAmount(IERC20 asset, uint256 amount, bool inElShares) external view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+
+        uint256 totalDepositBalance = 0;
+        uint256 totalWithdrawableBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalDepositBalance += _getDepositAssetBalanceNode(asset, nodes[i], inElShares);
+            totalWithdrawableBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i], inElShares);
+        }
+
+        if (totalDepositBalance == 0 || totalWithdrawableBalance == 0) return 0;
+
+        return amount.mulDiv(totalWithdrawableBalance, totalDepositBalance); // Withdrawable portion after any slashing
+    }
+
+    /// @inheritdoc ILiquidTokenManager
     function tokenIsSupported(IERC20 token) external view returns (bool) {
         return tokens[token].decimals != 0;
     }

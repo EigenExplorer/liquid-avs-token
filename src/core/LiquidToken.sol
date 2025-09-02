@@ -178,19 +178,19 @@ contract LiquidToken is
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
         // Check if we have enough funds from staked (pre-slashing) and unstaked balances
-        /// @dev Here we make a UX decision to check pre-slashing `depositShares` on EL, accept the amount but only "charge" the user for the actual redeemable amount
-        /// @dev This removes the burden from the user to track slashing on the LAT. The amount initially deposited can be asked backed here, and the fn takes care of the actual accounting
-        /// @dev This decision also removes the burden from the manager from tracking slashing when calling `settleUserWithdrawals`
-        (bool isPossible, uint256[] memory actualAmountsForShares) = _previewWithdrawal(assets, amounts);
-        if (!isPossible) revert InvalidWithdrawalRequest();
+        // Here we make a UX decision to check pre-slashing `depositShares` on EL, which means caller can ask for the same amount they deposited, and the fn takes care of the actual accounting
+        // This removes the burden from the caller and from the manager (when calling `settleUserWithdrawals`) to track slashing on the LAT
+        if (!_previewWithdrawal(assets, amounts)) revert InvalidWithdrawalRequest();
 
-        // Calculate the amount of LAT shares to receive from the user in exchange for the
-        // withdrawal request with the right to fulfill after a period delay
+        // Calculate the amount of LAT shares to receive from the user in exchange for the withdrawal request with the right to fulfill after a period delay
+        // We "charge" the user the equivalent at pre-slashing LAT price, to maintain fair pricing regardless of slashing
         uint256 totalShares = 0;
+        uint256[] memory elWithdrawableShares = new uint256[](assets.length);
         for (uint256 i = 0; i < assets.length; i++) {
-            if (!liquidTokenManager.tokenIsSupported(assets[i])) revert UnsupportedAsset(assets[i]);
-            if (actualAmountsForShares[i] == 0) revert InvalidWithdrawalRequest();
-            totalShares += calculateShares(assets[i], actualAmountsForShares[i]); // Charge the user based on actual assets
+            elWithdrawableShares[i] = liquidTokenManager.getWithdrawableAssetAmount(assets[i], amounts[i], true);
+            if (elWithdrawableShares[i] == 0) revert ZeroAmount();
+
+            totalShares += calculateSharesNoSlashing(assets[i], amounts[i]); // Charge user at pre-slashing LAT price
         }
 
         if (totalShares == 0) revert ZeroAmount();
@@ -208,15 +208,22 @@ contract LiquidToken is
         _transfer(msg.sender, address(this), totalShares);
 
         // Create a withdrawal request for the user
-        withdrawalManager.createWithdrawalRequest(assets, amounts, totalShares, msg.sender, requestId);
+        withdrawalManager.createWithdrawalRequest(
+            assets,
+            amounts,
+            elWithdrawableShares,
+            totalShares,
+            msg.sender,
+            requestId
+        );
 
         return requestId;
     }
 
     /// @inheritdoc ILiquidToken
     function previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) external view override returns (bool) {
-        (bool isPossible, ) = _previewWithdrawal(assets, amounts);
-        return isPossible;
+        if (assets.length != amounts.length) revert ArrayLengthMismatch();
+        return _previewWithdrawal(assets, amounts);
     }
 
     /// @inheritdoc ILiquidToken
@@ -316,6 +323,15 @@ contract LiquidToken is
         return liquidTokenManager.convertFromUnitOfAccount(asset, amountInUnitOfAccount);
     }
 
+    /// @notice Calculate shares at pre-slashing LAT price
+    /// @param asset The asset to calculate shares for
+    /// @param amount The amount of the asset
+    /// @return shares The number of LAT shares at pre-slashing price
+    function calculateSharesNoSlashing(IERC20 asset, uint256 amount) public view returns (uint256) {
+        uint256 assetAmountInUnitOfAccount = liquidTokenManager.convertToUnitOfAccount(asset, amount);
+        return _convertToSharesNoSlashing(assetAmountInUnitOfAccount);
+    }
+
     // ------------------------------------------------------------------------------
     // Getter functions
     // ------------------------------------------------------------------------------
@@ -393,6 +409,46 @@ contract LiquidToken is
         return (shares * totalAsset) / supply;
     }
 
+    /// @dev Called by `calculateSharesNoSlashing`
+    /// @dev Calculate shares using pre-slashing total assets
+    function _convertToSharesNoSlashing(uint256 amount) internal view returns (uint256) {
+        uint256 supply = totalSupply();
+        uint256 totalAssetPreSlashing = _totalAssetsNoSlashing();
+
+        // Check for totalAssets being 0 to avoid division by zero
+        if (supply == 0 || totalAssetPreSlashing == 0) {
+            return amount;
+        }
+
+        return (amount * supply) / totalAssetPreSlashing;
+    }
+
+    /// @dev Called by `_convertToSharesNoSlashing`
+    /// @dev Calculate total assets as if no slashing occurred
+    function _totalAssetsNoSlashing() internal view returns (uint256) {
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+
+        uint256 total = 0;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            // Unstaked asset balances
+            total += liquidTokenManager.convertToUnitOfAccount(supportedTokens[i], _balanceAsset(supportedTokens[i]));
+
+            // Queued asset balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                _balanceQueuedAsset(supportedTokens[i])
+            );
+
+            // Pre-slashing staked balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                liquidTokenManager.getDepositAssetBalance(supportedTokens[i], false) // Pre-slashing
+            );
+        }
+
+        return total;
+    }
+
     /// @dev Called by `balanceAssets` and `totalAssets`
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
         return assetBalances[address(asset)];
@@ -407,29 +463,20 @@ contract LiquidToken is
     }
 
     /// @dev Called by `initiateWithdrawal` and `previewWithdrawal`
-    function _previewWithdrawal(
-        IERC20[] memory assets,
-        uint256[] memory amounts
-    ) internal view returns (bool, uint256[] memory) {
+    function _previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) internal view returns (bool) {
         bool isPossible = true;
-        uint256[] memory actualAmountsForShares = new uint256[](assets.length);
-
         for (uint256 i = 0; i < assets.length; i++) {
-            if (amounts[i] == 0) revert ZeroAmount();
             IERC20 asset = assets[i];
-            uint256 unstaked = assetBalances[address(asset)];
-
             if (
-                (unstaked + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
+                (!liquidTokenManager.tokenIsSupported(assets[i])) ||
+                (amounts[i] == 0) ||
+                (assetBalances[address(asset)] + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
             ) {
                 isPossible = false;
                 break;
             }
-
-            uint256 totalAvailable = unstaked + liquidTokenManager.getWithdrawableAssetBalance(asset, false); // Return post-slashing balances
-            actualAmountsForShares[i] = totalAvailable < amounts[i] ? totalAvailable : amounts[i];
         }
-        return (isPossible, actualAmountsForShares);
+        return isPossible;
     }
 
     // ------------------------------------------------------------------------------
