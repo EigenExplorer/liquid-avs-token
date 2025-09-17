@@ -103,8 +103,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         unchecked {
             for (uint256 i = 0; i < assetsLength; i++) {
                 IERC20 asset = assets[i];
-                uint256 amount = amounts[i];
                 IStrategy strategy = strategies[i];
+
+                uint256 balance = assets[i].balanceOf(address(this));
+                uint256 amount = balance < amounts[i] ? balance : amounts[i];
 
                 asset.forceApprove(address(strategyManager), amount);
 

@@ -356,11 +356,13 @@ contract LiquidTokenManager is
         // Transfer assets to node
         for (uint256 i = 0; i < assetsLength; i++) {
             depositAssets[i] = assets[i];
-            depositAmounts[i] = amounts[i];
-            assets[i].safeTransfer(address(node), amounts[i]);
+            uint256 balance = assets[i].balanceOf(address(this));
+            depositAmounts[i] = balance < amounts[i] ? balance : amounts[i];
+
+            assets[i].safeTransfer(address(node), depositAmounts[i]);
         }
 
-        emit AssetsStakedToNode(nodeId, assets, amounts, msg.sender);
+        emit AssetsStakedToNode(nodeId, depositAssets, depositAmounts, msg.sender);
 
         // Call for node to deposit assets into EigenLayer
         node.depositAssets(depositAssets, depositAmounts, strategiesForNode);
@@ -866,6 +868,11 @@ contract LiquidTokenManager is
             }
         }
 
+        // Trim arrays to actual sizes
+        assembly {
+            mstore(redemptionAssets, uniqueTokenCount)
+        }
+
         // Credit queued asset shares with total withdrawable amounts, post slashing
         // As noted above, here we specifically factor in any slashing to maintain accurate AUM calc
         // If there is any additional slashing after this (during EL withdrawal queue period), we handle it in redemption completion
@@ -1340,6 +1347,27 @@ contract LiquidTokenManager is
         }
 
         return inElShares ? withdrawableShares[0] : strategy.sharesToUnderlyingView(withdrawableShares[0]);
+    }
+
+    /// @inheritdoc ILiquidTokenManager
+    function getWithdrawableAssetAmount(IERC20 asset, uint256 amount, bool inElShares) external view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+
+        uint256 totalDepositBalance = 0;
+        uint256 totalWithdrawableBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalDepositBalance += _getDepositAssetBalanceNode(asset, nodes[i], inElShares);
+            totalWithdrawableBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i], inElShares);
+        }
+
+        if (totalDepositBalance == 0 || totalWithdrawableBalance == 0) return 0;
+
+        return amount.mulDiv(totalWithdrawableBalance, totalDepositBalance); // Withdrawable portion after any slashing
     }
 
     /// @inheritdoc ILiquidTokenManager

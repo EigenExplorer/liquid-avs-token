@@ -198,12 +198,14 @@ interface IWithdrawalManager {
     /// @notice Creates a withdrawal request for a user when they initate one via `LiquidToken`
     /// @param assets The final assets the the user wants to end up with
     /// @param amounts The withdrawal amounts per asset
+    /// @param elWithdrawableShares Array of EL shares withdrawable per asset (after any slashing)
     /// @param sharesDeposited The LAT shares deposited by the user, to be burned on withdrawal fulfilment
     /// @param user The requesting user's address
     /// @param requestId The unique identifier of the withdrawal request
     function createWithdrawalRequest(
         IERC20[] memory assets,
         uint256[] memory amounts,
+        uint256[] memory elWithdrawableShares,
         uint256 sharesDeposited,
         address user,
         bytes32 requestId

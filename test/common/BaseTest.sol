@@ -12,6 +12,7 @@ import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManage
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
+import {IAllocationManager} from "@eigenlayer/contracts/interfaces/IAllocationManager.sol";
 
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
@@ -53,6 +54,7 @@ contract BaseTest is Test {
     // EigenLayer Contracts
     IStrategyManager public strategyManager;
     IDelegationManager public delegationManager;
+    IAllocationManager public allocationManager;
 
     // Contracts
     LiquidToken public liquidToken;
@@ -296,6 +298,7 @@ contract BaseTest is Test {
 
         strategyManager = IStrategyManager(addresses.strategyManager);
         delegationManager = IDelegationManager(addresses.delegationManager);
+        allocationManager = IAllocationManager(addresses.allocationManager);
     }
 
     function _deployMockContracts() internal virtual {
@@ -454,6 +457,7 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
         liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this));
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(this));
 
         // Update LSR address if mockLSTSwapRouter is set - Added
         if (address(mockLSTSwapRouter) != address(0) && address(mockLSTSwapRouter) != address(0xDEAD)) {

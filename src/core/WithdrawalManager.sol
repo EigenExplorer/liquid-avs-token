@@ -107,38 +107,14 @@ contract WithdrawalManager is IWithdrawalManager, Initializable, AccessControlUp
     function createWithdrawalRequest(
         IERC20[] memory assets,
         uint256[] memory amounts,
+        uint256[] memory elWithdrawableShares,
         uint256 sharesDeposited,
         address user,
         bytes32 requestId
     ) external override nonReentrant {
         if (msg.sender != address(liquidToken)) revert NotLiquidToken(msg.sender);
-        if (sharesDeposited == 0) revert ZeroAmount();
-        if (assets.length != amounts.length) revert LengthMismatch();
-        if (assets.length == 0) revert ZeroAmount();
         if (assets.length > MAX_WITHDRAWAL_ASSETS) revert ExceedsMaxAssets();
-        if (user == address(0)) revert ZeroAddress();
         if (withdrawalRequests[requestId].user != address(0)) revert RequestAlreadyExists();
-
-        uint256[] memory elWithdrawableShares = new uint256[](assets.length);
-
-        // Check for duplicate assets and validate each asset
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (address(assets[i]) == address(0)) revert ZeroAddress();
-            if (amounts[i] == 0) revert ZeroAmount();
-
-            // Check for duplicates
-            for (uint256 j = 0; j < i; j++) {
-                if (assets[i] == assets[j]) revert DuplicateAsset(address(assets[i]));
-            }
-
-            // Validate asset is supported
-            if (!liquidTokenManager.tokenIsSupported(assets[i])) {
-                revert UnsupportedAsset(assets[i]);
-            }
-
-            elWithdrawableShares[i] = liquidTokenManager.assetUnderlyingToShares(assets[i], amounts[i]);
-            if (elWithdrawableShares[i] == 0) revert ZeroAmount();
-        }
 
         WithdrawalRequest memory request = WithdrawalRequest({
             user: user,
