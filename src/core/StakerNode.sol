@@ -62,6 +62,7 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
         _delegateRewardsClaiming();
     }
 
+    /// @dev Called by `initializeV2`
     function _delegateRewardsClaiming() internal {
         IRewardsCoordinator rewardsCoordinator = coordinator.rewardsCoordinator();
         address rewardsManager = address(coordinator.rewardsManager());

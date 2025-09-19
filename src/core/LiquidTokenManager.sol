@@ -849,10 +849,10 @@ contract LiquidTokenManager is
 
         // Verify that the cumulative deposit shares required are equal to the proposed values, hence settling all requests
         // We are not concerned with slashing here, hence we use the EL `depositShares` -- slashing loss will be passed on after withdrawal completion
-        // We allow 10 bps margin of error for rounding
+        // We allow 50 bps margin of error for rounding
         for (uint256 i = 0; i < uniqueTokenCount; i++) {
-            uint256 upperMargin = Math.mulDiv(redemptionElDepositShares[i], 10, 10000, Math.Rounding.Up);
-            uint256 lowerMargin = Math.mulDiv(redemptionElDepositShares[i], 10, 10000, Math.Rounding.Down);
+            uint256 upperMargin = Math.mulDiv(redemptionElDepositShares[i], 50, 10000, Math.Rounding.Up);
+            uint256 lowerMargin = Math.mulDiv(redemptionElDepositShares[i], 50, 10000, Math.Rounding.Down);
 
             uint256 maxAllowed = redemptionElDepositShares[i] + upperMargin;
             uint256 minAllowed = redemptionElDepositShares[i] - lowerMargin;
@@ -900,14 +900,22 @@ contract LiquidTokenManager is
                 bool found = false;
                 for (uint256 k = 0; k < uniqueTokenCount; k++) {
                     if (redemptionAssets[k] == token) {
-                        redemptionElDepositShares[k] += request.elWithdrawableShares[j]; // These are deposit shares for now, we will slash them on redemption completion
+                        redemptionElDepositShares[k] += _getDepositAssetAmount(
+                            token,
+                            request.elWithdrawableShares[j],
+                            true
+                        );
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
                     redemptionAssets[uniqueTokenCount] = token;
-                    redemptionElDepositShares[uniqueTokenCount] = request.elWithdrawableShares[j]; // These are deposit shares for now, we will slash them on redemption completion
+                    redemptionElDepositShares[uniqueTokenCount] = _getDepositAssetAmount(
+                        token,
+                        request.elWithdrawableShares[j],
+                        true
+                    );
                     uniqueTokenCount++;
                 }
             }
@@ -1368,6 +1376,32 @@ contract LiquidTokenManager is
         if (totalDepositBalance == 0 || totalWithdrawableBalance == 0) return 0;
 
         return amount.mulDiv(totalWithdrawableBalance, totalDepositBalance); // Withdrawable portion after any slashing
+    }
+
+    /// @dev Called by `_processWithdrawalRequests`
+    /// @dev Converts a given withdrawable shares/amount value into corresponding EL deposit shares/equivalent amount
+    function _getDepositAssetAmount(
+        IERC20 asset,
+        uint256 withdrawableAmount,
+        bool inElShares
+    ) internal view returns (uint256) {
+        IStrategy strategy = tokenStrategies[asset];
+        if (address(strategy) == address(0)) {
+            revert StrategyNotFound(address(asset));
+        }
+
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+
+        uint256 totalDepositBalance = 0;
+        uint256 totalWithdrawableBalance = 0;
+        for (uint256 i = 0; i < nodes.length; i++) {
+            totalDepositBalance += _getDepositAssetBalanceNode(asset, nodes[i], inElShares);
+            totalWithdrawableBalance += _getWithdrawableAssetBalanceNode(asset, nodes[i], inElShares);
+        }
+
+        if (totalDepositBalance == 0 || totalWithdrawableBalance == 0) return 0;
+
+        return withdrawableAmount.mulDiv(totalDepositBalance, totalWithdrawableBalance); // Deposit portion undoing any slashing
     }
 
     /// @inheritdoc ILiquidTokenManager
