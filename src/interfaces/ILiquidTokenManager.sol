@@ -29,7 +29,6 @@ interface ILiquidTokenManager {
         IStakerNodeCoordinator stakerNodeCoordinator;
         ITokenRegistryOracle tokenRegistryOracle;
         IWithdrawalManager withdrawalManager;
-        ILSTSwapRouter lstSwapRouter;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -144,28 +143,6 @@ interface ILiquidTokenManager {
 
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
-
-    /// @notice Emitted when LSTSwapRouter contract is updated
-    event LSTSwapRouterUpdated(address indexed oldLsr, address indexed newLsr, address updatedBy);
-
-    /// @notice Emitted when assets are swapped and staked to a node
-    event AssetsSwappedAndStakedToNode(
-        uint256 indexed nodeId,
-        IERC20[] assetsSwapped,
-        uint256[] amountsSwapped,
-        IERC20[] assetsStaked,
-        uint256[] amountsStaked,
-        address indexed initiator
-    );
-
-    /// @notice Emitted when a swap is executed
-    event SwapExecuted(
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        uint256 indexed nodeId
-    );
 
     /// @notice Emitted when a redemption is created due to node undelegation
     /// @dev `assets` is a 1D array since each withdrawal will have only 1 corresponding asset
@@ -290,10 +267,6 @@ interface ILiquidTokenManager {
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
-    /// @notice Updates the LSTSwapRouter contract address
-    /// @param newLSTSwapRouter The new LSR contract address
-    function updateLSTSwapRouter(address newLSTSwapRouter) external;
-
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
     /// @param decimals Number of decimals for the token
@@ -351,22 +324,6 @@ interface ILiquidTokenManager {
     /// @notice Stakes assets to multiple nodes
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
-
-    /// @notice Swaps multiple assets and stakes them to multiple nodes
-    /// @param allocationsWithSwaps Array of node allocations with swap instructions
-    function swapAndStakeAssetsToNodes(NodeAllocationWithSwap[] calldata allocationsWithSwaps) external;
-
-    /// @notice Swaps assets and stakes them to a single node
-    /// @param nodeId The node ID to stake to
-    /// @param assetsToSwap Array of input tokens to swap from
-    /// @param amountsToSwap Array of amounts to swap
-    /// @param assetsToStake Array of output tokens to receive and stake
-    function swapAndStakeAssetsToNode(
-        uint256 nodeId,
-        IERC20[] memory assetsToSwap,
-        uint256[] memory amountsToSwap,
-        IERC20[] memory assetsToStake
-    ) external;
 
     /// @notice Undelegates a set of staker nodes from their operators and creates a set of redemptions
     /// @dev A separate redemption is created for each node, since undelegating a node on EL queues one withdrawal per strategy
@@ -530,8 +487,4 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
-
-    /// @notice Returns the LSTSwapRouter contract
-    /// @return The ILSTSwapRouter interface
-    function lstSwapRouter() external view returns (ILSTSwapRouter);
 }
