@@ -370,6 +370,10 @@ contract LiquidTokenManager is
         emit AssetsDepositedToEigenlayer(depositAssets, depositAmounts, strategiesForNode, address(node));
     }
 
+    /**
+    /// @notice FUNCTIONS RELATED TO `swapAndStakeAssetsToNodes`
+    /// @notice OUT OF SCOPE FOR V2 
+
     /// @inheritdoc ILiquidTokenManager
     function swapAndStakeAssetsToNodes(
         NodeAllocationWithSwap[] calldata allocationsWithSwaps
@@ -554,6 +558,11 @@ contract LiquidTokenManager is
 
         return actualAmountOut;
     }
+    */
+
+    /**
+    /// @notice FUNCTIONS RELATED TO `undelegateNodes`
+    /// @notice OUT OF SCOPE FOR V2 
 
     /// @inheritdoc ILiquidTokenManager
     function undelegateNodes(uint256[] calldata nodeIds) external override onlyRole(STRATEGY_CONTROLLER_ROLE) {
@@ -660,6 +669,11 @@ contract LiquidTokenManager is
 
         return (withdrawalRoots, withdrawals, redemptionAssets);
     }
+    */
+
+    /**
+    /// @notice FUNCTIONS RELATED TO `withdrawNodeAssets`
+    /// @notice OUT OF SCOPE FOR V2 
 
     /// @inheritdoc ILiquidTokenManager
     function withdrawNodeAssets(
@@ -774,6 +788,7 @@ contract LiquidTokenManager is
 
         return uniqueTokenCount;
     }
+    */
 
     /// @inheritdoc ILiquidTokenManager
     function settleUserWithdrawals(
@@ -1188,11 +1203,6 @@ contract LiquidTokenManager is
         );
 
         return scaledSharesAsset;
-    }
-
-    /// @notice Fallback to receive ETH from swaps
-    receive() external payable {
-        // Accept ETH from DEX swaps
     }
 
     // ------------------------------------------------------------------------------
