@@ -198,13 +198,12 @@ contract LiquidToken is
         if (balanceOf(msg.sender) < totalShares)
             revert InsufficientBalance(IERC20(address(this)), totalShares, balanceOf(msg.sender));
 
-        // Generate requestId
         bytes32 requestId = keccak256(
             abi.encodePacked(msg.sender, assets, amounts, block.timestamp, _withdrawalNonce[msg.sender])
         );
         _withdrawalNonce[msg.sender] += 1;
 
-        // Receive escrow LAT shares to be burned when user fulfills their withdrawal
+        // Receive escrow LAT shares to be burned after withdrawal completion
         _transfer(msg.sender, address(this), totalShares);
 
         // Create a withdrawal request for the user

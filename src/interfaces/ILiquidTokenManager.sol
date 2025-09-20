@@ -352,6 +352,9 @@ interface ILiquidTokenManager {
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
 
+    /**
+    /// @notice OUT OF SCOPE FOR V2
+
     /// @notice Swaps multiple assets and stakes them to multiple nodes
     /// @param allocationsWithSwaps Array of node allocations with swap instructions
     function swapAndStakeAssetsToNodes(NodeAllocationWithSwap[] calldata allocationsWithSwaps) external;
@@ -367,6 +370,7 @@ interface ILiquidTokenManager {
         uint256[] memory amountsToSwap,
         IERC20[] memory assetsToStake
     ) external;
+    
 
     /// @notice Undelegates a set of staker nodes from their operators and creates a set of redemptions
     /// @dev A separate redemption is created for each node, since undelegating a node on EL queues one withdrawal per strategy
@@ -387,6 +391,7 @@ interface ILiquidTokenManager {
         IERC20[][] calldata assets,
         uint256[][] calldata elDepositShares
     ) external;
+    */
 
     /// @notice Enables a set of user withdrawal requests to be fulfillable after 14 days by the respective users
     /// @dev This function only uses staked balances from EigenLayer to ensure fair slashing distribution

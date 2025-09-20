@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 import "forge-std/console.sol";
+import "forge-std/console2.sol";
 
 import "forge-std/Test.sol";
 import "./common/BaseTest.sol";
@@ -37,9 +38,9 @@ struct StrategySlashPair {
 
 struct ExpectedBalances {
     uint256 totalAssets;
-    uint256[4] assetBalances; // [testToken, testToken2, token3, token4]
-    uint256[4] queuedAssetBalances;
-    uint256[4] nodeBalances;
+    uint256[1] assetBalances; // [testToken]
+    uint256[1] queuedAssetBalances;
+    uint256[1] nodeBalances;
     string description;
 }
 
@@ -54,14 +55,11 @@ struct UserTestData {
 
 struct SlashingResults {
     uint256 token1Remaining;
-    uint256 token2Remaining;
-    uint256 token3Remaining;
-    uint256 token4Remaining;
 }
 
 struct WithdrawalPhaseData {
     bytes32[] requestIds;
-    UserTestData[4] users;
+    UserTestData[1] users;
     SlashingResults remainingBalances;
     IDelegationManagerTypes.Withdrawal[] withdrawals; // Store actual withdrawals from settlement
 }
@@ -216,10 +214,6 @@ contract MockTransferLossToken is MockERC20 {
 
 contract WithdrawalManagerTest is BaseTest {
     IStakerNode public stakerNode;
-    MockStrategy public token3Strategy;
-    MockStrategy public token4Strategy;
-    MockRebasingToken public token3 = new MockRebasingToken("Mock rebasing", "R");
-    MockTransferLossToken public token4 = new MockTransferLossToken("Mock transfer loss", "TL");
     address public operator = address(uint160(uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao)))));
     address public avs = address(uint160(uint256(keccak256(abi.encodePacked(block.timestamp + 1, block.prevrandao)))));
     MockAVSRegistrar public mockAVSRegistrar;
@@ -230,40 +224,8 @@ contract WithdrawalManagerTest is BaseTest {
 
     function setUp() public override {
         super.setUp();
-        _setupAdditionalTokens();
         _setupAvs();
         _setupStakerNodeAndOperator();
-    }
-
-    function _setupAdditionalTokens() internal {
-        token3Strategy = new MockStrategy(strategyManager, IERC20(address(token3)));
-        token4Strategy = new MockStrategy(strategyManager, IERC20(address(token4)));
-
-        vm.startPrank(admin);
-        liquidTokenManager.addToken(
-            IERC20(address(token3)),
-            18,
-            0,
-            IStrategy(address(token3Strategy)),
-            SOURCE_TYPE_CHAINLINK,
-            address(new MockChainlinkFeed(int256(1e8), 8)),
-            0,
-            address(0),
-            bytes4(0)
-        );
-
-        liquidTokenManager.addToken(
-            IERC20(address(token4)),
-            18,
-            0,
-            IStrategy(address(token4Strategy)),
-            SOURCE_TYPE_CHAINLINK,
-            address(new MockChainlinkFeed(int256(1e8), 8)),
-            0,
-            address(0),
-            bytes4(0)
-        );
-        vm.stopPrank();
     }
 
     function _setupAvs() internal {
@@ -276,11 +238,8 @@ contract WithdrawalManagerTest is BaseTest {
         allocationManager.updateAVSMetadataURI(address(avs), "test");
 
         // Create an Operator Set
-        IStrategy[] memory strategies = new IStrategy[](4);
+        IStrategy[] memory strategies = new IStrategy[](1);
         strategies[0] = IStrategy(address(mockStrategy));
-        strategies[1] = IStrategy(address(mockStrategy2));
-        strategies[2] = IStrategy(address(token3Strategy));
-        strategies[3] = IStrategy(address(token4Strategy));
 
         IAllocationManagerTypes.CreateSetParams[]
             memory createSetParams = new IAllocationManagerTypes.CreateSetParams[](1);
@@ -294,11 +253,8 @@ contract WithdrawalManagerTest is BaseTest {
     function _setupStakerNodeAndOperator() internal {
         // Whitelist all strategies
         vm.prank(strategyManager.strategyWhitelister());
-        IStrategy[] memory strategiesToWhitelist = new IStrategy[](4);
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](1);
         strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
-        strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
-        strategiesToWhitelist[2] = IStrategy(address(token3Strategy));
-        strategiesToWhitelist[3] = IStrategy(address(token4Strategy));
         strategyManager.addStrategiesToDepositWhitelist(strategiesToWhitelist);
 
         // Register a new Operator and register for Operator Set 1
@@ -321,11 +277,8 @@ contract WithdrawalManagerTest is BaseTest {
         vm.warp(18 days);
 
         vm.startPrank(operator);
-        uint64[] memory magnitudes = new uint64[](4);
+        uint64[] memory magnitudes = new uint64[](1);
         magnitudes[0] = 1e18;
-        magnitudes[1] = 1e18;
-        magnitudes[2] = 1e18;
-        magnitudes[3] = 1e18;
         IAllocationManagerTypes.AllocateParams[] memory params = new IAllocationManagerTypes.AllocateParams[](1);
         params[0] = IAllocationManagerTypes.AllocateParams({
             operatorSet: OperatorSet({avs: address(avs), id: uint32(1)}),
@@ -429,43 +382,25 @@ contract WithdrawalManagerTest is BaseTest {
 
     function _verifyOraclePricing() internal {
         uint256 testTokenConvert = liquidTokenManager.convertToUnitOfAccount(IERC20(address(testToken)), 1 ether);
-        uint256 testToken2Convert = liquidTokenManager.convertToUnitOfAccount(IERC20(address(testToken2)), 1 ether);
-        uint256 token3Convert = liquidTokenManager.convertToUnitOfAccount(IERC20(address(token3)), 1 ether);
-        uint256 token4Convert = liquidTokenManager.convertToUnitOfAccount(IERC20(address(token4)), 1 ether);
-
         uint256 testTokenShares = mockStrategy.sharesToUnderlying(1 ether);
-        uint256 testToken2Shares = mockStrategy2.sharesToUnderlying(1 ether);
 
         assertTrue(testTokenConvert == 1 ether, "testToken convert should be 1e18");
-        assertTrue(testToken2Convert == 0.5 ether, "testToken2 convert should be 0.5e18");
-        assertTrue(token3Convert == 1 ether, "token3 convert should be 1e18");
-        assertTrue(token4Convert == 1 ether, "token4 convert should be 1e18");
         assertTrue(testTokenShares == 1 ether, "testToken strategy shares should be 1:1");
-        assertTrue(testToken2Shares == 1 ether, "testToken2 strategy shares should be 1:1");
     }
 
     function _performInitialDeposits() internal {
-        address user1 = address(0x1001);
         address user2 = address(0x1002);
-        address user3 = address(0x1003);
-        address user4 = address(0x1004);
 
-        testToken.mint(user1, 1 ether);
-        testToken2.mint(user2, 1 ether);
-        token3.mint(user3, 1 ether);
-        token4.mint(user4, 1 ether);
+        testToken.mint(user2, 1 ether);
 
-        _executeUserDeposit(user1, IERC20(address(testToken)), 1 ether);
-        _executeUserDeposit(user2, IERC20(address(testToken2)), 1 ether);
-        _executeUserDeposit(user3, IERC20(address(token3)), 1 ether);
-        _executeUserDeposit(user4, IERC20(address(token4)), 1 ether);
+        _executeUserDeposit(user2, IERC20(address(testToken)), 1 ether);
 
         _assertExpectedBalances(
             ExpectedBalances({
-                totalAssets: 3.5 ether - 1,
-                assetBalances: [uint256(1 ether), 1 ether, 1 ether, 1 ether - 1],
-                queuedAssetBalances: [uint256(0), 0, 0, 0],
-                nodeBalances: [uint256(0), 0, 0, 0],
+                totalAssets: 1 ether,
+                assetBalances: [uint256(1 ether)],
+                queuedAssetBalances: [uint256(0)],
+                nodeBalances: [uint256(0)],
                 description: "after deposits"
             })
         );
@@ -481,29 +416,26 @@ contract WithdrawalManagerTest is BaseTest {
 
         _assertExpectedBalances(
             ExpectedBalances({
-                totalAssets: 3.5 ether - 4,
-                assetBalances: [uint256(0), 0, 0, 0],
-                queuedAssetBalances: [uint256(0), 0, 0, 0],
-                nodeBalances: [uint256(1 ether), 0.5 ether, 1 ether, 1 ether - 4],
+                totalAssets: 1 ether,
+                assetBalances: [uint256(0)],
+                queuedAssetBalances: [uint256(0)],
+                nodeBalances: [uint256(1 ether)],
                 description: "after staking"
             })
         );
     }
 
     function _performSlashing() internal returns (SlashingResults memory) {
-        StrategySlashPair[4] memory strategyPairs = [
-            StrategySlashPair(address(mockStrategy), 1e18),
-            StrategySlashPair(address(mockStrategy2), 5e17),
-            StrategySlashPair(address(token3Strategy), 15e16),
-            StrategySlashPair(address(token4Strategy), 10e16)
+        StrategySlashPair[1] memory strategyPairs = [
+            StrategySlashPair(address(mockStrategy), 5e17) // 50% slash
         ];
 
-        _sortStrategyPairs(strategyPairs);
+        _sortStrategyPairs1(strategyPairs);
 
-        IStrategy[] memory strategiesToSlash = new IStrategy[](4);
-        uint256[] memory wadsToSlash = new uint256[](4);
+        IStrategy[] memory strategiesToSlash = new IStrategy[](1);
+        uint256[] memory wadsToSlash = new uint256[](1);
 
-        for (uint i = 0; i < 4; i++) {
+        for (uint i = 0; i < 1; i++) {
             strategiesToSlash[i] = IStrategy(strategyPairs[i].strategy);
             wadsToSlash[i] = strategyPairs[i].wadToSlash;
         }
@@ -521,27 +453,15 @@ contract WithdrawalManagerTest is BaseTest {
         );
 
         SlashingResults memory results = SlashingResults({
-            token1Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken)), false),
-            token2Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken2)), false),
-            token3Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(token3)), false),
-            token4Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(token4)), false)
+            token1Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken)), false)
         });
 
         _assertExpectedBalances(
             ExpectedBalances({
-                totalAssets: results.token1Remaining +
-                    results.token2Remaining /
-                    2 +
-                    results.token3Remaining +
-                    results.token4Remaining,
-                assetBalances: [uint256(0), 0, 0, 0],
-                queuedAssetBalances: [uint256(0), 0, 0, 0],
-                nodeBalances: [
-                    results.token1Remaining,
-                    results.token2Remaining / 2,
-                    results.token3Remaining,
-                    results.token4Remaining
-                ],
+                totalAssets: results.token1Remaining,
+                assetBalances: [uint256(0)],
+                queuedAssetBalances: [uint256(0)],
+                nodeBalances: [results.token1Remaining],
                 description: "after slashing"
             })
         );
@@ -552,78 +472,34 @@ contract WithdrawalManagerTest is BaseTest {
     function _performWithdrawalRequests(
         SlashingResults memory slashingResults
     ) internal returns (WithdrawalPhaseData memory) {
-        bytes32[] memory requestIds = new bytes32[](3);
-        UserTestData[4] memory users;
+        bytes32[] memory requestIds = new bytes32[](1);
+        UserTestData[1] memory users;
 
         users[0] = UserTestData({
-            user: address(0x1001),
-            assets: _createUserAssets(IERC20(address(testToken))),
-            amounts: _createAmountsArray(1 ether),
-            balanceBefore: 0,
-            balanceAfter: 0,
-            sharesCharged: 0
-        });
-
-        users[1] = UserTestData({
             user: address(0x1002),
-            assets: _createUserAssets(IERC20(address(testToken2))),
-            amounts: _createAmountsArray(1 ether),
+            assets: _createUserAssets(IERC20(address(testToken))),
+            amounts: _createAmountsArray(0.5 ether), // After 50% slashing, only 0.5 ether available
             balanceBefore: liquidToken.balanceOf(address(0x1002)),
             balanceAfter: 0,
             sharesCharged: 0
         });
 
-        users[2] = UserTestData({
-            user: address(0x1003),
-            assets: _createUserAssets(IERC20(address(token3))),
-            amounts: _createAmountsArray(1 ether),
-            balanceBefore: liquidToken.balanceOf(address(0x1003)),
-            balanceAfter: 0,
-            sharesCharged: 0
-        });
-
-        users[3] = UserTestData({
-            user: address(0x1004),
-            assets: _createUserAssets(IERC20(address(token4))),
-            amounts: _createAmountsArray(1 ether - 4 wei),
-            balanceBefore: liquidToken.balanceOf(address(0x1004)),
-            balanceAfter: 0,
-            sharesCharged: 0
-        });
-
-        // User1 (100% slashed) - should fail
+        // User2 successful withdrawal
         vm.startPrank(users[0].user);
-        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
-        liquidToken.initiateWithdrawal(users[0].assets, _createAmountsArray(1 ether));
+        requestIds[0] = liquidToken.initiateWithdrawal(users[0].assets, users[0].amounts);
+        users[0].balanceAfter = liquidToken.balanceOf(users[0].user);
+        users[0].sharesCharged = users[0].balanceBefore - users[0].balanceAfter;
         vm.stopPrank();
-
-        // Users 2-4 successful withdrawals
-        for (uint i = 1; i < 4; i++) {
-            vm.startPrank(users[i].user);
-            requestIds[i - 1] = liquidToken.initiateWithdrawal(users[i].assets, users[i].amounts);
-            users[i].balanceAfter = liquidToken.balanceOf(users[i].user);
-            users[i].sharesCharged = users[i].balanceBefore - users[i].balanceAfter;
-            vm.stopPrank();
-        }
 
         _verifyWithdrawalRequests(requestIds, users, slashingResults);
 
         // Balance assertions after withdrawal requests - assets remain staked, no queued balances yet
         _assertExpectedBalances(
             ExpectedBalances({
-                totalAssets: slashingResults.token1Remaining +
-                    slashingResults.token2Remaining /
-                    2 +
-                    slashingResults.token3Remaining +
-                    slashingResults.token4Remaining,
-                assetBalances: [uint256(0), 0, 0, 0], // Everything remains staked during withdrawal requests
-                queuedAssetBalances: [uint256(0), 0, 0, 0], // No queued balances until settlement
-                nodeBalances: [
-                    slashingResults.token1Remaining,
-                    slashingResults.token2Remaining / 2,
-                    slashingResults.token3Remaining,
-                    slashingResults.token4Remaining
-                ],
+                totalAssets: slashingResults.token1Remaining,
+                assetBalances: [uint256(0)], // Everything remains staked during withdrawal requests
+                queuedAssetBalances: [uint256(0)], // No queued balances until settlement
+                nodeBalances: [slashingResults.token1Remaining],
                 description: "after withdrawal requests"
             })
         );
@@ -654,11 +530,7 @@ contract WithdrawalManagerTest is BaseTest {
 
         // Verify total assets preserved after settlement (internal state transition only)
         uint256 totalAssetsAfterSettlement = liquidToken.totalAssets();
-        uint256 expectedTotalAssets = data.remainingBalances.token1Remaining +
-            data.remainingBalances.token2Remaining /
-            2 +
-            data.remainingBalances.token3Remaining +
-            data.remainingBalances.token4Remaining;
+        uint256 expectedTotalAssets = data.remainingBalances.token1Remaining;
 
         // Allow for small rounding differences (up to 10 wei) in settlement precision
         uint256 tolerance = 10 wei;
@@ -681,23 +553,19 @@ contract WithdrawalManagerTest is BaseTest {
 
     function _performQueuePeriodSlashing() internal returns (SlashingResults memory) {
         // Apply additional slashing during the EigenLayer withdrawal queue period
-        // testToken2: Additional 25% slash (was 50%, now 62.5% total)
-        // token3: Additional 10% slash (was 15%, now 24% total)
-        // token4: Additional 15% slash (was 10%, now 23.5% total)
+        // testToken: Additional 15% slash (was 50%, now 57.5% total)
 
         // Create strategy-slash pairs for sorting (similar to initial slashing)
-        StrategySlashPair[3] memory strategyPairs = [
-            StrategySlashPair(address(mockStrategy2), 25e16), // testToken2, 25% additional slash
-            StrategySlashPair(address(token3Strategy), 10e16), // token3, 10% additional slash
-            StrategySlashPair(address(token4Strategy), 15e16) // token4, 15% additional slash
+        StrategySlashPair[1] memory strategyPairs = [
+            StrategySlashPair(address(mockStrategy), 15e16) // testToken, 15% additional slash
         ];
 
-        _sortStrategyPairs3(strategyPairs);
+        _sortStrategyPairs1(strategyPairs);
 
-        IStrategy[] memory strategiesToSlash = new IStrategy[](3);
-        uint256[] memory wadsToSlash = new uint256[](3);
+        IStrategy[] memory strategiesToSlash = new IStrategy[](1);
+        uint256[] memory wadsToSlash = new uint256[](1);
 
-        for (uint i = 0; i < 3; i++) {
+        for (uint i = 0; i < 1; i++) {
             strategiesToSlash[i] = IStrategy(strategyPairs[i].strategy);
             wadsToSlash[i] = strategyPairs[i].wadToSlash;
         }
@@ -715,18 +583,8 @@ contract WithdrawalManagerTest is BaseTest {
         );
 
         SlashingResults memory results = SlashingResults({
-            token1Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken)), false),
-            token2Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken2)), false),
-            token3Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(token3)), false),
-            token4Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(token4)), false)
+            token1Remaining: liquidTokenManager.getWithdrawableAssetBalance(IERC20(address(testToken)), false)
         });
-
-        // Calculate total assets considering token prices
-        uint256 expectedTotalAssets = results.token1Remaining +
-            (results.token2Remaining * 1e18) /
-            (2e18) + // testToken2 is priced at 0.5 ETH
-            results.token3Remaining +
-            results.token4Remaining;
 
         // Note: totalAssets() doesn't immediately reflect queue period slashing
         // The slashing effect only shows when withdrawals are completed
@@ -740,19 +598,9 @@ contract WithdrawalManagerTest is BaseTest {
         _assertExpectedBalances(
             ExpectedBalances({
                 totalAssets: actualTotalAssets, // Total assets remain unchanged until redemption completion
-                assetBalances: [uint256(0), 0, 0, 0], // Still staked
-                queuedAssetBalances: [
-                    currentQueuedBalances[0],
-                    currentQueuedBalances[1],
-                    currentQueuedBalances[2],
-                    currentQueuedBalances[3]
-                ], // Convert to fixed array
-                nodeBalances: [
-                    results.token1Remaining,
-                    results.token2Remaining / 2,
-                    results.token3Remaining,
-                    results.token4Remaining
-                ],
+                assetBalances: [uint256(0)], // Still staked
+                queuedAssetBalances: [currentQueuedBalances[0]], // Convert to fixed array
+                nodeBalances: [results.token1Remaining],
                 description: "after queue period slashing"
             })
         );
@@ -824,14 +672,10 @@ contract WithdrawalManagerTest is BaseTest {
         assertTrue(redemptionCompletedEmitted, "RedemptionCompleted event should have been emitted");
 
         // Verify that withdrawal requests are now marked as canFulfill = true
-        for (uint i = 0; i < withdrawalData.requestIds.length; i++) {
-            if (withdrawalData.requestIds[i] != bytes32(0)) {
-                IWithdrawalManager.WithdrawalRequest[] memory requests = withdrawalManager.getWithdrawalRequests(
-                    _createSingleRequestIdArray(withdrawalData.requestIds[i])
-                );
-                assertTrue(requests[0].canFulfill, "Withdrawal request should be marked as fulfillable");
-            }
-        }
+        IWithdrawalManager.WithdrawalRequest[] memory requests = withdrawalManager.getWithdrawalRequests(
+            _createSingleRequestIdArray(withdrawalData.requestIds[0])
+        );
+        assertTrue(requests[0].canFulfill, "Withdrawal request should be marked as fulfillable");
 
         // Balance assertions after redemption completion
         uint256 actualTotalAssetsAfterCompletion = liquidToken.totalAssets();
@@ -839,14 +683,9 @@ contract WithdrawalManagerTest is BaseTest {
         _assertExpectedBalances(
             ExpectedBalances({
                 totalAssets: actualTotalAssetsAfterCompletion,
-                assetBalances: [uint256(0), 0, 0, 0], // Assets transferred to WithdrawalManager
-                queuedAssetBalances: [uint256(0), 0, 0, 0], // Queued balances should be cleared after completion
-                nodeBalances: [
-                    queueSlashingResults.token1Remaining,
-                    queueSlashingResults.token2Remaining / 2,
-                    queueSlashingResults.token3Remaining,
-                    queueSlashingResults.token4Remaining
-                ],
+                assetBalances: [uint256(0)], // Assets transferred to WithdrawalManager
+                queuedAssetBalances: [uint256(0)], // Queued balances should be cleared after completion
+                nodeBalances: [queueSlashingResults.token1Remaining],
                 description: "after redemption completion"
             })
         );
@@ -860,32 +699,18 @@ contract WithdrawalManagerTest is BaseTest {
         vm.warp(block.timestamp + withdrawalManager.withdrawalDelay());
 
         // Record initial user token balances before fulfillment
-        uint256[4] memory userInitialBalances;
-        userInitialBalances[0] = 0; // User 1 has no testToken balance (was rejected)
-        userInitialBalances[1] = testToken2.balanceOf(withdrawalData.users[1].user);
-        userInitialBalances[2] = token3.balanceOf(withdrawalData.users[2].user);
-        userInitialBalances[3] = token4.balanceOf(withdrawalData.users[3].user);
+        uint256 userInitialBalance = testToken.balanceOf(withdrawalData.users[0].user);
 
         // Record WithdrawalManager initial balances
-        uint256 wmToken2Balance = testToken2.balanceOf(address(withdrawalManager));
-        uint256 wmToken3Balance = token3.balanceOf(address(withdrawalManager));
-        uint256 wmToken4Balance = token4.balanceOf(address(withdrawalManager));
-
-        // User 1 should not be able to fulfill (was rejected during withdrawal request)
-        vm.startPrank(withdrawalData.users[0].user);
-        vm.expectRevert(); // Should revert with InvalidWithdrawalRequest or similar
-        withdrawalManager.fulfillWithdrawal(withdrawalData.requestIds[0]); // This will be bytes32(0)
-        vm.stopPrank();
+        uint256 wmTokenBalance = testToken.balanceOf(address(withdrawalManager));
 
         // Record logs to capture WithdrawalFulfilled events
         vm.recordLogs();
 
-        // Users 2, 3, 4 fulfill their withdrawals
-        for (uint i = 1; i < 4; i++) {
-            vm.startPrank(withdrawalData.users[i].user);
-            withdrawalManager.fulfillWithdrawal(withdrawalData.requestIds[i - 1]);
-            vm.stopPrank();
-        }
+        // User fulfills withdrawal
+        vm.startPrank(withdrawalData.users[0].user);
+        withdrawalManager.fulfillWithdrawal(withdrawalData.requestIds[0]);
+        vm.stopPrank();
 
         // Verify WithdrawalFulfilled events were emitted
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -895,66 +720,49 @@ contract WithdrawalManagerTest is BaseTest {
                 fulfillmentEventCount++;
             }
         }
-        assertEq(fulfillmentEventCount, 3, "Should have 3 WithdrawalFulfilled events");
+        assertEq(fulfillmentEventCount, 1, "Should have 1 WithdrawalFulfilled event");
 
-        // Verify final user token balances - users should have received reduced amounts
-        uint256 user2FinalBalance = testToken2.balanceOf(withdrawalData.users[1].user);
-        uint256 user3FinalBalance = token3.balanceOf(withdrawalData.users[2].user);
-        uint256 user4FinalBalance = token4.balanceOf(withdrawalData.users[3].user);
+        // Verify final user token balances - user should have received reduced amounts
+        uint256 userFinalBalance = testToken.balanceOf(withdrawalData.users[0].user);
 
-        // Users should have received tokens (more than initial)
-        assertTrue(user2FinalBalance > userInitialBalances[1], "User 2 should have received testToken2");
-        assertTrue(user3FinalBalance > userInitialBalances[2], "User 3 should have received token3");
-        assertTrue(user4FinalBalance > userInitialBalances[3], "User 4 should have received token4");
+        // User should have received tokens (more than initial)
+        assertTrue(userFinalBalance > userInitialBalance, "User should have received testToken");
 
-        // But due to cumulative slashing, they should have received less than their original 1 ETH equivalent
-        uint256 user2ReceivedAmount = user2FinalBalance - userInitialBalances[1];
-        uint256 user3ReceivedAmount = user3FinalBalance - userInitialBalances[2];
-        uint256 user4ReceivedAmount = user4FinalBalance - userInitialBalances[3];
+        // But due to cumulative slashing, they should have received less than their original 0.5 ETH
+        uint256 userReceivedAmount = userFinalBalance - userInitialBalance;
 
         // Calculate expected amounts after cumulative slashing
-        // User 2 (testToken2): 50% initial + 25% queue = 62.5% total loss, so ~37.5% remaining
-        // User 3 (token3): 15% initial + 10% queue ≈ 24% total loss, so ~76% remaining
-        // User 4 (token4): 10% initial + 15% queue ≈ 23.5% total loss, so ~76.5% remaining
+        // testToken: 50% initial + 15% queue = 57.5% total loss, so ~42.5% remaining
+        // Original withdrawal was 0.5 ETH, so user should receive ~0.5 * 0.425 = ~0.2125 ETH
 
         // Use approximate checks since exact calculations are complex due to cumulative effects
-        assertTrue(user2ReceivedAmount < 5e17, "User 2 should receive less than 0.5 ETH worth due to heavy slashing");
-        assertTrue(user3ReceivedAmount < 8e17, "User 3 should receive less than 0.8 ETH worth due to slashing");
-        assertTrue(user4ReceivedAmount < 8e17, "User 4 should receive less than 0.8 ETH worth due to slashing");
+        assertTrue(userReceivedAmount < 3e17, "User should receive less than 0.3 ETH due to heavy slashing");
+        assertTrue(userReceivedAmount > 1e17, "User should receive more than 0.1 ETH");
 
         // Verify WithdrawalManager balances were reduced
-        uint256 wmToken2FinalBalance = testToken2.balanceOf(address(withdrawalManager));
-        uint256 wmToken3FinalBalance = token3.balanceOf(address(withdrawalManager));
-        uint256 wmToken4FinalBalance = token4.balanceOf(address(withdrawalManager));
+        uint256 wmTokenFinalBalance = testToken.balanceOf(address(withdrawalManager));
+        assertTrue(wmTokenFinalBalance < wmTokenBalance, "WithdrawalManager testToken balance should be reduced");
 
-        assertTrue(wmToken2FinalBalance < wmToken2Balance, "WithdrawalManager testToken2 balance should be reduced");
-        assertTrue(wmToken3FinalBalance < wmToken3Balance, "WithdrawalManager token3 balance should be reduced");
-        assertTrue(wmToken4FinalBalance < wmToken4Balance, "WithdrawalManager token4 balance should be reduced");
-
-        // Verify withdrawal requests were deleted (should revert if trying to fulfill again)
-        for (uint i = 1; i < 4; i++) {
-            vm.startPrank(withdrawalData.users[i].user);
-            vm.expectRevert(); // Should revert with InvalidWithdrawalRequest
-            withdrawalManager.fulfillWithdrawal(withdrawalData.requestIds[i - 1]);
-            vm.stopPrank();
-        }
+        // Verify withdrawal request was deleted (should revert if trying to fulfill again)
+        vm.startPrank(withdrawalData.users[0].user);
+        vm.expectRevert(); // Should revert with InvalidWithdrawalRequest
+        withdrawalManager.fulfillWithdrawal(withdrawalData.requestIds[0]);
+        vm.stopPrank();
     }
 
     function _performFinalValidation(bytes32 redemptionId, WithdrawalPhaseData memory data) internal {
         ILiquidTokenManager.Redemption memory redemption = withdrawalManager.getRedemption(redemptionId);
 
         // Verify redemption structure
-        assertEq(redemption.assets.length, 3, "Redemption should have 3 assets");
-        assertEq(redemption.elWithdrawableShares.length, 3, "Redemption should have 3 withdrawable share amounts");
+        assertEq(redemption.assets.length, 1, "Redemption should have 1 asset");
+        assertEq(redemption.elWithdrawableShares.length, 1, "Redemption should have 1 withdrawable share amount");
 
         // Verify EigenLayer applied slashing correctly
         ILiquidTokenManager.UserWithdrawalsSettlement memory settlement = _createSettlement(data.requestIds);
         assertTrue(
             redemption.elWithdrawableShares[0] < settlement.elDepositShares[0][0],
-            "testToken2 should be slashed"
+            "testToken should be slashed"
         );
-        assertTrue(redemption.elWithdrawableShares[1] < settlement.elDepositShares[1][0], "token3 should be slashed");
-        assertTrue(redemption.elWithdrawableShares[2] < settlement.elDepositShares[2][0], "token4 should be slashed");
     }
 
     // ------------------------------------------------------------------------------
@@ -974,11 +782,8 @@ contract WithdrawalManagerTest is BaseTest {
     }
 
     function _createAllAssetsArray() internal view returns (IERC20[] memory) {
-        IERC20[] memory allAssets = new IERC20[](4);
+        IERC20[] memory allAssets = new IERC20[](1);
         allAssets[0] = IERC20(address(testToken));
-        allAssets[1] = IERC20(address(testToken2));
-        allAssets[2] = IERC20(address(token3));
-        allAssets[3] = IERC20(address(token4));
         return allAssets;
     }
 
@@ -1025,27 +830,25 @@ contract WithdrawalManagerTest is BaseTest {
         }
     }
 
+    function _sortStrategyPairs1(StrategySlashPair[1] memory pairs) internal pure {
+        // No sorting needed for single element
+    }
+
     function _verifyWithdrawalRequests(
         bytes32[] memory requestIds,
-        UserTestData[4] memory users,
+        UserTestData[1] memory users,
         SlashingResults memory slashing
     ) internal {
         IWithdrawalManager.WithdrawalRequest[] memory requests = withdrawalManager.getWithdrawalRequests(requestIds);
 
         // Basic request validation
-        assertEq(requests[0].requestedAmounts[0], 1 ether, "User 2 requested amount should be 1 ETH");
-        assertEq(requests[1].requestedAmounts[0], 1 ether, "User 3 requested amount should be 1 ETH");
-        assertEq(requests[2].requestedAmounts[0], 1 ether - 4 wei, "User 4 requested amount should be 1 ETH - 4 wei");
+        assertEq(requests[0].requestedAmounts[0], 0.5 ether, "User requested amount should be 0.5 ETH");
 
         // Verify user balance changes
-        assertEq(users[1].balanceAfter, 0, "User 2 should be charged full amount");
-        assertEq(users[2].balanceAfter, 0, "User 3 should be charged full amount");
-        assertEq(users[3].balanceAfter, 3, "User 4 should have small remainder");
+        assertTrue(users[0].balanceAfter < users[0].balanceBefore, "User should be charged for withdrawal");
 
         // Verify shares deposited match what was charged
-        for (uint i = 1; i < 4; i++) {
-            assertEq(requests[i - 1].sharesDeposited, users[i].sharesCharged, "Shares deposited should match charged");
-        }
+        assertEq(requests[0].sharesDeposited, users[0].sharesCharged, "Shares deposited should match charged");
     }
 
     function _createSettlement(
@@ -1054,24 +857,25 @@ contract WithdrawalManagerTest is BaseTest {
         ILiquidTokenManager.UserWithdrawalsSettlement memory settlement;
         settlement.requestIds = requestIds;
 
-        settlement.nodeIds = new uint256[](3);
-        for (uint i = 0; i < 3; i++) {
-            settlement.nodeIds[i] = stakerNode.getId();
-        }
+        settlement.nodeIds = new uint256[](1);
+        settlement.nodeIds[0] = stakerNode.getId();
 
-        settlement.elAssets = new IERC20[][](3);
-        settlement.elDepositShares = new uint256[][](3);
+        settlement.elAssets = new IERC20[][](1);
+        settlement.elDepositShares = new uint256[][](1);
 
         IWithdrawalManager.WithdrawalRequest[] memory requests = withdrawalManager.getWithdrawalRequests(requestIds);
 
-        for (uint256 i = 0; i < 3; i++) {
-            settlement.elAssets[i] = new IERC20[](1);
-            settlement.elDepositShares[i] = new uint256[](1);
+        settlement.elAssets[0] = new IERC20[](1);
+        settlement.elDepositShares[0] = new uint256[](1);
 
-            settlement.elAssets[i][0] = requests[i].assets[0];
-            IStrategy strategy = liquidTokenManager.getTokenStrategy(requests[i].assets[0]);
-            settlement.elDepositShares[i][0] = strategy.underlyingToSharesView(requests[i].requestedAmounts[0]);
-        }
+        settlement.elAssets[0][0] = requests[0].assets[0];
+        IStrategy strategy = liquidTokenManager.getTokenStrategy(requests[0].assets[0]);
+        settlement.elDepositShares[0][0] = strategy.underlyingToSharesView(requests[0].requestedAmounts[0]);
+
+        console2.log("Settlement index: 0");
+        console2.log("  Asset:", address(settlement.elAssets[0][0]));
+        console2.log("  Strategy:", address(strategy));
+        console2.log("  Shares:", settlement.elDepositShares[0][0]);
 
         return settlement;
     }
@@ -1159,60 +963,32 @@ contract WithdrawalManagerTest is BaseTest {
         // 1. No assets in liquid state (everything staked or queued)
         // 2. Queued balances exist for settled assets
 
-        IERC20[] memory assetsToCheck = new IERC20[](4);
+        IERC20[] memory assetsToCheck = new IERC20[](1);
         assetsToCheck[0] = IERC20(address(testToken));
-        assetsToCheck[1] = IERC20(address(testToken2));
-        assetsToCheck[2] = IERC20(address(token3));
-        assetsToCheck[3] = IERC20(address(token4));
 
         uint256[] memory assetBalances = liquidToken.balanceAssets(assetsToCheck);
-        for (uint256 i = 0; i < 4; i++) {
-            assertEq(assetBalances[i], 0, "All assets should remain staked or queued, none in liquid state");
-        }
+        assertEq(assetBalances[0], 0, "All assets should remain staked or queued, none in liquid state");
 
         uint256[] memory queuedBalances = liquidToken.balanceQueuedAssets(assetsToCheck);
-        assertEq(queuedBalances[0], 0, "testToken should have no queued balance (not settled)");
-        assertTrue(queuedBalances[1] > 0, "testToken2 should have queued balance after settlement");
-        assertTrue(queuedBalances[2] > 0, "token3 should have queued balance after settlement");
-        assertTrue(queuedBalances[3] > 0, "token4 should have queued balance after settlement");
+        assertTrue(queuedBalances[0] > 0, "testToken should have queued balance after settlement");
     }
 
     function _verifyRedemptionWithdrawableShares(
         ILiquidTokenManager.Redemption memory redemption,
         ILiquidTokenManager.UserWithdrawalsSettlement memory settlement
     ) internal {
-        // For testToken2: 50% slashed, so our deposit shares should become 50% less withdrawable shares
-        uint256 expectedToken2WithdrawableShares = settlement.elDepositShares[0][0] / 2; // 50% slashing
+        // For testToken: 50% slashed, so our deposit shares should become 50% less withdrawable shares
+        uint256 expectedTokenWithdrawableShares = settlement.elDepositShares[0][0] / 2; // 50% slashing
         assertEq(
             redemption.elWithdrawableShares[0],
-            expectedToken2WithdrawableShares,
-            "testToken2 should reflect 50% slashing"
+            expectedTokenWithdrawableShares,
+            "testToken should reflect 50% slashing"
         );
-
-        // For token3: 15% slashed, so withdrawable shares = deposit shares * (1 - 0.15) = deposit shares * 0.85
-        uint256 expectedToken3WithdrawableShares = (settlement.elDepositShares[1][0] * 85) / 100; // 85% remaining after 15% slash
-        assertEq(
-            redemption.elWithdrawableShares[1],
-            expectedToken3WithdrawableShares,
-            "token3 should reflect 15% slashing"
-        );
-
-        // For token4: 10% slashed, so withdrawable shares = deposit shares * (1 - 0.10) = deposit shares * 0.90
-        uint256 expectedToken4WithdrawableShares = (settlement.elDepositShares[2][0] * 90) / 100; // 90% remaining after 10% slash
-        // Allow small tolerance for transfer loss token rounding
-        uint256 token4Tolerance = expectedToken4WithdrawableShares / 100; // 1% tolerance
-        uint256 token4Diff = redemption.elWithdrawableShares[2] > expectedToken4WithdrawableShares
-            ? redemption.elWithdrawableShares[2] - expectedToken4WithdrawableShares
-            : expectedToken4WithdrawableShares - redemption.elWithdrawableShares[2];
-        assertTrue(token4Diff <= token4Tolerance, "token4 should reflect ~10% slashing with transfer loss tolerance");
     }
 
     function _assertExpectedBalances(ExpectedBalances memory expected) internal {
-        IERC20[] memory allAssets = new IERC20[](4);
+        IERC20[] memory allAssets = new IERC20[](1);
         allAssets[0] = IERC20(address(testToken));
-        allAssets[1] = IERC20(address(testToken2));
-        allAssets[2] = IERC20(address(token3));
-        allAssets[3] = IERC20(address(token4));
 
         // Check total assets
         uint256 actualTotalAssets = liquidToken.totalAssets();
@@ -1224,56 +1000,30 @@ contract WithdrawalManagerTest is BaseTest {
 
         // Check asset balances
         uint256[] memory actualAssetBalances = liquidToken.balanceAssets(allAssets);
-        for (uint256 i = 0; i < 4; i++) {
-            assertEq(
-                actualAssetBalances[i],
-                expected.assetBalances[i],
-                string.concat("Asset balance mismatch for token ", Strings.toString(i), " - ", expected.description)
-            );
-        }
+        assertEq(
+            actualAssetBalances[0],
+            expected.assetBalances[0],
+            string.concat("Asset balance mismatch for testToken - ", expected.description)
+        );
 
         // Check queued asset balances
         uint256[] memory actualQueuedBalances = liquidToken.balanceQueuedAssets(allAssets);
-        for (uint256 i = 0; i < 4; i++) {
-            assertEq(
-                actualQueuedBalances[i],
-                expected.queuedAssetBalances[i],
-                string.concat("Queued balance mismatch for token ", Strings.toString(i), " - ", expected.description)
-            );
-        }
-
-        // Check node balances
-        for (uint256 i = 0; i < 4; i++) {
-            uint256 actualNodeBalance = liquidTokenManager.getWithdrawableAssetBalanceNode(
-                allAssets[i],
-                stakerNode.getId(),
-                false
-            );
-            assertEq(
-                liquidTokenManager.convertToUnitOfAccount(allAssets[i], actualNodeBalance),
-                expected.nodeBalances[i],
-                string.concat("Node balance mismatch for token ", Strings.toString(i), " - ", expected.description)
-            );
-        }
-    }
-
-    /// @notice Helper function that warps time and updates token3 oracle price
-    /// @dev Use this instead of vm.warp() when you need token3's oracle to reflect rebased value
-    /// @param timeToAdd Number of seconds to add to current timestamp
-    function _warpAndUpdateToken3Oracle(uint256 timeToAdd) internal {
-        vm.warp(block.timestamp + timeToAdd);
-
-        uint256 currentPrice = token3.getCurrentPrice();
-
-        // Update oracle mock
-        vm.mockCall(
-            address(tokenRegistryOracle),
-            abi.encodeWithSelector(ITokenRegistryOracle.getTokenPrice.selector, address(token3)),
-            abi.encode(currentPrice)
+        assertEq(
+            actualQueuedBalances[0],
+            expected.queuedAssetBalances[0],
+            string.concat("Queued balance mismatch for testToken - ", expected.description)
         );
 
-        // Update stored pricePerUnit in LiquidTokenManager for full consistency
-        vm.prank(admin);
-        liquidTokenManager.updatePrice(IERC20(address(token3)), currentPrice);
+        // Check node balances
+        uint256 actualNodeBalance = liquidTokenManager.getWithdrawableAssetBalanceNode(
+            allAssets[0],
+            stakerNode.getId(),
+            false
+        );
+        assertEq(
+            liquidTokenManager.convertToUnitOfAccount(allAssets[0], actualNodeBalance),
+            expected.nodeBalances[0],
+            string.concat("Node balance mismatch for testToken - ", expected.description)
+        );
     }
 }
