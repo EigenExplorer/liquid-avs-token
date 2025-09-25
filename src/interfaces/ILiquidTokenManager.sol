@@ -7,7 +7,6 @@ import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegat
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
-import {ILSTSwapRouter} from "../interfaces/ILSTSwapRouter.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 import {ILiquidToken} from "./ILiquidToken.sol";
 import {IStakerNodeCoordinator} from "./IStakerNodeCoordinator.sol";
@@ -29,7 +28,6 @@ interface ILiquidTokenManager {
         IStakerNodeCoordinator stakerNodeCoordinator;
         ITokenRegistryOracle tokenRegistryOracle;
         IWithdrawalManager withdrawalManager;
-        ILSTSwapRouter lstSwapRouter;
         address initialOwner;
         address strategyController;
         address priceUpdater;
@@ -145,18 +143,9 @@ interface ILiquidTokenManager {
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
-    /// @notice Emitted when LSTSwapRouter contract is updated
-    event LSTSwapRouterUpdated(address indexed oldLsr, address indexed newLsr, address updatedBy);
 
-    /// @notice Emitted when assets are swapped and staked to a node
-    event AssetsSwappedAndStakedToNode(
-        uint256 indexed nodeId,
-        IERC20[] assetsSwapped,
-        uint256[] amountsSwapped,
-        IERC20[] assetsStaked,
-        uint256[] amountsStaked,
-        address indexed initiator
-    );
+
+   
 
     /// @notice Emitted when a swap is executed
     event SwapExecuted(
@@ -290,9 +279,7 @@ interface ILiquidTokenManager {
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
 
-    /// @notice Updates the LSTSwapRouter contract address
-    /// @param newLSTSwapRouter The new LSR contract address
-    function updateLSTSwapRouter(address newLSTSwapRouter) external;
+
 
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
@@ -536,7 +523,5 @@ interface ILiquidTokenManager {
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
 
-    /// @notice Returns the LSTSwapRouter contract
-    /// @return The ILSTSwapRouter interface
-    function lstSwapRouter() external view returns (ILSTSwapRouter);
+   
 }

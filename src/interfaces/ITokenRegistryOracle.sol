@@ -21,9 +21,9 @@ interface ITokenRegistryOracle {
     }
 
     struct TokenConfig {
-        uint8 primaryType; // 1=Chainlink, 2=Curve, 3=Protocol,
+        uint8 primaryType; // 1=Chainlink, 2=Curve, 3=Protocol, 4=UniswapV3TWAP, 5=BalancerV2
         uint8 needsArg; // 0=No arg, 1=Needs arg
-        uint16 reserved; // For future use
+        uint16 reserved; // it used to be for future use and now : For TWAP period in minutes (when applicable)
         address primarySource; // Primary price source address
         address fallbackSource; // Fallback source contract address
         bytes4 fallbackFn; // Function selector for fallback

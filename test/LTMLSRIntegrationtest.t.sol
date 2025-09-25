@@ -1,3 +1,4 @@
+/*
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -713,11 +714,9 @@ contract LTMLSRIntegrationTest is Test {
         console.log(string.concat("stETH received: ", Strings.toString(amountReceived)));
         assertGe(amountReceived, minAmountOut, "Output too low");
     }
-    */
+    
 
-    // ================================================================================================
-    // ETH Validation Tests for LSTSwapRouter Integration
-    // ================================================================================================
+
 
     function testSwapAndStakeAssetsToNode_RevertsOnETHAsTokenIn() public {
         console.log("\n=== Test: ETH Validation - ETH as tokenIn ===");
@@ -809,11 +808,8 @@ contract LTMLSRIntegrationTest is Test {
         assertGe(amountStaked, minAmountOut, "Bridge routing should work");
         console.log("ETH bridge routing works correctly");
     }
-    */
+    
 
-    // ================================================================================================
-    //  Workflow Test - Integration with External LST Swap Router
-    // ================================================================================================
 
     function testFullWorkflowWithExternalLSTSwapRouter() public {
         console.log("\n=== Test: Full Workflow with External LST Swap Router ===");
@@ -909,9 +905,6 @@ contract LTMLSRIntegrationTest is Test {
         console.log("  - Multi-step execution supported via LSR plans");
     }
 
-    // ================================================================================================
-    // Test LSR Router Update Functionality
-    // ================================================================================================
 
     function testUpdateLSTSwapRouter() public {
         console.log("\n=== Test: Update LST Swap Router ===");
@@ -939,3 +932,4 @@ contract LTMLSRIntegrationTest is Test {
 
     receive() external payable {}
 }
+*/

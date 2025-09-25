@@ -45,6 +45,8 @@ contract BaseTest is Test {
     uint8 constant SOURCE_TYPE_CURVE = 2;
     uint8 constant SOURCE_TYPE_PROTOCOL = 3;
     uint8 constant SOURCE_TYPE_NATIVE = 0;
+    uint8 constant SOURCE_TYPE_UNISWAP_V3_TWAP = 4;
+    uint8 constant SOURCE_TYPE_BALANCER_V2 = 5;
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;
@@ -66,7 +68,7 @@ contract BaseTest is Test {
     RewardsManager public rewardsManager;
 
     // Mock LSR contract for testing
-    ILSTSwapRouter public mockLSTSwapRouter;
+    //ILSTSwapRouter public mockLSTSwapRouter;
 
     // Mock contracts - base test tokens
     MockERC20 public testToken;
@@ -313,7 +315,7 @@ contract BaseTest is Test {
         testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
 
         // Deploy mock LSR contract - Added
-        mockLSTSwapRouter = ILSTSwapRouter(address(0xDEAD)); // Placeholder address for now
+        // mockLSTSwapRouter = ILSTSwapRouter(address(0xDEAD)); // Placeholder address for now
     }
 
     function _deployMainContracts() internal virtual {
@@ -442,7 +444,6 @@ contract BaseTest is Test {
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
-            lstSwapRouter: mockLSTSwapRouter,
             withdrawalManager: withdrawalManager,
             initialOwner: deployer,
             strategyController: deployer,
@@ -459,10 +460,6 @@ contract BaseTest is Test {
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(this));
 
-        // Update LSR address if mockLSTSwapRouter is set - Added
-        if (address(mockLSTSwapRouter) != address(0) && address(mockLSTSwapRouter) != address(0xDEAD)) {
-            liquidTokenManager.updateLSTSwapRouter(address(mockLSTSwapRouter));
-        }
         vm.stopPrank();
     }
 
@@ -712,42 +709,5 @@ contract BaseTest is Test {
 
     function _createMockFailingOracle() internal virtual returns (MockFailingOracle) {
         return new MockFailingOracle();
-    }
-
-    // ================= NEW SWAP AND STAKE HELPER METHODS - Added =================
-
-    /**
-     * @dev Sets a mock LSR contract for testing swap functionality
-     */
-    function _setMockLSTSwapRouter(address mockLSR) internal virtual {
-        mockLSTSwapRouter = ILSTSwapRouter(mockLSR);
-
-        // Update in LiquidTokenManager if it's already initialized
-        if (address(liquidTokenManager) != address(0)) {
-            vm.prank(deployer);
-            liquidTokenManager.updateLSTSwapRouter(mockLSR);
-        }
-    }
-
-    /**
-     * @dev Helper to test swap and stake functionality with mock data
-     */
-    function _testSwapAndStake(
-        uint256 nodeId,
-        IERC20[] memory assetsToSwap,
-        uint256[] memory amountsToSwap,
-        IERC20[] memory assetsToStake
-    ) internal virtual {
-        // This would be overridden in actual test contracts that set up proper mocks
-        vm.startPrank(deployer);
-        liquidTokenManager.swapAndStakeAssetsToNode(nodeId, assetsToSwap, amountsToSwap, assetsToStake);
-        vm.stopPrank();
-    }
-
-    /**
-     * @dev Helper to get current LSR address
-     */
-    function _getLSTSwapRouterAddress() internal view virtual returns (address) {
-        return address(liquidTokenManager.lstSwapRouter());
     }
 }
