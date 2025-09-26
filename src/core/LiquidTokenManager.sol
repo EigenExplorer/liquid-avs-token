@@ -20,7 +20,6 @@ import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
-import {ILSTSwapRouter} from "../interfaces/ILSTSwapRouter.sol";
 
 /// @title LiquidTokenManager
 /// @notice Manages liquid tokens and their staking to EigenLayer strategies
@@ -42,9 +41,6 @@ contract LiquidTokenManager is
 
     /// @notice Role identifier for asset price update operations
     bytes32 public constant PRICE_UPDATER_ROLE = keccak256("PRICE_UPDATER_ROLE");
-
-    /// @notice Number of decimal places used for price representation
-    uint256 public constant PRICE_DECIMALS = 18;
 
     /// @notice EigenLayer contracts
     IStrategyManager public strategyManager;
@@ -69,10 +65,6 @@ contract LiquidTokenManager is
 
     /// @notice v2 contracts
     IWithdrawalManager public withdrawalManager;
-    ILSTSwapRouter public lstSwapRouter;
-
-    /// @notice Constant for ETH address representation
-    address private constant _ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /// @notice Total redemptions created
     uint256 private _redemptionNonce;
@@ -98,8 +90,7 @@ contract LiquidTokenManager is
             address(init.initialOwner) == address(0) ||
             address(init.priceUpdater) == address(0) ||
             address(init.tokenRegistryOracle) == address(0) ||
-            address(init.withdrawalManager) == address(0) ||
-            address(init.lstSwapRouter) == address(0)
+            address(init.withdrawalManager) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -114,21 +105,6 @@ contract LiquidTokenManager is
         delegationManager = init.delegationManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
         withdrawalManager = init.withdrawalManager;
-        lstSwapRouter = init.lstSwapRouter;
-    }
-
-    // ------------------------------------------------------------------------------
-    // Admin functions
-    // ------------------------------------------------------------------------------
-
-    /// @inheritdoc ILiquidTokenManager
-    function updateLSTSwapRouter(address newLstSwapRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newLstSwapRouter == address(0)) revert ZeroAddress();
-
-        address oldLsr = address(lstSwapRouter);
-        lstSwapRouter = ILSTSwapRouter(newLstSwapRouter);
-
-        emit LSTSwapRouterUpdated(oldLsr, newLstSwapRouter, msg.sender);
     }
 
     // ------------------------------------------------------------------------------
@@ -159,7 +135,7 @@ contract LiquidTokenManager is
 
         // Price source validation and configuration
         bool isNative = (primaryType == 0 && primarySource == address(0));
-        if (!isNative && (primaryType < 1 || primaryType > 3)) revert InvalidPriceSource();
+        if (!isNative && (primaryType < 1 || primaryType > 5)) revert InvalidPriceSource();
         if (!isNative && primarySource == address(0)) revert InvalidPriceSource();
         if (!isNative) {
             tokenRegistryOracle.configureToken(
