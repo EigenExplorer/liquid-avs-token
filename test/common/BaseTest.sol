@@ -7,26 +7,36 @@ import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transpa
 import {IPauserRegistry} from "@eigenlayer/contracts/permissions/PauserRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
 import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
+import {IAllocationManager} from "@eigenlayer/contracts/interfaces/IAllocationManager.sol";
 
 import {LiquidToken} from "../../src/core/LiquidToken.sol";
 import {TokenRegistryOracle} from "../../src/utils/TokenRegistryOracle.sol";
 import {LiquidTokenManager} from "../../src/core/LiquidTokenManager.sol";
 import {StakerNode} from "../../src/core/StakerNode.sol";
 import {StakerNodeCoordinator} from "../../src/core/StakerNodeCoordinator.sol";
+import {WithdrawalManager} from "../../src/core/WithdrawalManager.sol";
+import {RewardsManager} from "../../src/core/RewardsManager.sol";
+
+import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
+import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
+import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
+import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
+import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
+import {IWithdrawalManager} from "../../src/interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../../src/interfaces/IRewardsManager.sol";
+import {ILSTSwapRouter} from "../../src/interfaces/ILSTSwapRouter.sol";
+
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockStrategy} from "../mocks/MockStrategy.sol";
 import {MockChainlinkFeed} from "../mocks/MockChainlinkFeed.sol";
 import {MockCurvePool} from "../mocks/MockCurvePool.sol";
 import {MockProtocolToken} from "../mocks/MockProtocolToken.sol";
 import {MockFailingOracle} from "../mocks/MockFailingOracle.sol";
-import {IStakerNodeCoordinator} from "../../src/interfaces/IStakerNodeCoordinator.sol";
-import {IStakerNode} from "../../src/interfaces/IStakerNode.sol";
-import {ILiquidToken} from "../../src/interfaces/ILiquidToken.sol";
-import {ITokenRegistryOracle} from "../../src/interfaces/ITokenRegistryOracle.sol";
-import {ILiquidTokenManager} from "../../src/interfaces/ILiquidTokenManager.sol";
 import {NetworkAddresses} from "../utils/NetworkAddresses.sol";
 
 contract BaseTest is Test {
@@ -35,6 +45,8 @@ contract BaseTest is Test {
     uint8 constant SOURCE_TYPE_CURVE = 2;
     uint8 constant SOURCE_TYPE_PROTOCOL = 3;
     uint8 constant SOURCE_TYPE_NATIVE = 0;
+    uint8 constant SOURCE_TYPE_UNISWAP_V3_TWAP = 4;
+    uint8 constant SOURCE_TYPE_BALANCER_V2 = 5;
 
     // Price freshness constants
     uint256 constant PRICE_FRESHNESS_PERIOD = 12 hours;
@@ -44,6 +56,7 @@ contract BaseTest is Test {
     // EigenLayer Contracts
     IStrategyManager public strategyManager;
     IDelegationManager public delegationManager;
+    IAllocationManager public allocationManager;
 
     // Contracts
     LiquidToken public liquidToken;
@@ -51,6 +64,11 @@ contract BaseTest is Test {
     LiquidTokenManager public liquidTokenManager;
     StakerNodeCoordinator public stakerNodeCoordinator;
     StakerNode public stakerNodeImplementation;
+    WithdrawalManager public withdrawalManager;
+    RewardsManager public rewardsManager;
+
+    // Mock LSR contract for testing
+    //ILSTSwapRouter public mockLSTSwapRouter;
 
     // Mock contracts - base test tokens
     MockERC20 public testToken;
@@ -81,11 +99,13 @@ contract BaseTest is Test {
     address public user1 = address(3);
     address public user2 = address(4);
 
-    // Private variables (with leading underscore)
+    // Private variables
     LiquidToken private _liquidTokenImplementation;
     TokenRegistryOracle private _tokenRegistryOracleImplementation;
     LiquidTokenManager private _liquidTokenManagerImplementation;
     StakerNodeCoordinator private _stakerNodeCoordinatorImplementation;
+    WithdrawalManager private _withdrawalManagerImplementation;
+    RewardsManager private _rewardsManagerImplementation;
 
     // Helper method to use deployer for proxy interactions
     modifier asDeployer() {
@@ -109,22 +129,28 @@ contract BaseTest is Test {
         // 2. Setup oracle sources
         _setupOracleSources();
 
-        // 3. Initialize LiquidTokenManager
+        // 3. Initialize WithdrawalManager
+        _initializeWithdrawalManager();
+
+        // 4. Initialize RewardsManager
+        _initializeRewardsManager();
+
+        // 5. Initialize LiquidTokenManager
         _initializeLiquidTokenManager();
 
-        // 4. Initialize LiquidToken (depends on LiquidTokenManager)
+        // 6. Initialize LiquidToken (depends on LiquidTokenManager)
         _initializeLiquidToken();
 
-        // 5. Initialize StakerNodeCoordinator (depends on LiquidTokenManager)
+        // 7. Initialize StakerNodeCoordinator (depends on LiquidTokenManager, WithdrawalManager, RewardsManager)
         _initializeStakerNodeCoordinator();
 
-        // 6. Add tokens after all initializations
+        // 8. Add tokens after all initializations
         _addTestTokens();
 
-        // 7. Setup test token balances
+        // 9. Setup test token balances
         _setupTestTokens();
 
-        // 8. Renounce roles at the end
+        // 10. Renounce roles at the end
         _renounceAllRoles();
     }
 
@@ -196,7 +222,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _renounceAllRoles() private {
+    function _renounceAllRoles() internal virtual {
         vm.startPrank(deployer);
 
         // LiquidTokenManager
@@ -232,6 +258,19 @@ contract BaseTest is Test {
             stakerNodeCoordinator.renounceRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), deployer);
         }
 
+        // WithdrawalManager
+        if (withdrawalManager.hasRole(withdrawalManager.DEFAULT_ADMIN_ROLE(), deployer)) {
+            withdrawalManager.renounceRole(withdrawalManager.DEFAULT_ADMIN_ROLE(), deployer);
+        }
+
+        // RewardsManager
+        if (rewardsManager.hasRole(rewardsManager.DEFAULT_ADMIN_ROLE(), deployer)) {
+            rewardsManager.renounceRole(rewardsManager.DEFAULT_ADMIN_ROLE(), deployer);
+        }
+        if (rewardsManager.hasRole(rewardsManager.PAUSER_ROLE(), deployer)) {
+            rewardsManager.renounceRole(rewardsManager.PAUSER_ROLE(), deployer);
+        }
+
         // LiquidToken
         if (liquidToken.hasRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer)) {
             liquidToken.renounceRole(liquidToken.DEFAULT_ADMIN_ROLE(), deployer);
@@ -255,16 +294,17 @@ contract BaseTest is Test {
         mETHToETHSelector = bytes4(keccak256("mETHToETH(uint256)"));
     }
 
-    function _setupELContracts() private {
+    function _setupELContracts() internal virtual {
         uint256 chainId = block.chainid;
         NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
 
         strategyManager = IStrategyManager(addresses.strategyManager);
         delegationManager = IDelegationManager(addresses.delegationManager);
+        allocationManager = IAllocationManager(addresses.allocationManager);
     }
 
-    function _deployMockContracts() private {
-        // Base test tokens
+    function _deployMockContracts() internal virtual {
+        // Base test tokens - Fix: MockERC20 expects 3 parameters (name, symbol, decimals)
         testToken = new MockERC20("Test Token", "TEST");
         testToken2 = new MockERC20("Test Token 2", "TEST2");
         mockStrategy = new MockStrategy(strategyManager, IERC20(address(testToken)));
@@ -273,26 +313,46 @@ contract BaseTest is Test {
         // Deploy price feed mocks with realistic values for test tokens
         testTokenFeed = new MockChainlinkFeed(int256(100000000), 8); // 1 ETH per TEST (8 decimals)
         testToken2Feed = new MockChainlinkFeed(int256(50000000), 8); // 0.5 ETH per TEST2 (8 decimals)
+
+        // Deploy mock LSR contract - Added
+        // mockLSTSwapRouter = ILSTSwapRouter(address(0xDEAD)); // Placeholder address for now
     }
 
-    function _deployMainContracts() private {
+    function _deployMainContracts() internal virtual {
         _tokenRegistryOracleImplementation = new TokenRegistryOracle();
         _liquidTokenImplementation = new LiquidToken();
         _liquidTokenManagerImplementation = new LiquidTokenManager();
         _stakerNodeCoordinatorImplementation = new StakerNodeCoordinator();
+        _withdrawalManagerImplementation = new WithdrawalManager();
+        _rewardsManagerImplementation = new RewardsManager();
         stakerNodeImplementation = new StakerNode();
     }
 
-    function _deployProxies() private {
+    function _deployProxies() internal virtual {
         tokenRegistryOracle = TokenRegistryOracle(
             address(new TransparentUpgradeableProxy(address(_tokenRegistryOracleImplementation), proxyAdminAddress, ""))
         );
+
         liquidTokenManager = LiquidTokenManager(
-            address(new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, ""))
+            payable(
+                address(
+                    new TransparentUpgradeableProxy(address(_liquidTokenManagerImplementation), proxyAdminAddress, "")
+                )
+            )
         );
+
         liquidToken = LiquidToken(
             address(new TransparentUpgradeableProxy(address(_liquidTokenImplementation), proxyAdminAddress, ""))
         );
+
+        withdrawalManager = WithdrawalManager(
+            address(new TransparentUpgradeableProxy(address(_withdrawalManagerImplementation), proxyAdminAddress, ""))
+        );
+
+        rewardsManager = RewardsManager(
+            address(new TransparentUpgradeableProxy(address(_rewardsManagerImplementation), proxyAdminAddress, ""))
+        );
+
         stakerNodeCoordinator = StakerNodeCoordinator(
             address(
                 new TransparentUpgradeableProxy(address(_stakerNodeCoordinatorImplementation), proxyAdminAddress, "")
@@ -300,7 +360,7 @@ contract BaseTest is Test {
         );
     }
 
-    function _setupOracleSources() private {
+    function _setupOracleSources() internal virtual {
         console.log("Setting up oracle sources...");
 
         // Grant TOKEN_CONFIGURATOR_ROLE to admin
@@ -346,7 +406,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeTokenRegistryOracle() private {
+    function _initializeTokenRegistryOracle() internal virtual {
         console.log("Initializing TokenRegistryOracle...");
         ITokenRegistryOracle.Init memory init = ITokenRegistryOracle.Init({
             initialOwner: deployer,
@@ -375,14 +435,16 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeLiquidTokenManager() private {
+    function _initializeLiquidTokenManager() internal virtual {
         console.log("Initializing LiquidTokenManager...");
+        // Use mock withdrawal manager instead of address(0)
         ILiquidTokenManager.Init memory init = ILiquidTokenManager.Init({
             liquidToken: liquidToken,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
             stakerNodeCoordinator: stakerNodeCoordinator,
             tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+            withdrawalManager: withdrawalManager,
             initialOwner: deployer,
             strategyController: deployer,
             priceUpdater: address(tokenRegistryOracle)
@@ -396,15 +458,25 @@ contract BaseTest is Test {
         vm.startPrank(deployer);
         liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), address(this));
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), address(this));
+        liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), address(this));
+
         vm.stopPrank();
     }
 
-    function _initializeStakerNodeCoordinator() private {
+    function _initializeStakerNodeCoordinator() internal virtual {
         console.log("Initializing StakerNodeCoordinator...");
+
+        // Get EigenLayer RewardsCoordinator from network addresses
+        uint256 chainId = block.chainid;
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
+
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
+            withdrawalManager: withdrawalManager,
+            rewardsManager: rewardsManager,
             strategyManager: strategyManager,
             delegationManager: delegationManager,
+            rewardsCoordinator: IRewardsCoordinator(addresses.rewardsCoordinator),
             maxNodes: 10,
             initialOwner: deployer,
             pauser: pauser,
@@ -424,7 +496,51 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _initializeLiquidToken() private {
+    function _initializeWithdrawalManager() internal virtual {
+        console.log("Initializing WithdrawalManager...");
+        IWithdrawalManager.Init memory init = IWithdrawalManager.Init({
+            initialOwner: deployer,
+            delegationManager: delegationManager,
+            liquidToken: liquidToken,
+            liquidTokenManager: liquidTokenManager,
+            stakerNodeCoordinator: stakerNodeCoordinator
+        });
+
+        vm.prank(deployer);
+        withdrawalManager.initialize(init);
+
+        // Grant roles
+        vm.startPrank(deployer);
+        withdrawalManager.grantRole(withdrawalManager.DEFAULT_ADMIN_ROLE(), address(this));
+        vm.stopPrank();
+    }
+
+    function _initializeRewardsManager() internal virtual {
+        console.log("Initializing RewardsManager...");
+
+        // Get EigenLayer RewardsCoordinator from network addresses
+        uint256 chainId = block.chainid;
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
+
+        IRewardsManager.Init memory init = IRewardsManager.Init({
+            rewardsCoordinator: IRewardsCoordinator(addresses.rewardsCoordinator),
+            liquidToken: liquidToken,
+            liquidTokenManager: liquidTokenManager,
+            initialOwner: deployer,
+            pauser: pauser
+        });
+
+        vm.prank(deployer);
+        rewardsManager.initialize(init);
+
+        // Grant roles
+        vm.startPrank(deployer);
+        rewardsManager.grantRole(rewardsManager.DEFAULT_ADMIN_ROLE(), address(this));
+        rewardsManager.grantRole(rewardsManager.PAUSER_ROLE(), pauser);
+        vm.stopPrank();
+    }
+
+    function _initializeLiquidToken() internal virtual {
         console.log("Initializing LiquidToken...");
         ILiquidToken.Init memory init = ILiquidToken.Init({
             name: "Liquid Staking Token",
@@ -432,7 +548,9 @@ contract BaseTest is Test {
             initialOwner: deployer,
             pauser: pauser,
             liquidTokenManager: ILiquidTokenManager(address(liquidTokenManager)),
-            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle))
+            tokenRegistryOracle: ITokenRegistryOracle(address(tokenRegistryOracle)),
+            withdrawalManager: withdrawalManager,
+            rewardsManager: rewardsManager
         });
 
         vm.prank(deployer);
@@ -445,7 +563,7 @@ contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    function _setupTestTokens() private {
+    function _setupTestTokens() internal virtual {
         testToken.mint(user1, 100 ether);
         testToken.mint(user2, 100 ether);
         testToken2.mint(user1, 100 ether);
@@ -483,7 +601,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Chainlink as the primary price source
      */
-    function _setupChainlinkToken(address token, address feed) internal {
+    function _setupChainlinkToken(address token, address feed) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -498,7 +616,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Protocol rate as the primary price source
      */
-    function _setupProtocolToken(address token, address contract_, bytes4 selector, bool needsArg) internal {
+    function _setupProtocolToken(address token, address contract_, bytes4 selector, bool needsArg) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -513,7 +631,7 @@ contract BaseTest is Test {
     /**
      * @dev Configures a token with Curve pool as the primary price source
      */
-    function _setupCurveToken(address token, address curvePool) internal {
+    function _setupCurveToken(address token, address curvePool) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(
             token,
@@ -535,7 +653,7 @@ contract BaseTest is Test {
         uint8 needsArg,
         address fallbackSource,
         bytes4 fallbackFn
-    ) internal {
+    ) internal virtual {
         vm.prank(admin);
         tokenRegistryOracle.configureToken(token, primaryType, primarySource, needsArg, fallbackSource, fallbackFn);
     }
@@ -543,53 +661,53 @@ contract BaseTest is Test {
     /**
      * @dev Gets the price of a token directly from TokenRegistryOracle
      */
-    function _getTokenPrice(address token) internal returns (uint256) {
+    function _getTokenPrice(address token) internal virtual returns (uint256) {
         return tokenRegistryOracle.getTokenPrice(token);
     }
 
     // Helper functions for inheriting contracts to use
-    function _actAsAdmin(function() internal fn) internal {
+    function _actAsAdmin(function() internal fn) internal virtual {
         vm.startPrank(admin);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsDeployer(function() internal fn) internal {
+    function _actAsDeployer(function() internal fn) internal virtual {
         vm.startPrank(deployer);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsUser1(function() internal fn) internal {
+    function _actAsUser1(function() internal fn) internal virtual {
         vm.startPrank(user1);
         fn();
         vm.stopPrank();
     }
 
-    function _actAsUser2(function() internal fn) internal {
+    function _actAsUser2(function() internal fn) internal virtual {
         vm.startPrank(user2);
         fn();
         vm.stopPrank();
     }
 
     // Helper to create a new price source mock for a token - updated to use int256
-    function _createMockPriceFeed(int256 price, uint8 decimals) internal returns (MockChainlinkFeed) {
+    function _createMockPriceFeed(int256 price, uint8 decimals) internal virtual returns (MockChainlinkFeed) {
         return new MockChainlinkFeed(price, decimals);
     }
 
-    function _createMockProtocolToken(uint256 exchangeRate) internal returns (MockProtocolToken) {
+    function _createMockProtocolToken(uint256 exchangeRate) internal virtual returns (MockProtocolToken) {
         MockProtocolToken token = new MockProtocolToken();
         token.setExchangeRate(exchangeRate);
         return token;
     }
 
-    function _createMockCurvePool(uint256 virtualPrice) internal returns (MockCurvePool) {
+    function _createMockCurvePool(uint256 virtualPrice) internal virtual returns (MockCurvePool) {
         MockCurvePool pool = new MockCurvePool();
         pool.setVirtualPrice(virtualPrice);
         return pool;
     }
 
-    function _createMockFailingOracle() internal returns (MockFailingOracle) {
+    function _createMockFailingOracle() internal virtual returns (MockFailingOracle) {
         return new MockFailingOracle();
     }
 }

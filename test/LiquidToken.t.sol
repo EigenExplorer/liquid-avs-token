@@ -135,7 +135,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[0] = 5 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
@@ -196,7 +196,7 @@ contract LiquidTokenTest is BaseTest {
         amountsToTransfer[1] = 2 ether;
 
         vm.prank(address(liquidTokenManager));
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
 
         assertEq(
             testToken.balanceOf(address(liquidTokenManager)),
@@ -272,7 +272,7 @@ contract LiquidTokenTest is BaseTest {
 
         vm.prank(user1);
         vm.expectRevert(abi.encodeWithSelector(ILiquidToken.NotLiquidTokenManager.selector, user1));
-        liquidToken.transferAssets(assets, amounts);
+        liquidToken.transferAssets(assets, amounts, address(liquidTokenManager));
     }
 
     function testTransferAssetsInsufficientBalance() public {
@@ -291,7 +291,7 @@ contract LiquidTokenTest is BaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(ILiquidToken.InsufficientBalance.selector, address(testToken), 10 ether, 20 ether)
         );
-        liquidToken.transferAssets(assets, amountsToTransfer);
+        liquidToken.transferAssets(assets, amountsToTransfer, address(liquidTokenManager));
     }
 
     function testPause() public {

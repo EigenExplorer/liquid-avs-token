@@ -7,7 +7,9 @@ import {StakerNode} from "../src/core/StakerNode.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
 import {IStakerNodeCoordinator} from "../src/interfaces/IStakerNodeCoordinator.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {NetworkAddresses} from "./utils/NetworkAddresses.sol";
 
 contract StakerNodeCoordinatorTest is BaseTest {
     function setUp() public override {
@@ -125,11 +127,18 @@ contract StakerNodeCoordinatorTest is BaseTest {
         );
         StakerNodeCoordinator proxiedCoordinator = StakerNodeCoordinator(address(proxy));
 
+        // Get EigenLayer RewardsCoordinator from network addresses
+        uint256 chainId = block.chainid;
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
+
         // Initialize with zero maxNodes
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
-            delegationManager: delegationManager,
+            withdrawalManager: withdrawalManager,
+            rewardsManager: rewardsManager,
             strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            rewardsCoordinator: IRewardsCoordinator(addresses.rewardsCoordinator),
             maxNodes: 0, // Set maxNodes to 0
             initialOwner: admin,
             pauser: pauser,
@@ -193,10 +202,16 @@ contract StakerNodeCoordinatorTest is BaseTest {
         );
 
         // 5. Initialize with maxNodes = 1 (normal case) using deployer as caller
+        uint256 chainId = block.chainid;
+        NetworkAddresses.Addresses memory addresses = NetworkAddresses.getAddresses(chainId);
+
         IStakerNodeCoordinator.Init memory init = IStakerNodeCoordinator.Init({
             liquidTokenManager: liquidTokenManager,
-            delegationManager: delegationManager,
+            withdrawalManager: withdrawalManager,
+            rewardsManager: rewardsManager,
             strategyManager: strategyManager,
+            delegationManager: delegationManager,
+            rewardsCoordinator: IRewardsCoordinator(addresses.rewardsCoordinator),
             maxNodes: 1, // Allow 1 node
             initialOwner: deployer, // Initialize with deployer as owner
             pauser: pauser,

@@ -12,6 +12,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ILiquidToken} from "../interfaces/ILiquidToken.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {ITokenRegistryOracle} from "../interfaces/ITokenRegistryOracle.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
+import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
 
 /**
  * @title LiquidToken
@@ -33,22 +36,22 @@ contract LiquidToken is
     /// @notice Role identifier for pausing the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    /// @notice LAT contracts
+    /// @notice v1 LAT contracts
     ILiquidTokenManager public liquidTokenManager;
     ITokenRegistryOracle public tokenRegistryOracle;
 
     /// @notice Mapping of assets to their corresponding unstaked balances (held in this contract)
     mapping(address => uint256) public assetBalances;
 
-    /// @notice Mapping of tokens to their corresponding queued balances (unused in V1)
-    mapping(address => uint256) public queuedAssetBalances;
+    /// @notice Mapping of tokens to their corresponding queued withdrawable shares (post-slashing)
+    mapping(address => uint256) public queuedAssetElShares;
 
-    /**
-     * @dev OUT OF SCOPE FOR V1
-    mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
-    mapping(address => bytes32[]) public userWithdrawalRequests;
+    /// @notice v2 LAT contracts
+    IWithdrawalManager public withdrawalManager;
+    IRewardsManager public rewardsManager;
+
+    /// @notice Mapping of user addresses to their corresponding withdrawal nonces
     mapping(address => uint256) private _withdrawalNonce;
-    */
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -70,7 +73,9 @@ contract LiquidToken is
             address(init.initialOwner) == address(0) ||
             address(init.pauser) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
-            address(init.tokenRegistryOracle) == address(0)
+            address(init.tokenRegistryOracle) == address(0) ||
+            address(init.withdrawalManager) == address(0) ||
+            address(init.rewardsManager) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -80,6 +85,8 @@ contract LiquidToken is
 
         liquidTokenManager = init.liquidTokenManager;
         tokenRegistryOracle = init.tokenRegistryOracle;
+        withdrawalManager = init.withdrawalManager;
+        rewardsManager = init.rewardsManager;
     }
 
     // ------------------------------------------------------------------------------
@@ -163,157 +170,122 @@ contract LiquidToken is
         return sharesArray;
     }
 
-    /// @dev OUT OF SCOPE FOR V1
-    /** 
-    function requestWithdrawal(
-        IERC20Upgradeable[] memory withdrawAssets,
-        uint256[] memory shareAmounts
-    ) external nonReentrant whenNotPaused {
-        if (withdrawAssets.length != shareAmounts.length)
-            revert ArrayLengthMismatch();
+    /// @inheritdoc ILiquidToken
+    function initiateWithdrawal(
+        IERC20[] memory assets,
+        uint256[] memory amounts
+    ) external nonReentrant whenNotPaused returns (bytes32) {
+        if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
-        uint256 len = withdrawAssets.length;
-        address sender = msg.sender;
-        uint256 totalShares;
+        // Check if we have enough funds from staked (pre-slashing) and unstaked balances
+        // Here we make a UX decision to check pre-slashing `depositShares` on EL, which means caller can ask for the same amount they deposited, and the fn takes care of the actual accounting
+        // This removes the burden from the caller and from the manager (when calling `settleUserWithdrawals`) to track slashing on the LAT
+        if (!_previewWithdrawal(assets, amounts)) revert InvalidWithdrawalRequest();
 
-        unchecked {
-            for (uint256 i = 0; i < len; i++) {
-                if (
-                    !liquidTokenManager.tokenIsSupported(
-                        IERC20(address(withdrawAssets[i]))
-                    )
-                ) revert UnsupportedAsset(withdrawAssets[i]);
-                if (shareAmounts[i] == 0) revert ZeroAmount();
-                totalShares += shareAmounts[i];
-            }
+        // Calculate the amount of LAT shares to receive from the user in exchange for the withdrawal request with the right to fulfill after a period delay
+        // We "charge" the user the equivalent at pre-slashing LAT price, to maintain fair pricing regardless of slashing
+        uint256 totalShares = 0;
+        uint256[] memory elWithdrawableShares = new uint256[](assets.length);
+        for (uint256 i = 0; i < assets.length; i++) {
+            elWithdrawableShares[i] = liquidTokenManager.getWithdrawableAssetAmount(assets[i], amounts[i], true);
+            if (elWithdrawableShares[i] == 0) revert ZeroAmount();
+
+            totalShares += calculateSharesNoSlashing(assets[i], amounts[i]); // Charge user at pre-slashing LAT price
         }
 
-        if (balanceOf(sender) < totalShares)
-            revert InsufficientBalance(
-                IERC20Upgradeable(address(this)),
-                totalShares,
-                balanceOf(sender)
-            );
+        if (totalShares == 0) revert ZeroAmount();
+
+        if (balanceOf(msg.sender) < totalShares)
+            revert InsufficientBalance(IERC20(address(this)), totalShares, balanceOf(msg.sender));
 
         bytes32 requestId = keccak256(
-            abi.encodePacked(
-                sender,
-                withdrawAssets,
-                shareAmounts,
-                block.timestamp,
-                block.number,
-                tx.gasprice,
-                address(this),
-                _withdrawalNonce[sender]++
-            )
+            abi.encodePacked(msg.sender, assets, amounts, block.timestamp, _withdrawalNonce[msg.sender])
         );
+        _withdrawalNonce[msg.sender] += 1;
 
-        if (withdrawalRequests[requestId].user != address(0)) {
-            revert DuplicateRequestId(requestId);
-        }
+        // Receive escrow LAT shares to be burned after withdrawal completion
+        _transfer(msg.sender, address(this), totalShares);
 
-        WithdrawalRequest memory request = WithdrawalRequest({
-            user: sender,
-            assets: withdrawAssets,
-            shareAmounts: shareAmounts,
-            requestTime: block.timestamp,
-            fulfilled: false
-        });
-
-        withdrawalRequests[requestId] = request;
-        userWithdrawalRequests[sender].push(requestId);
-
-        _transfer(sender, address(this), totalShares);
-
-        emit WithdrawalRequested(
-            requestId,
-            sender,
-            withdrawAssets,
-            shareAmounts,
-            block.timestamp
-        );
-    }
-    */
-
-    /// @dev OUT OF SCOPE FOR V1
-    /**
-    function fulfillWithdrawal(bytes32 requestId) external nonReentrant {
-        WithdrawalRequest storage request = withdrawalRequests[requestId];
-
-        if (request.user != msg.sender) revert InvalidWithdrawalRequest();
-        if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY)
-            revert WithdrawalDelayNotMet();
-        if (request.fulfilled) revert WithdrawalAlreadyFulfilled();
-
-        request.fulfilled = true;
-        uint256[] memory amounts = new uint256[](request.assets.length);
-        uint256 totalShares = 0;
-
-        for (uint256 i = 0; i < request.assets.length; i++) {
-            amounts[i] = calculateAmount(
-                request.assets[i],
-                request.shareAmounts[i]
-            );
-            totalShares += request.shareAmounts[i];
-        }
-
-        for (uint256 i = 0; i < amounts.length; i++) {
-            uint256 amount = amounts[i];
-            IERC20 asset = IERC20(address(request.assets[i]));
-
-            // Check the contract's actual token balance
-            if (asset.balanceOf(address(this)) < amount) {
-                revert InsufficientBalance(
-                    request.assets[i],
-                    asset.balanceOf(address(this)),
-                    amount
-                );
-            }
-
-            // Transfer the amount back to the user
-            asset.safeTransfer(msg.sender, amount);
-
-            // Reduce the asset balances for the asset
-            // Note: Make sure that whenever this contract receives funds from EL withdrawal, `queuedAssetBalances` is debited and `assetBalances` is credited
-            assetBalances[address(asset)] -= amount;
-
-            if (assetBalances[address(asset)] > asset.balanceOf(address(this)))
-                revert AssetBalanceOutOfSync(
-                    request.assets[i],
-                    assetBalances[address(asset)],
-                    asset.balanceOf(address(this))
-                );
-        }
-
-        // Burn the shares that were transferred to the contract during the withdrawal request
-        _burn(address(this), totalShares);
-
-        emit WithdrawalFulfilled(
-            requestId,
-            msg.sender,
-            request.assets,
+        // Create a withdrawal request for the user
+        withdrawalManager.createWithdrawalRequest(
+            assets,
             amounts,
-            block.timestamp
+            elWithdrawableShares,
+            totalShares,
+            msg.sender,
+            requestId
         );
+
+        return requestId;
     }
-    */
 
     /// @inheritdoc ILiquidToken
-    function creditQueuedAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
-        if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
+    function previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) external view override returns (bool) {
+        if (assets.length != amounts.length) revert ArrayLengthMismatch();
+        return _previewWithdrawal(assets, amounts);
+    }
+
+    /// @inheritdoc ILiquidToken
+    function creditQueuedAssetElShares(IERC20[] calldata assets, uint256[] calldata shares) external whenNotPaused {
+        if (msg.sender != address(liquidTokenManager) && msg.sender != address(withdrawalManager))
+            revert UnauthorizedAccess(msg.sender);
+
+        if (assets.length != shares.length) revert ArrayLengthMismatch();
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            queuedAssetElShares[address(assets[i])] += shares[i];
+        }
+    }
+
+    /// @inheritdoc ILiquidToken
+    function debitQueuedAssetElShares(
+        IERC20[] calldata assets,
+        uint256[] calldata shares,
+        uint256 latSharesToBurn
+    ) external whenNotPaused {
+        if (msg.sender != address(liquidTokenManager) && msg.sender != address(withdrawalManager))
+            revert UnauthorizedAccess(msg.sender);
+
+        if (assets.length != shares.length) revert ArrayLengthMismatch();
+
+        if (latSharesToBurn > 0 && balanceOf(address(this)) < latSharesToBurn) {
+            revert InsufficientBalance(IERC20(address(this)), latSharesToBurn, balanceOf(address(this)));
+        }
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            queuedAssetElShares[address(assets[i])] -= shares[i];
+        }
+
+        if (latSharesToBurn > 0) {
+            _burn(address(this), latSharesToBurn);
+        }
+    }
+
+    /// @inheritdoc ILiquidToken
+    function creditAssetBalances(IERC20[] calldata assets, uint256[] calldata amounts) external whenNotPaused {
+        if (msg.sender != address(liquidTokenManager) && msg.sender != address(rewardsManager))
+            revert UnauthorizedAccess(msg.sender);
 
         if (assets.length != amounts.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < assets.length; i++) {
-            queuedAssetBalances[address(assets[i])] += amounts[i];
+            assetBalances[address(assets[i])] += amounts[i];
         }
     }
 
     /// @inheritdoc ILiquidToken
-    function transferAssets(IERC20[] calldata assetsToRetrieve, uint256[] calldata amounts) external whenNotPaused {
+    function transferAssets(
+        IERC20[] calldata assetsToRetrieve,
+        uint256[] calldata amounts,
+        address receiver
+    ) external whenNotPaused {
         if (msg.sender != address(liquidTokenManager)) revert NotLiquidTokenManager(msg.sender);
 
         if (assetsToRetrieve.length != amounts.length) revert ArrayLengthMismatch();
+
+        // Only `LiquidTokenManager` and `WithdrawalManager` can receive funds from this contract
+        if (receiver != address(liquidTokenManager) && receiver != address(withdrawalManager))
+            revert InvalidReceiver(receiver);
 
         for (uint256 i = 0; i < assetsToRetrieve.length; i++) {
             IERC20 asset = assetsToRetrieve[i];
@@ -325,7 +297,7 @@ contract LiquidToken is
                 revert InsufficientBalance(asset, assetBalances[address(asset)], amount);
 
             assetBalances[address(asset)] -= amount;
-            asset.safeTransfer(address(liquidTokenManager), amount);
+            asset.safeTransfer(receiver, amount);
 
             if (assetBalances[address(asset)] > asset.balanceOf(address(this)))
                 revert AssetBalanceOutOfSync(
@@ -350,31 +322,18 @@ contract LiquidToken is
         return liquidTokenManager.convertFromUnitOfAccount(asset, amountInUnitOfAccount);
     }
 
+    /// @notice Calculate shares at pre-slashing LAT price
+    /// @param asset The asset to calculate shares for
+    /// @param amount The amount of the asset
+    /// @return shares The number of LAT shares at pre-slashing price
+    function calculateSharesNoSlashing(IERC20 asset, uint256 amount) public view returns (uint256) {
+        uint256 assetAmountInUnitOfAccount = liquidTokenManager.convertToUnitOfAccount(asset, amount);
+        return _convertToSharesNoSlashing(assetAmountInUnitOfAccount);
+    }
+
     // ------------------------------------------------------------------------------
     // Getter functions
     // ------------------------------------------------------------------------------
-
-    /**
-     * @dev OUT OF SCOPE FOR V1
-     */
-    /**
-    function getUserWithdrawalRequests(
-        address user
-    ) external view returns (bytes32[] memory) {
-        return userWithdrawalRequests[user];
-    }
-    */
-
-    /**
-     * @dev OUT OF SCOPE FOR V1
-     */
-    /**
-    function getWithdrawalRequest(
-        bytes32 requestId
-    ) external view returns (WithdrawalRequest memory) {
-        return withdrawalRequests[requestId];
-    }
-    */
 
     /// @inheritdoc ILiquidToken
     function totalAssets() public view returns (uint256) {
@@ -382,17 +341,20 @@ contract LiquidToken is
 
         uint256 total = 0;
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            // Unstaked Asset Balances
+            // Unstaked asset balances
             total += liquidTokenManager.convertToUnitOfAccount(supportedTokens[i], _balanceAsset(supportedTokens[i]));
 
-            // Queued Asset Balances
+            // Queued asset balances
             total += liquidTokenManager.convertToUnitOfAccount(
                 supportedTokens[i],
                 _balanceQueuedAsset(supportedTokens[i])
             );
 
-            // Staked Withdrawable Asset Balances
-            total += liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i]);
+            // Staked withdrawable asset balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                liquidTokenManager.getWithdrawableAssetBalance(supportedTokens[i], false) // After any slashing
+            );
         }
 
         return total;
@@ -446,6 +408,46 @@ contract LiquidToken is
         return (shares * totalAsset) / supply;
     }
 
+    /// @dev Called by `calculateSharesNoSlashing`
+    /// @dev Calculate shares using pre-slashing total assets
+    function _convertToSharesNoSlashing(uint256 amount) internal view returns (uint256) {
+        uint256 supply = totalSupply();
+        uint256 totalAssetPreSlashing = _totalAssetsNoSlashing();
+
+        // Check for totalAssets being 0 to avoid division by zero
+        if (supply == 0 || totalAssetPreSlashing == 0) {
+            return amount;
+        }
+
+        return (amount * supply) / totalAssetPreSlashing;
+    }
+
+    /// @dev Called by `_convertToSharesNoSlashing`
+    /// @dev Calculate total assets as if no slashing occurred
+    function _totalAssetsNoSlashing() internal view returns (uint256) {
+        IERC20[] memory supportedTokens = liquidTokenManager.getSupportedTokens();
+
+        uint256 total = 0;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            // Unstaked asset balances
+            total += liquidTokenManager.convertToUnitOfAccount(supportedTokens[i], _balanceAsset(supportedTokens[i]));
+
+            // Queued asset balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                _balanceQueuedAsset(supportedTokens[i])
+            );
+
+            // Pre-slashing staked balances
+            total += liquidTokenManager.convertToUnitOfAccount(
+                supportedTokens[i],
+                liquidTokenManager.getDepositAssetBalance(supportedTokens[i], false) // Pre-slashing
+            );
+        }
+
+        return total;
+    }
+
     /// @dev Called by `balanceAssets` and `totalAssets`
     function _balanceAsset(IERC20 asset) internal view returns (uint256) {
         return assetBalances[address(asset)];
@@ -453,7 +455,27 @@ contract LiquidToken is
 
     /// @dev Called by `balanceQueuedAssets` and `totalAssets`
     function _balanceQueuedAsset(IERC20 asset) internal view returns (uint256) {
-        return queuedAssetBalances[address(asset)];
+        uint256 shares = queuedAssetElShares[address(asset)];
+        if (shares == 0) return 0;
+
+        return liquidTokenManager.assetSharesToUnderlying(asset, shares);
+    }
+
+    /// @dev Called by `initiateWithdrawal` and `previewWithdrawal`
+    function _previewWithdrawal(IERC20[] memory assets, uint256[] memory amounts) internal view returns (bool) {
+        bool isPossible = true;
+        for (uint256 i = 0; i < assets.length; i++) {
+            IERC20 asset = assets[i];
+            if (
+                (!liquidTokenManager.tokenIsSupported(assets[i])) ||
+                (amounts[i] == 0) ||
+                (assetBalances[address(asset)] + liquidTokenManager.getDepositAssetBalance(asset, false)) < amounts[i] // Preview with pre-slashing balances
+            ) {
+                isPossible = false;
+                break;
+            }
+        }
+        return isPossible;
     }
 
     // ------------------------------------------------------------------------------

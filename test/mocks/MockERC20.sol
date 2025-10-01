@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract MockERC20 is ERC20 {
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
 
-    function mint(address to, uint256 amount) public {
+    function mint(address to, uint256 amount) public virtual {
         _mint(to, amount);
     }
 }

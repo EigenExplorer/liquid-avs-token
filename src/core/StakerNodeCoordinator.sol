@@ -6,10 +6,13 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {IStrategyManager} from "@eigenlayer/contracts/interfaces/IStrategyManager.sol";
 import {IDelegationManager} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
+import {IRewardsCoordinator} from "@eigenlayer/contracts/interfaces/IRewardsCoordinator.sol";
 
 import {IStakerNodeCoordinator} from "../interfaces/IStakerNodeCoordinator.sol";
 import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
+import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
+import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
 
 /**
  * @title StakerNodeCoordinator
@@ -31,11 +34,16 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     IStrategyManager public override strategyManager;
     IDelegationManager public override delegationManager;
 
-    /// @notice OZ and LAT contracts
+    /// @notice OZ and v1 LAT contracts
     UpgradeableBeacon public upgradeableBeacon;
     IStakerNode[] private stakerNodes;
 
     uint256 public override maxNodes;
+
+    /// @notice v2 contracts
+    IWithdrawalManager public override withdrawalManager;
+    IRewardsManager public override rewardsManager;
+    IRewardsCoordinator public override rewardsCoordinator;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -57,8 +65,11 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
             address(init.stakerNodeCreator) == address(0) ||
             address(init.stakerNodesDelegator) == address(0) ||
             address(init.liquidTokenManager) == address(0) ||
+            address(init.withdrawalManager) == address(0) ||
+            address(init.rewardsManager) == address(0) ||
             address(init.strategyManager) == address(0) ||
-            address(init.delegationManager) == address(0)
+            address(init.delegationManager) == address(0) ||
+            address(init.rewardsCoordinator) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -72,8 +83,11 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
 
         liquidTokenManager = init.liquidTokenManager;
+        withdrawalManager = init.withdrawalManager;
+        rewardsManager = init.rewardsManager;
         strategyManager = init.strategyManager;
         delegationManager = init.delegationManager;
+        rewardsCoordinator = init.rewardsCoordinator;
         maxNodes = init.maxNodes;
         _registerStakerNodeImplementation(init.stakerNodeImplementation);
     }
@@ -99,6 +113,31 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     // ------------------------------------------------------------------------------
 
     /// @inheritdoc IStakerNodeCoordinator
+    function createStakerNodes(
+        uint256 number
+    )
+        public
+        override
+        notZeroAddress(address(upgradeableBeacon))
+        onlyRole(STAKER_NODE_CREATOR_ROLE)
+        returns (IStakerNode[] memory)
+    {
+        uint256 nodeId = stakerNodes.length;
+
+        if (nodeId + number > maxNodes) {
+            revert TooManyStakerNodes(maxNodes);
+        }
+
+        IStakerNode[] memory nodes = new IStakerNode[](number);
+
+        for (uint256 i = 0; i < number; i++) {
+            nodes[i] = _createStakerNode();
+        }
+
+        return nodes;
+    }
+
+    /// @inheritdoc IStakerNodeCoordinator
     function createStakerNode()
         public
         override
@@ -106,6 +145,10 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         onlyRole(STAKER_NODE_CREATOR_ROLE)
         returns (IStakerNode)
     {
+        return _createStakerNode();
+    }
+
+    function _createStakerNode() internal returns (IStakerNode) {
         uint256 nodeId = stakerNodes.length;
 
         if (nodeId >= maxNodes) {
