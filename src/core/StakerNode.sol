@@ -178,7 +178,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc IStakerNode
-    function undelegate() external override onlyRole(STAKER_NODES_DELEGATOR_ROLE) returns (bytes32[] memory) {
+    function undelegate() external override returns (bytes32[] memory) {
+        // Allow both LIQUID_TOKEN_MANAGER_ROLE and STAKER_NODES_DELEGATOR_ROLE
+        if (!coordinator.hasLiquidTokenManagerRole(msg.sender) && !coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
+            revert UnauthorizedAccess(msg.sender, LIQUID_TOKEN_MANAGER_ROLE);
+        }
+
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
         IDelegationManager delegationManager = coordinator.delegationManager();
