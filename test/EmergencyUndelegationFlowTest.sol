@@ -344,7 +344,8 @@ contract EmergencyUndelegationFlowTest is BaseTest {
                     data.strategies,
                     data.depositShares,
                     data.nonce,
-                    data.operator
+                    data.operator,
+                    data.startBlock
                 );
 
                 withdrawals[i][j] = withdrawal;

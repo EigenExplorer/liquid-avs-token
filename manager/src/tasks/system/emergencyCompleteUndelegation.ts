@@ -66,7 +66,7 @@ export async function emergencyCompleteUndelegation(
         
         const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS
         const reconstructAbi = parseAbi([
-            'function reconstructWithdrawal(uint256,address[],uint256[],uint256,address) view returns (tuple(address staker, address delegatedTo, address withdrawer, uint256 nonce, uint32 startBlock, address[] strategies, uint256[] scaledShares), bytes32)'
+            'function reconstructWithdrawal(uint256,address[],uint256[],uint256,address,uint256) view returns (tuple(address staker, address delegatedTo, address withdrawer, uint256 nonce, uint32 startBlock, address[] strategies, uint256[] scaledShares), bytes32)'
         ])
 
         const allWithdrawals: any[] = []
@@ -89,7 +89,8 @@ export async function emergencyCompleteUndelegation(
                         withdrawal.strategies,
                         withdrawal.depositShares.map((s: string) => BigInt(s)),
                         BigInt(withdrawal.nonce),
-                        withdrawal.operator
+                        withdrawal.operator,
+                        BigInt(withdrawal.startBlock)
                     ]
                 })
 

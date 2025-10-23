@@ -1340,7 +1340,8 @@ contract LiquidTokenManager is
         IStrategy[] calldata strategies,
         uint256[] calldata shares,
         uint256 nonce,
-        address delegatedTo
+        address delegatedTo,
+        uint256 startBlock
     ) external view returns (IDelegationManagerTypes.Withdrawal memory withdrawal, bytes32 withdrawalRoot) {
         IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
         address nodeAddress = address(node);
@@ -1365,7 +1366,7 @@ contract LiquidTokenManager is
             delegatedTo: delegatedTo,
             withdrawer: nodeAddress,
             nonce: nonce,
-            startBlock: uint32(block.number), 
+            startBlock: uint32(startBlock),
             strategies: strategies,
             scaledShares: scaledShares
         });
@@ -1434,6 +1435,7 @@ contract LiquidTokenManager is
             if (withdrawal.delegatedTo != stored.operator) revert InvalidWithdrawalData();
             if (withdrawal.withdrawer != nodeAddress) revert InvalidWithdrawalData();
             if (withdrawal.nonce != stored.nonce) revert InvalidWithdrawalData();
+            if (withdrawal.startBlock != uint32(stored.startBlock)) revert InvalidWithdrawalData();
 
             // Validate strategies match
             if (withdrawal.strategies.length != stored.strategies.length) revert InvalidWithdrawalData();

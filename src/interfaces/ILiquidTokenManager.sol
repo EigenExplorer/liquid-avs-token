@@ -569,6 +569,7 @@ interface ILiquidTokenManager {
     /// @param shares The share amounts for each strategy
     /// @param nonce The withdrawal nonce
     /// @param delegatedTo The operator the node was delegated to
+    /// @param startBlock The block number when the withdrawal was queued
     /// @return withdrawal The reconstructed withdrawal struct
     /// @return withdrawalRoot The computed withdrawal root
     function reconstructWithdrawal(
@@ -576,7 +577,8 @@ interface ILiquidTokenManager {
         IStrategy[] calldata strategies,
         uint256[] calldata shares,
         uint256 nonce,
-        address delegatedTo
+        address delegatedTo,
+        uint256 startBlock
     ) external view returns (IDelegationManagerTypes.Withdrawal memory withdrawal, bytes32 withdrawalRoot);
 
     /// @notice Get stored emergency withdrawal data for a node
