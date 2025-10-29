@@ -94,7 +94,14 @@ interface ILiquidTokenManager {
         IERC20[][] elAssets;
         uint256[][] elDepositShares;
     }
-
+    struct EmergencyWithdrawalData {
+        IStrategy[] strategies;
+        uint256[] depositShares;
+        uint256 nonce;
+        address operator;
+        uint256 startBlock;
+        bool exists;
+    }
     // ============================================================================
     // EVENTS
     // ============================================================================
@@ -143,10 +150,6 @@ interface ILiquidTokenManager {
     /// @notice Emitted when a token is removed from the registry
     event TokenRemoved(IERC20 indexed token, address indexed remover);
 
-
-
-   
-
     /// @notice Emitted when a swap is executed
     event SwapExecuted(
         address indexed tokenIn,
@@ -194,11 +197,29 @@ interface ILiquidTokenManager {
         uint256[] requestedElShares,
         uint256[] receivedAmounts
     );
+    event EmergencyUndelegationInitiated(uint256[] nodeIds, address indexed initiator);
+    event EmergencyNodeUndelegated(uint256 indexed nodeId, address indexed operator, bytes32[] withdrawalRoots);
+    event EmergencyUndelegationCompleted(
+        uint256[] nodeIds,
+        IERC20[] tokens,
+        uint256[] amounts,
+        address indexed recipient,
+        address indexed initiator
+    );
+    event EmergencyWithdrawalDataStored(
+        uint256 indexed nodeId,
+        IStrategy[] strategies,
+        uint256[] shares,
+        uint256 nonce,
+        address operator
+    );
 
     // ============================================================================
     // CUSTOM ERRORS
     // ============================================================================
-
+    error NoNodesToUndelegate();
+    error InvalidWithdrawalData();
+    error WithdrawalDelayNotMet();
     /// @notice Error for zero address
     error ZeroAddress();
 
@@ -278,8 +299,6 @@ interface ILiquidTokenManager {
     /// @notice Initializes the LiquidTokenManager contract
     /// @param init Initialization parameters
     function initialize(Init memory init) external;
-
-
 
     /// @notice Adds a new token to the registry and configures its price sources
     /// @param token Address of the token to add
@@ -523,5 +542,58 @@ interface ILiquidTokenManager {
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
 
-   
+    /// @notice Emergency function to undelegate all nodes from their operators
+    /// @dev Can only be called by admin (multisig). Queues withdrawals on EigenLayer.
+    /// @return nodeIds Array of node IDs that were undelegated
+    /// @return withdrawalRoots Nested array of withdrawal roots per node
+    function emergencyUndelegateAllNodes()
+        external
+        returns (uint256[] memory nodeIds, bytes32[][] memory withdrawalRoots);
+
+    /// @notice Emergency function to complete undelegation and recover funds
+    /// @dev Can only be called by admin (multisig) after EL withdrawal delay (7 days)
+    /// @param nodeIds Array of node IDs to complete withdrawals for
+    /// @param withdrawals Nested array of withdrawal structs per node
+    /// @param assets Nested array of asset arrays per withdrawal per node
+    /// @param recipient Address to receive the recovered funds (multisig)
+    function emergencyCompleteUndelegation(
+        uint256[] calldata nodeIds,
+        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
+        IERC20[][][] calldata assets,
+        address recipient
+    ) external;
+
+    /// @notice Helper to reconstruct withdrawal structs from stored data
+    /// @param nodeId The node ID
+    /// @param strategies The strategies involved in the withdrawal
+    /// @param shares The share amounts for each strategy
+    /// @param nonce The withdrawal nonce
+    /// @param delegatedTo The operator the node was delegated to
+    /// @param startBlock The block number when the withdrawal was queued
+    /// @return withdrawal The reconstructed withdrawal struct
+    /// @return withdrawalRoot The computed withdrawal root
+    function reconstructWithdrawal(
+        uint256 nodeId,
+        IStrategy[] calldata strategies,
+        uint256[] calldata shares,
+        uint256 nonce,
+        address delegatedTo,
+        uint256 startBlock
+    ) external view returns (IDelegationManagerTypes.Withdrawal memory withdrawal, bytes32 withdrawalRoot);
+
+    /// @notice Get stored emergency withdrawal data for a node
+    /// @param nodeId The node ID
+    /// @param withdrawalIndex The withdrawal index
+    /// @return data The stored withdrawal data
+    function getEmergencyWithdrawalData(
+        uint256 nodeId,
+        uint256 withdrawalIndex
+    ) external view returns (EmergencyWithdrawalData memory data);
+
+    /// @notice Get all emergency withdrawal data for a node
+    /// @param nodeId The node ID
+    /// @return allData Array of all withdrawal data for the node
+    function getAllEmergencyWithdrawalData(
+        uint256 nodeId
+    ) external view returns (EmergencyWithdrawalData[] memory allData);
 }

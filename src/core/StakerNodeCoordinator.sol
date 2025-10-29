@@ -13,7 +13,6 @@ import {IStakerNode} from "../interfaces/IStakerNode.sol";
 import {ILiquidTokenManager} from "../interfaces/ILiquidTokenManager.sol";
 import {IWithdrawalManager} from "../interfaces/IWithdrawalManager.sol";
 import {IRewardsManager} from "../interfaces/IRewardsManager.sol";
-
 /**
  * @title StakerNodeCoordinator
  * @notice Coordinates the creation, init, management and upgradeability of staker nodes
@@ -44,6 +43,7 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
     IWithdrawalManager public override withdrawalManager;
     IRewardsManager public override rewardsManager;
     IRewardsCoordinator public override rewardsCoordinator;
+    address public emergencyRescue;
 
     // ------------------------------------------------------------------------------
     // Init functions
@@ -81,6 +81,7 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         _grantRole(DEFAULT_ADMIN_ROLE, init.initialOwner);
         _grantRole(STAKER_NODE_CREATOR_ROLE, init.stakerNodeCreator);
         _grantRole(STAKER_NODES_DELEGATOR_ROLE, init.stakerNodesDelegator);
+        emergencyRescue = address(0);
 
         liquidTokenManager = init.liquidTokenManager;
         withdrawalManager = init.withdrawalManager;
@@ -91,7 +92,19 @@ contract StakerNodeCoordinator is IStakerNodeCoordinator, AccessControlUpgradeab
         maxNodes = init.maxNodes;
         _registerStakerNodeImplementation(init.stakerNodeImplementation);
     }
+    /// @notice Set the emergency rescue contract address
+    /// @param _emergencyRescue Address of emergency rescue contract
+    function setEmergencyRescue(address _emergencyRescue) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        emergencyRescue = _emergencyRescue;
+        emit EmergencyRescueUpdated(_emergencyRescue);
+    }
 
+    /// @notice Check if caller has emergency role
+    /// @param caller Address to check
+    /// @return bool True if caller is emergency rescue contract
+    function hasEmergencyRole(address caller) public view returns (bool) {
+        return caller == emergencyRescue;
+    }
     /// @notice Registers the initial staker node implementation
     /// @dev Called by `initialize`
     function _registerStakerNodeImplementation(

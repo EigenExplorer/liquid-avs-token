@@ -33,7 +33,8 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
 
     /// @notice Role identifier for delegation operations
     bytes32 public constant STAKER_NODES_DELEGATOR_ROLE = keccak256("STAKER_NODES_DELEGATOR_ROLE");
-
+    /// @notice Role identifier for emergency operations
+    bytes32 public constant EMERGENCY_ROLE = keccak256("EMERGENCY_ROLE");
     /// @notice v1 LAT contracts
     IStakerNodeCoordinator public coordinator;
 
@@ -118,7 +119,68 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             }
         }
     }
+    /// @notice Emergency undelegation - can only be called by emergency rescue contract
+    /// @return withdrawalRoots Array of withdrawal roots from EigenLayer
+    function emergencyUndelegate() external override returns (bytes32[] memory) {
+        if (!coordinator.hasEmergencyRole(msg.sender)) {
+            revert UnauthorizedAccess(msg.sender, EMERGENCY_ROLE);
+        }
 
+        if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        bytes32[] memory withdrawalRoots = delegationManager.undelegate(address(this));
+
+        emit UndelegatedFromOperator(operatorDelegation);
+
+        operatorDelegation = address(0);
+        return withdrawalRoots;
+    }
+    /// @notice Emergency complete withdrawals - transfers funds to specified recipient
+    /// @param withdrawals Array of withdrawal structs
+    /// @param tokens Array of token arrays
+    /// @param recipient Address to receive the funds
+    /// @return receivedTokens Array of tokens received
+    function emergencyCompleteWithdrawals(
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        address recipient
+    ) external override returns (IERC20[] memory) {
+        if (!coordinator.hasEmergencyRole(msg.sender)) {
+            revert UnauthorizedAccess(msg.sender, EMERGENCY_ROLE);
+        }
+
+        uint256 arrayLength = withdrawals.length;
+        bool[] memory receiveAsTokensArray = new bool[](arrayLength);
+
+        for (uint256 i = 0; i < arrayLength; i++) {
+            receiveAsTokensArray[i] = true;
+        }
+
+        IDelegationManager delegationManager = coordinator.delegationManager();
+        delegationManager.completeQueuedWithdrawals(withdrawals, tokens, receiveAsTokensArray);
+
+        uint256 totalTokenCount = 0;
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalTokenCount += tokens[i].length;
+        }
+
+        IERC20[] memory receivedTokens = new IERC20[](totalTokenCount);
+        uint256 uniqueCount = 0;
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            for (uint256 j = 0; j < tokens[i].length; j++) {
+                IERC20 token = tokens[i][j];
+                uint256 balance = token.balanceOf(address(this));
+                if (balance > 0) {
+                    token.safeTransfer(recipient, balance);
+                    receivedTokens[uniqueCount++] = token;
+                }
+            }
+        }
+
+        return receivedTokens;
+    }
     /// @inheritdoc IStakerNode
     function withdrawAssets(
         IStrategy[] calldata strategies,
@@ -178,7 +240,12 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc IStakerNode
-    function undelegate() external override onlyRole(STAKER_NODES_DELEGATOR_ROLE) returns (bytes32[] memory) {
+    function undelegate() external override returns (bytes32[] memory) {
+        // Allow both LIQUID_TOKEN_MANAGER_ROLE and STAKER_NODES_DELEGATOR_ROLE
+        if (!coordinator.hasLiquidTokenManagerRole(msg.sender) && !coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
+            revert UnauthorizedAccess(msg.sender, LIQUID_TOKEN_MANAGER_ROLE);
+        }
+
         if (operatorDelegation == address(0)) revert NodeIsNotDelegated();
 
         IDelegationManager delegationManager = coordinator.delegationManager();
@@ -234,6 +301,10 @@ contract StakerNode is IStakerNode, Initializable, ReentrancyGuardUpgradeable {
             }
         } else if (role == STAKER_NODES_DELEGATOR_ROLE) {
             if (!coordinator.hasStakerNodeDelegatorRole(msg.sender)) {
+                revert UnauthorizedAccess(msg.sender, role);
+            }
+        } else if (role == EMERGENCY_ROLE) {
+            if (!coordinator.hasEmergencyRole(msg.sender)) {
                 revert UnauthorizedAccess(msg.sender, role);
             }
         } else {

@@ -69,6 +69,14 @@ contract LiquidTokenManager is
     /// @notice Total redemptions created
     uint256 private _redemptionNonce;
 
+    // State - Emergency Withdrawal Data
+
+    /// @notice Mapping of nodeId => withdrawal index => withdrawal data
+    mapping(uint256 => mapping(uint256 => EmergencyWithdrawalData)) public emergencyWithdrawalData;
+
+    /// @notice Mapping of nodeId => number of withdrawals
+    mapping(uint256 => uint256) public emergencyWithdrawalCount;
+
     // ------------------------------------------------------------------------------
     // Init functions
     // ------------------------------------------------------------------------------
@@ -1181,6 +1189,309 @@ contract LiquidTokenManager is
         return scaledSharesAsset;
     }
 
+    // ------------------------------------------------------------------------------
+    // Emergency Functions
+    // ------------------------------------------------------------------------------
+
+    /// @notice Emergency function to undelegate all nodes from their operators
+    /// @dev Can only be called by admin (multisig). Queues withdrawals on EigenLayer.
+    /// @return nodeIds Array of node IDs that were undelegated
+    /// @return withdrawalRoots Nested array of withdrawal roots per node
+    function emergencyUndelegateAllNodes()
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        returns (uint256[] memory nodeIds, bytes32[][] memory withdrawalRoots)
+    {
+        IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
+        uint256 delegatedCount = 0;
+
+        // First pass: count delegated nodes
+        for (uint256 i = 0; i < nodes.length; i++) {
+            if (nodes[i].getOperatorDelegation() != address(0)) {
+                delegatedCount++;
+            }
+        }
+
+        if (delegatedCount == 0) revert NoNodesToUndelegate();
+
+        nodeIds = new uint256[](delegatedCount);
+        withdrawalRoots = new bytes32[][](delegatedCount);
+        uint256 index = 0;
+
+        // Second pass: undelegate and store withdrawal data
+        for (uint256 i = 0; i < nodes.length; i++) {
+            IStakerNode node = nodes[i];
+            address operator = node.getOperatorDelegation();
+
+            if (operator != address(0)) {
+                uint256 nodeId = node.getId();
+                address nodeAddress = address(node);
+
+                // Get current deposits before undelegating
+                (IStrategy[] memory strategies, uint256[] memory depositShares) = strategyManager.getDeposits(
+                    nodeAddress
+                );
+
+                // Get the nonce before undelegating
+                uint256 nonce = delegationManager.cumulativeWithdrawalsQueued(nodeAddress);
+
+                // Store withdrawal data for later reconstruction
+                _storeEmergencyWithdrawalData(nodeId, strategies, depositShares, nonce, operator);
+
+                // Undelegate the node - this queues withdrawals on EigenLayer
+                bytes32[] memory roots = node.undelegate();
+
+                nodeIds[index] = nodeId;
+                withdrawalRoots[index] = roots;
+                index++;
+
+                emit EmergencyNodeUndelegated(nodeId, operator, roots);
+            }
+        }
+
+        emit EmergencyUndelegationInitiated(nodeIds, msg.sender);
+    }
+
+    /// @notice Emergency function to complete undelegation and recover funds
+    /// @dev Can only be called by admin (multisig) after EL withdrawal delay (7 days)
+    /// @param nodeIds Array of node IDs to complete withdrawals for
+    /// @param withdrawals Nested array of withdrawal structs per node
+    /// @param assets Nested array of asset arrays per withdrawal per node
+    /// @param recipient Address to receive the recovered funds (multisig)
+    function emergencyCompleteUndelegation(
+        uint256[] calldata nodeIds,
+        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
+        IERC20[][][] calldata assets,
+        address recipient
+    ) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (recipient == address(0)) revert ZeroAddress();
+        if (withdrawals.length != nodeIds.length) revert LengthMismatch(withdrawals.length, nodeIds.length);
+        if (assets.length != nodeIds.length) revert LengthMismatch(assets.length, nodeIds.length);
+
+        // Validate all withdrawal structs match stored data
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            _validateEmergencyWithdrawals(nodeIds[i], withdrawals[i]);
+        }
+
+        // Track unique tokens received
+        IERC20[] memory receivedTokens = new IERC20[](supportedTokens.length);
+        uint256 uniqueTokenCount = 0;
+
+        // Complete withdrawals for each node
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            IStakerNode node = stakerNodeCoordinator.getNodeById(nodeIds[i]);
+
+            // Complete EL withdrawals - funds come back to the node, then to LTM
+            IERC20[] memory nodeReceivedTokens = node.completeWithdrawals(withdrawals[i], assets[i]);
+
+            // Track unique received tokens
+            for (uint256 j = 0; j < nodeReceivedTokens.length; j++) {
+                IERC20 token = nodeReceivedTokens[j];
+                bool found = false;
+
+                for (uint256 k = 0; k < uniqueTokenCount; k++) {
+                    if (receivedTokens[k] == token) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    receivedTokens[uniqueTokenCount++] = token;
+                }
+            }
+
+            // Clear stored withdrawal data
+            _clearEmergencyWithdrawalData(nodeIds[i]);
+        }
+
+        // Transfer all recovered funds from LTM to recipient (multisig)
+        uint256[] memory recoveredAmounts = new uint256[](uniqueTokenCount);
+
+        for (uint256 i = 0; i < uniqueTokenCount; i++) {
+            IERC20 token = receivedTokens[i];
+            uint256 balance = token.balanceOf(address(this));
+
+            if (balance > 0) {
+                recoveredAmounts[i] = balance;
+                token.safeTransfer(recipient, balance);
+            }
+        }
+
+        // Trim arrays to actual size
+        assembly {
+            mstore(receivedTokens, uniqueTokenCount)
+            mstore(recoveredAmounts, uniqueTokenCount)
+        }
+
+        emit EmergencyUndelegationCompleted(nodeIds, receivedTokens, recoveredAmounts, recipient, msg.sender);
+    }
+
+    /// @notice Helper to reconstruct withdrawal structs from stored data
+    /// @param nodeId The node ID
+    /// @param strategies The strategies involved in the withdrawal
+    /// @param shares The share amounts for each strategy
+    /// @param nonce The withdrawal nonce
+    /// @param delegatedTo The operator the node was delegated to
+    /// @return withdrawal The reconstructed withdrawal struct
+    /// @return withdrawalRoot The computed withdrawal root
+    function reconstructWithdrawal(
+        uint256 nodeId,
+        IStrategy[] calldata strategies,
+        uint256[] calldata shares,
+        uint256 nonce,
+        address delegatedTo,
+        uint256 startBlock
+    ) external view returns (IDelegationManagerTypes.Withdrawal memory withdrawal, bytes32 withdrawalRoot) {
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        address nodeAddress = address(node);
+
+        if (strategies.length != shares.length) revert LengthMismatch(strategies.length, shares.length);
+
+        // Get assets from strategies
+        IERC20[] memory assets = new IERC20[](strategies.length);
+        for (uint256 i = 0; i < strategies.length; i++) {
+            assets[i] = strategyTokens[strategies[i]];
+            if (address(assets[i]) == address(0)) {
+                revert TokenForStrategyNotFound(address(strategies[i]));
+            }
+        }
+
+        // Scale shares
+        uint256[] memory scaledShares = _scaleSharesForNode(nodeId, assets, shares);
+
+        // Construct withdrawal struct
+        withdrawal = IDelegationManagerTypes.Withdrawal({
+            staker: nodeAddress,
+            delegatedTo: delegatedTo,
+            withdrawer: nodeAddress,
+            nonce: nonce,
+            startBlock: uint32(startBlock),
+            strategies: strategies,
+            scaledShares: scaledShares
+        });
+
+        // Compute withdrawal root
+        withdrawalRoot = keccak256(abi.encode(withdrawal));
+    }
+
+    /// @dev Store emergency withdrawal data for later reconstruction
+    function _storeEmergencyWithdrawalData(
+        uint256 nodeId,
+        IStrategy[] memory strategies,
+        uint256[] memory depositShares,
+        uint256 nonce,
+        address operator
+    ) internal {
+        uint256 withdrawalIndex = emergencyWithdrawalCount[nodeId];
+
+        EmergencyWithdrawalData storage data = emergencyWithdrawalData[nodeId][withdrawalIndex];
+
+        // Deep copy arrays
+        data.strategies = new IStrategy[](strategies.length);
+        data.depositShares = new uint256[](depositShares.length);
+
+        for (uint256 i = 0; i < strategies.length; i++) {
+            data.strategies[i] = strategies[i];
+            data.depositShares[i] = depositShares[i];
+        }
+
+        data.nonce = nonce;
+        data.operator = operator;
+        data.startBlock = block.number;
+        data.exists = true;
+
+        emergencyWithdrawalCount[nodeId]++;
+
+        emit EmergencyWithdrawalDataStored(nodeId, strategies, depositShares, nonce, operator);
+    }
+
+    /// @dev Validate emergency withdrawals against stored data
+    function _validateEmergencyWithdrawals(
+        uint256 nodeId,
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals
+    ) internal view {
+        uint256 storedCount = emergencyWithdrawalCount[nodeId];
+
+        if (withdrawals.length != storedCount) {
+            revert InvalidWithdrawalData();
+        }
+
+        IStakerNode node = stakerNodeCoordinator.getNodeById(nodeId);
+        address nodeAddress = address(node);
+
+        // Get the minimum withdrawal delay from EigenLayer
+        uint256 minWithdrawalDelay = uint256(delegationManager.minWithdrawalDelayBlocks());
+
+        for (uint256 i = 0; i < withdrawals.length; i++) {
+            EmergencyWithdrawalData storage stored = emergencyWithdrawalData[nodeId][i];
+
+            if (!stored.exists) revert InvalidWithdrawalData();
+
+            IDelegationManagerTypes.Withdrawal calldata withdrawal = withdrawals[i];
+
+            // Validate basic fields
+            if (withdrawal.staker != nodeAddress) revert InvalidWithdrawalData();
+            if (withdrawal.delegatedTo != stored.operator) revert InvalidWithdrawalData();
+            if (withdrawal.withdrawer != nodeAddress) revert InvalidWithdrawalData();
+            if (withdrawal.nonce != stored.nonce) revert InvalidWithdrawalData();
+            if (withdrawal.startBlock != uint32(stored.startBlock)) revert InvalidWithdrawalData();
+
+            // Validate strategies match
+            if (withdrawal.strategies.length != stored.strategies.length) revert InvalidWithdrawalData();
+
+            for (uint256 j = 0; j < withdrawal.strategies.length; j++) {
+                if (address(withdrawal.strategies[j]) != address(stored.strategies[j])) {
+                    revert InvalidWithdrawalData();
+                }
+            }
+
+            // Validate withdrawal is past delay period
+            if (block.number < stored.startBlock + minWithdrawalDelay) {
+                revert WithdrawalDelayNotMet();
+            }
+        }
+    }
+
+    /// @dev Clear emergency withdrawal data after completion
+    function _clearEmergencyWithdrawalData(uint256 nodeId) internal {
+        uint256 count = emergencyWithdrawalCount[nodeId];
+
+        for (uint256 i = 0; i < count; i++) {
+            delete emergencyWithdrawalData[nodeId][i];
+        }
+
+        emergencyWithdrawalCount[nodeId] = 0;
+    }
+
+    /// @notice Get stored emergency withdrawal data for a node
+    /// @param nodeId The node ID
+    /// @param withdrawalIndex The withdrawal index
+    /// @return data The stored withdrawal data
+    function getEmergencyWithdrawalData(
+        uint256 nodeId,
+        uint256 withdrawalIndex
+    ) external view returns (EmergencyWithdrawalData memory data) {
+        data = emergencyWithdrawalData[nodeId][withdrawalIndex];
+        if (!data.exists) revert InvalidWithdrawalData();
+        return data;
+    }
+
+    /// @notice Get all emergency withdrawal data for a node
+    /// @param nodeId The node ID
+    /// @return allData Array of all withdrawal data for the node
+    function getAllEmergencyWithdrawalData(
+        uint256 nodeId
+    ) external view returns (EmergencyWithdrawalData[] memory allData) {
+        uint256 count = emergencyWithdrawalCount[nodeId];
+        allData = new EmergencyWithdrawalData[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            allData[i] = emergencyWithdrawalData[nodeId][i];
+        }
+
+        return allData;
+    }
     // ------------------------------------------------------------------------------
     // Getter functions
     // ------------------------------------------------------------------------------
