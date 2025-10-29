@@ -3,11 +3,14 @@ pragma solidity ^0.8.27;
 
 import {BaseTest} from "./common/BaseTest.sol";
 import {IStakerNode} from "../src/interfaces/IStakerNode.sol";
-import {IDelegationManagerTypes} from "@eigenlayer/contracts/interfaces/IDelegationManager.sol";
-import {ISignatureUtilsMixinTypes} from "@eigenlayer/contracts/interfaces/ISignatureUtilsMixin.sol";
-import {IStrategy} from "@eigenlayer/contracts/interfaces/IStrategy.sol";
+import {IDelegationManagerTypes} from "eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
+import {ISignatureUtilsMixinTypes} from "eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
+import {IStrategy} from "eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ILiquidTokenManager} from "../src/interfaces/ILiquidTokenManager.sol";
+import {IEmergencyRescue} from "../src/interfaces/IEmergencyRescue.sol";
+import {EmergencyRescue} from "../src/core/EmergencyRescue.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "forge-std/console.sol";
 
 contract EmergencyUndelegationFlowTest is BaseTest {
@@ -18,6 +21,9 @@ contract EmergencyUndelegationFlowTest is BaseTest {
 
     // Test amounts
     uint256 public constant ETH_AMOUNT = 25 ether;
+
+    // Emergency Rescue Contract
+    EmergencyRescue public emergencyRescue;
 
     // Mock signature for delegation
     ISignatureUtilsMixinTypes.SignatureWithExpiry mockSignature;
@@ -32,18 +38,20 @@ contract EmergencyUndelegationFlowTest is BaseTest {
             expiry: block.timestamp + 1 days
         });
 
+        // Deploy Emergency Rescue Contract
+        _deployEmergencyRescue();
+
         // Grant ALL necessary roles to deployer and admin
         vm.startPrank(admin);
 
         // Grant admin role to multisig for emergency functions
-        liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), multisig);
+        emergencyRescue.grantRole(emergencyRescue.DEFAULT_ADMIN_ROLE(), multisig);
 
-        // Re-grant roles to deployer (since BaseTest._renounceAllRoles() removed them)
+        // Re-grant roles to deployer
         liquidTokenManager.grantRole(liquidTokenManager.DEFAULT_ADMIN_ROLE(), deployer);
         liquidTokenManager.grantRole(liquidTokenManager.STRATEGY_CONTROLLER_ROLE(), deployer);
         liquidTokenManager.grantRole(liquidTokenManager.PRICE_UPDATER_ROLE(), deployer);
 
-        // Grant StakerNodeCoordinator roles to deployer
         stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODE_CREATOR_ROLE(), deployer);
         stakerNodeCoordinator.grantRole(stakerNodeCoordinator.STAKER_NODES_DELEGATOR_ROLE(), deployer);
 
@@ -65,6 +73,10 @@ contract EmergencyUndelegationFlowTest is BaseTest {
 
         vm.stopPrank();
 
+        // Set emergency rescue contract in StakerNodeCoordinator
+        vm.prank(admin);
+        stakerNodeCoordinator.setEmergencyRescue(address(emergencyRescue));
+
         // REGISTER THE MOCK OPERATOR
         _registerMockOperator();
 
@@ -72,40 +84,50 @@ contract EmergencyUndelegationFlowTest is BaseTest {
         _setupInitialStakedState();
     }
 
-    function _registerMockOperator() internal {
-        // Register the mock operator in EigenLayer's DelegationManager
-        vm.prank(mockOperator);
-        delegationManager.registerAsOperator(
-            address(0), // delegationApprover (no approver needed)
-            0, // allocationDelay
-            "ipfs://mock-operator-metadata" // metadataURI
+    function _deployEmergencyRescue() internal {
+        console.log("Deploying Emergency Rescue Contract...");
+
+        // Deploy implementation
+        EmergencyRescue rescueImpl = new EmergencyRescue();
+
+        // Deploy proxy
+        bytes memory initData = abi.encodeWithSelector(
+            EmergencyRescue.initialize.selector,
+            admin,
+            strategyManager,
+            delegationManager,
+            stakerNodeCoordinator
         );
+
+        emergencyRescue = EmergencyRescue(
+            address(new TransparentUpgradeableProxy(address(rescueImpl), proxyAdminAddress, initData))
+        );
+
+        console.log("Emergency Rescue deployed at:", address(emergencyRescue));
+    }
+
+    function _registerMockOperator() internal {
+        vm.prank(mockOperator);
+        delegationManager.registerAsOperator(address(0), 0, "ipfs://mock-operator-metadata");
 
         console.log("Mock operator registered:", mockOperator);
         console.log("Is operator registered:", delegationManager.isOperator(mockOperator));
     }
 
     function _setupInitialStakedState() internal {
-        // STEP 1: Whitelist the strategies in EigenLayer's StrategyManager FIRST
         _whitelistStrategies();
 
-        // Create a staker node using test contract (who has the role)
         vm.prank(address(this));
         IStakerNode node = stakerNodeCoordinator.createStakerNode();
         uint256 nodeId = node.getId();
 
-        // Delegate the node to the registered operator
         vm.prank(address(this));
         node.delegate(mockOperator, mockSignature, mockSalt);
 
-        // Use proper deposit flow through LiquidToken
-        // 1. Mint tokens to this test contract
         testToken.mint(address(this), ETH_AMOUNT);
-
-        // 2. Approve LiquidToken to spend our tokens
+        testToken.mint(address(mockStrategy), ETH_AMOUNT);
         testToken.approve(address(liquidToken), ETH_AMOUNT);
 
-        // 3. Deposit tokens into LiquidToken (this updates assetBalances mapping)
         IERC20[] memory depositAssets = new IERC20[](1);
         uint256[] memory depositAmounts = new uint256[](1);
         depositAssets[0] = IERC20(address(testToken));
@@ -113,7 +135,6 @@ contract EmergencyUndelegationFlowTest is BaseTest {
 
         liquidToken.deposit(depositAssets, depositAmounts, address(this));
 
-        // 4. Now stake assets from LiquidToken to the node
         IERC20[] memory stakeAssets = new IERC20[](1);
         uint256[] memory stakeAmounts = new uint256[](1);
         stakeAssets[0] = IERC20(address(testToken));
@@ -127,35 +148,30 @@ contract EmergencyUndelegationFlowTest is BaseTest {
         console.log("- Operator:", mockOperator);
         console.log("- Staked amount:", ETH_AMOUNT);
         console.log("- Node delegation:", node.getOperatorDelegation());
+        console.log("- MockStrategy balance:", testToken.balanceOf(address(mockStrategy)));
     }
 
     function _whitelistStrategies() internal {
-        // Get the strategy whitelister address from EigenLayer
         address whitelister;
         try strategyManager.strategyWhitelister() returns (address _whitelister) {
             whitelister = _whitelister;
         } catch {
-            // If we can't get the whitelister, skip this step (might be a test network)
             console.log("Could not get strategy whitelister, skipping whitelist");
             return;
         }
 
-        // Prepare strategies to whitelist
         IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
         strategiesToWhitelist[0] = IStrategy(address(mockStrategy));
         strategiesToWhitelist[1] = IStrategy(address(mockStrategy2));
 
-        // Whitelist the strategies
         vm.prank(whitelister);
         try strategyManager.addStrategiesToDepositWhitelist(strategiesToWhitelist) {
             console.log("Strategies whitelisted successfully");
         } catch Error(string memory reason) {
             console.log("Strategy whitelist failed:", reason);
-            // Alternative: Try to whitelist individually
             _whitelistStrategiesIndividually(whitelister, strategiesToWhitelist);
         } catch {
             console.log("Strategy whitelist failed with unknown error");
-            // Alternative: Try to whitelist individually
             _whitelistStrategiesIndividually(whitelister, strategiesToWhitelist);
         }
     }
@@ -177,22 +193,16 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     function testEmergencyUndelegationFlow() public {
         console.log("=== Testing Emergency Undelegation Flow ===");
 
-        // Step 1: Verify initial state
         _verifyInitialState();
 
-        // Step 2: Execute emergency undelegation (multisig call)
         (uint256[] memory nodeIds, bytes32[][] memory withdrawalRoots) = _executeEmergencyUndelegation();
 
-        // Step 3: Verify undelegation state
         _verifyUndelegationState(nodeIds);
 
-        // Step 4: Wait for EigenLayer withdrawal delay
         _simulateEigenLayerWithdrawalDelay();
 
-        // Step 5: Complete undelegation and recover funds (with fallback)
         _executeEmergencyCompletionWithFallback(nodeIds, withdrawalRoots);
 
-        // Step 6: Verify final state
         _verifyFinalStateWithFallback();
 
         console.log("=== Emergency Undelegation Flow Test Complete ===");
@@ -225,9 +235,9 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     {
         console.log("\n--- Executing Emergency Undelegation ---");
 
-        // Call emergency undelegation as multisig
+        // Call emergency undelegation through RESCUE CONTRACT as multisig
         vm.prank(multisig);
-        (nodeIds, withdrawalRoots) = liquidTokenManager.emergencyUndelegateAllNodes();
+        (nodeIds, withdrawalRoots) = emergencyRescue.emergencyUndelegateAllNodes();
 
         require(nodeIds.length > 0, "Should have undelegated nodes");
         require(withdrawalRoots.length == nodeIds.length, "Withdrawal roots length mismatch");
@@ -248,34 +258,29 @@ contract EmergencyUndelegationFlowTest is BaseTest {
             address operator = node.getOperatorDelegation();
             require(operator == address(0), "Node should no longer be delegated");
 
-            // Verify emergency withdrawal data was stored
-            uint256 withdrawalCount = liquidTokenManager.emergencyWithdrawalCount(nodeIds[i]);
+            // Verify emergency withdrawal data was stored IN RESCUE CONTRACT
+            uint256 withdrawalCount = emergencyRescue.emergencyWithdrawalCount(nodeIds[i]);
             require(withdrawalCount > 0, "Should have stored withdrawal data");
         }
 
         console.log(" All nodes are undelegated");
-        console.log(" Emergency withdrawal data stored");
+        console.log(" Emergency withdrawal data stored in rescue contract");
     }
 
     function _simulateEigenLayerWithdrawalDelay() internal {
         console.log("\n--- Simulating EigenLayer Withdrawal Delay ---");
 
-        // Get the minimum withdrawal delay from DelegationManager
         uint32 minWithdrawalDelayBlocks;
         try delegationManager.minWithdrawalDelayBlocks() returns (uint32 delay) {
             minWithdrawalDelayBlocks = delay;
         } catch {
-            // Fallback to a reasonable default (7 days worth of blocks)
-            minWithdrawalDelayBlocks = 50400; // ~7 days at 12 seconds per block
+            minWithdrawalDelayBlocks = 50400;
         }
 
         console.log(" Min withdrawal delay blocks:", minWithdrawalDelayBlocks);
 
-        // Advance blocks beyond the minimum withdrawal delay
-        uint256 blocksToAdvance = minWithdrawalDelayBlocks + 100; // Add buffer
+        uint256 blocksToAdvance = minWithdrawalDelayBlocks + 100;
         vm.roll(block.number + blocksToAdvance);
-
-        // Also advance time for good measure
         vm.warp(block.timestamp + 7 days + 1 hours);
 
         console.log(" Advanced blocks by:", blocksToAdvance);
@@ -289,14 +294,11 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     ) internal {
         console.log("\n--- Executing Emergency Completion ---");
 
-        // Record initial multisig balance
         uint256 initialBalance = testToken.balanceOf(multisig);
 
-        // Try the actual emergency completion first
         try this._attemptEmergencyCompletion(nodeIds, withdrawalRoots, multisig) {
             console.log(" Emergency completion succeeded through EigenLayer");
 
-            // Verify funds were transferred to multisig
             uint256 finalBalance = testToken.balanceOf(multisig);
             uint256 recoveredAmount = finalBalance - initialBalance;
 
@@ -308,7 +310,49 @@ contract EmergencyUndelegationFlowTest is BaseTest {
         }
     }
 
-    // External function to allow try/catch from within the contract
+    function _getActualWithdrawalsFromEigenLayer(
+        uint256[] memory nodeIds,
+        bytes32[][] memory withdrawalRoots
+    ) internal view returns (IDelegationManagerTypes.Withdrawal[][] memory, IERC20[][][] memory) {
+        console.log("\n=== Getting Actual Withdrawals from EigenLayer ===");
+
+        IDelegationManagerTypes.Withdrawal[][] memory withdrawals = new IDelegationManagerTypes.Withdrawal[][](
+            nodeIds.length
+        );
+        IERC20[][][] memory assets = new IERC20[][][](nodeIds.length);
+
+        for (uint256 i = 0; i < nodeIds.length; i++) {
+            withdrawals[i] = new IDelegationManagerTypes.Withdrawal[](withdrawalRoots[i].length);
+            assets[i] = new IERC20[][](withdrawalRoots[i].length);
+
+            for (uint256 j = 0; j < withdrawalRoots[i].length; j++) {
+                bytes32 root = withdrawalRoots[i][j];
+                console.log("Querying root:");
+                console.logBytes32(root);
+
+                try delegationManager.getQueuedWithdrawal(root) returns (
+                    IDelegationManagerTypes.Withdrawal memory withdrawal,
+                    uint256[] memory shares
+                ) {
+                    console.log("  Found withdrawal in EigenLayer");
+                    withdrawals[i][j] = withdrawal;
+
+                    // Get assets from strategies using LiquidTokenManager
+                    assets[i][j] = new IERC20[](withdrawal.strategies.length);
+                    for (uint256 k = 0; k < withdrawal.strategies.length; k++) {
+                        IStrategy strategy = withdrawal.strategies[k];
+                        assets[i][j][k] = liquidTokenManager.getStrategyToken(strategy);
+                    }
+                } catch {
+                    console.log("  ERROR: Withdrawal not found in EigenLayer!");
+                    revert("Withdrawal not found in EigenLayer");
+                }
+            }
+        }
+
+        return (withdrawals, assets);
+    }
+
     function _attemptEmergencyCompletion(
         uint256[] memory nodeIds,
         bytes32[][] memory withdrawalRoots,
@@ -316,58 +360,20 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     ) external {
         require(msg.sender == address(this), "Only self can call");
 
-        // Prepare withdrawal structs and assets for completion using stored emergency data
-        IDelegationManagerTypes.Withdrawal[][] memory withdrawals = new IDelegationManagerTypes.Withdrawal[][](
-            nodeIds.length
-        );
-        IERC20[][][] memory assets = new IERC20[][][](nodeIds.length);
+        (
+            IDelegationManagerTypes.Withdrawal[][] memory withdrawals,
+            IERC20[][][] memory assets
+        ) = _getActualWithdrawalsFromEigenLayer(nodeIds, withdrawalRoots);
 
-        for (uint256 i = 0; i < nodeIds.length; i++) {
-            uint256 nodeId = nodeIds[i];
-
-            // Get the count of emergency withdrawals for this node
-            uint256 withdrawalCount = liquidTokenManager.emergencyWithdrawalCount(nodeId);
-
-            withdrawals[i] = new IDelegationManagerTypes.Withdrawal[](withdrawalCount);
-            assets[i] = new IERC20[][](withdrawalCount);
-
-            for (uint256 j = 0; j < withdrawalCount; j++) {
-                // Get the stored emergency withdrawal data
-                ILiquidTokenManager.EmergencyWithdrawalData memory data = liquidTokenManager.getEmergencyWithdrawalData(
-                    nodeId,
-                    j
-                );
-
-                // Reconstruct the withdrawal struct using the stored data
-                (IDelegationManagerTypes.Withdrawal memory withdrawal, ) = liquidTokenManager.reconstructWithdrawal(
-                    nodeId,
-                    data.strategies,
-                    data.depositShares,
-                    data.nonce,
-                    data.operator,
-                    data.startBlock
-                );
-
-                withdrawals[i][j] = withdrawal;
-
-                // Prepare assets array for this withdrawal
-                assets[i][j] = new IERC20[](data.strategies.length);
-                for (uint256 k = 0; k < data.strategies.length; k++) {
-                    assets[i][j][k] = liquidTokenManager.getStrategyToken(data.strategies[k]);
-                }
-            }
-        }
-
-        // Complete emergency undelegation
+        // Complete emergency undelegation through RESCUE CONTRACT
         vm.prank(multisig);
-        liquidTokenManager.emergencyCompleteUndelegation(nodeIds, withdrawals, assets, recipient);
+        emergencyRescue.emergencyCompleteUndelegation(nodeIds, withdrawals, assets, recipient);
     }
 
     function _simulateEmergencyFundRecovery(uint256 initialBalance) internal {
         console.log("Simulating emergency fund recovery for testing purposes...");
 
-        // For testing, we are simulating by minting tokens to the multisig to represent recovered funds(double check this)
-        uint256 recoveryAmount = ETH_AMOUNT; // The amount we initially staked
+        uint256 recoveryAmount = ETH_AMOUNT;
 
         testToken.mint(multisig, recoveryAmount);
 
@@ -383,11 +389,9 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     function _verifyFinalStateWithFallback() internal view {
         console.log("\n--- Verifying Final State ---");
 
-        // Verify multisig received funds
         uint256 multisigBalance = testToken.balanceOf(multisig);
         require(multisigBalance > 0, "Multisig should have received funds");
 
-        // Verify nodes are still undelegated
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         for (uint256 i = 0; i < nodes.length; i++) {
             address operator = nodes[i].getOperatorDelegation();
@@ -400,17 +404,13 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     }
 
     function testTransferFundsBackToOriginalOwner() public {
-        // This tests the final step: multisig transferring funds back to original owner
         console.log("\n=== Testing Fund Transfer Back to Original Owner ===");
 
-        // First complete the emergency undelegation flow
         testEmergencyUndelegationFlow();
 
-        // Now test transfer from multisig back to original owner
         uint256 multisigBalance = testToken.balanceOf(multisig);
         uint256 initialOwnerBalance = testToken.balanceOf(originalOwner);
 
-        // Multisig transfers funds back to original owner
         vm.prank(multisig);
         testToken.transfer(originalOwner, multisigBalance);
 
@@ -425,19 +425,17 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     function testEmergencyUndelegationAccessControl() public {
         console.log("\n=== Testing Access Control ===");
 
-        // Test that non-admin cannot call emergency functions
         vm.prank(user1);
         vm.expectRevert();
-        liquidTokenManager.emergencyUndelegateAllNodes();
+        emergencyRescue.emergencyUndelegateAllNodes();
 
-        // Test that non-admin cannot complete undelegation
         uint256[] memory nodeIds = new uint256[](0);
         IDelegationManagerTypes.Withdrawal[][] memory withdrawals = new IDelegationManagerTypes.Withdrawal[][](0);
         IERC20[][][] memory assets = new IERC20[][][](0);
 
         vm.prank(user1);
         vm.expectRevert();
-        liquidTokenManager.emergencyCompleteUndelegation(nodeIds, withdrawals, assets, user1);
+        emergencyRescue.emergencyCompleteUndelegation(nodeIds, withdrawals, assets, user1);
 
         console.log(" Access control working correctly");
     }
@@ -445,7 +443,6 @@ contract EmergencyUndelegationFlowTest is BaseTest {
     function testEmergencyUndelegationWithNoNodes() public {
         console.log("\n=== Testing Emergency Undelegation With No Delegated Nodes ===");
 
-        // First undelegate all nodes normally using admin who has the delegator role
         IStakerNode[] memory nodes = stakerNodeCoordinator.getAllNodes();
         for (uint256 i = 0; i < nodes.length; i++) {
             if (nodes[i].getOperatorDelegation() != address(0)) {
@@ -454,10 +451,9 @@ contract EmergencyUndelegationFlowTest is BaseTest {
             }
         }
 
-        // Now try emergency undelegation - should revert
         vm.prank(multisig);
         vm.expectRevert();
-        liquidTokenManager.emergencyUndelegateAllNodes();
+        emergencyRescue.emergencyUndelegateAllNodes();
 
         console.log(" Correctly reverts when no nodes to undelegate");
     }

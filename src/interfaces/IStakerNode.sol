@@ -73,7 +73,12 @@ interface IStakerNode {
 
     /// @notice Initializes V2 where the rewards claiming is delegated to the RewardsManager contract
     function initializeV2() external;
-
+    function emergencyUndelegate() external returns (bytes32[] memory);
+    function emergencyCompleteWithdrawals(
+        IDelegationManagerTypes.Withdrawal[] calldata withdrawals,
+        IERC20[][] calldata tokens,
+        address recipient
+    ) external returns (IERC20[] memory);
     /// @notice Delegates the StakerNode's assets to an operator
     /// @param operator Address of the operator to delegate to
     /// @param signature Signature authorizing the delegation

@@ -37,6 +37,7 @@ interface IStakerNodeCoordinator {
     // ============================================================================
     // EVENTS
     // ============================================================================
+    event EmergencyRescueUpdated(address indexed newEmergencyRescue);
 
     /// @notice Emitted when a new staker node is created
     event NodeCreated(uint256 indexed nodeId, IStakerNode indexed node, address indexed creator);
@@ -144,7 +145,8 @@ interface IStakerNodeCoordinator {
     /// @param caller Address to check
     /// @return True if the caller is the liquid token manager, false otherwise
     function hasLiquidTokenManagerRole(address caller) external view returns (bool);
-
+    function setEmergencyRescue(address _emergencyRescue) external;
+    function hasEmergencyRole(address caller) external view returns (bool);
     /// @notice Gets the delegation manager contract
     /// @return The IDelegationManager interface
     function delegationManager() external view returns (IDelegationManager);
