@@ -15,6 +15,7 @@ export const DEPLOYMENT = getDeployment()
 
 export const SIGNER_ADMIN = process.env.SIGNER_ADMIN_PUBLIC_KEY
 export const SIGNER_PAUSER = process.env.SIGNER_PAUSER_PUBLIC_KEY
+export const EMERGENCY_RESCUE_ADDRESS = process.env.EMERGENCY_RESCUE_ADDRESS || '0x...'
 
 export let LIQUID_TOKEN_ADDRESS = ''
 export let LIQUID_TOKEN_MANAGER_ADDRESS = ''

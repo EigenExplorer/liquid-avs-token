@@ -3,10 +3,10 @@ import 'dotenv/config'
 import { OperationType } from '@safe-global/types-kit'
 import { encodeFunctionData, parseAbi, getAddress } from 'viem/utils'
 import { apiKit, protocolKitOwnerAdmin } from '../../utils/safe'
-import { ADMIN, LIQUID_TOKEN_MANAGER_ADDRESS, proposeSafeTransaction } from '../../utils/forge'
+import { ADMIN, EMERGENCY_RESCUE_ADDRESS, proposeSafeTransaction } from '../../utils/forge'
 
 /**
- * Creates a proposal for `emergencyUndelegateAllNodes` on `LiquidTokenManager`
+ * Creates a proposal for `emergencyUndelegateAllNodes` on `EmergencyRescue`
  * This will undelegate all nodes and queue withdrawals on EigenLayer
  * 
  * IMPORTANT: After execution, save the returned nodeIds and withdrawalRoots
@@ -19,7 +19,7 @@ export async function emergencyUndelegateAllNodes() {
         if (!ADMIN) throw new Error('Env vars not set correctly.')
 
         // Setup task params
-        const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS
+        const contractAddress = EMERGENCY_RESCUE_ADDRESS //  CHANGED since we changed our approach now
         const abi = parseAbi(['function emergencyUndelegateAllNodes() returns (uint256[], bytes32[][])'])
         const metadata = {
             title: 'Emergency Undelegate All Nodes',
