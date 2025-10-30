@@ -53,7 +53,7 @@ interface ILiquidTokenManager {
         uint256[] amounts;
     }
 
-    /// @notice Represents allocation of assets to a node for staking, including a set of swaps swap
+    /// @notice Represents allocation of assets to a node for staking, including a set of swaps
     /// @param nodeId The ID of the staker node to allocate assets to
     /// @param assetsToSwap Array of input tokens to swap from
     /// @param amountsToSwap Array of amounts to swap
@@ -94,14 +94,8 @@ interface ILiquidTokenManager {
         IERC20[][] elAssets;
         uint256[][] elDepositShares;
     }
-    struct EmergencyWithdrawalData {
-        IStrategy[] strategies;
-        uint256[] depositShares;
-        uint256 nonce;
-        address operator;
-        uint256 startBlock;
-        bool exists;
-    }
+
+
     // ============================================================================
     // EVENTS
     // ============================================================================
@@ -190,36 +184,23 @@ interface ILiquidTokenManager {
         uint256[] nodeIds
     );
 
-    /// @notice Emitted when a redemption is successfuly completed
+    /// @notice Emitted when a redemption is successfully completed
     event RedemptionCompleted(
         bytes32 indexed redemptionId,
         IERC20[] assets,
         uint256[] requestedElShares,
         uint256[] receivedAmounts
     );
-    event EmergencyUndelegationInitiated(uint256[] nodeIds, address indexed initiator);
-    event EmergencyNodeUndelegated(uint256 indexed nodeId, address indexed operator, bytes32[] withdrawalRoots);
-    event EmergencyUndelegationCompleted(
-        uint256[] nodeIds,
-        IERC20[] tokens,
-        uint256[] amounts,
-        address indexed recipient,
-        address indexed initiator
-    );
-    event EmergencyWithdrawalDataStored(
-        uint256 indexed nodeId,
-        IStrategy[] strategies,
-        uint256[] shares,
-        uint256 nonce,
-        address operator
-    );
+
+   
+ 
 
     // ============================================================================
     // CUSTOM ERRORS
     // ============================================================================
-    error NoNodesToUndelegate();
-    error InvalidWithdrawalData();
-    error WithdrawalDelayNotMet();
+
+   
+
     /// @notice Error for zero address
     error ZeroAddress();
 
@@ -286,7 +267,7 @@ interface ILiquidTokenManager {
     /// @notice Error thrown when a withdrawal root doesn't match the expected value
     error InvalidWithdrawalRoot();
 
-    /// @notice Error thrown when redemption amounts for user withdrawal settlement are not enough up to make the withdrawal requests whole
+    /// @notice Error thrown when redemption amounts for user withdrawal settlement are not enough to make the withdrawal requests whole
     error RequestsDoNotSettle(address asset, uint256 expectedAmount, uint256 requestAmount);
 
     /// @notice Error thrown when a withdrawal is missing when attempting redemption completion
@@ -357,47 +338,6 @@ interface ILiquidTokenManager {
     /// @notice Stakes assets to multiple nodes
     /// @param allocations Array of NodeAllocation structs containing staking information
     function stakeAssetsToNodes(NodeAllocation[] calldata allocations) external;
-
-    /**
-    /// @notice OUT OF SCOPE FOR V2
-
-    /// @notice Swaps multiple assets and stakes them to multiple nodes
-    /// @param allocationsWithSwaps Array of node allocations with swap instructions
-    function swapAndStakeAssetsToNodes(NodeAllocationWithSwap[] calldata allocationsWithSwaps) external;
-
-    /// @notice Swaps assets and stakes them to a single node
-    /// @param nodeId The node ID to stake to
-    /// @param assetsToSwap Array of input tokens to swap from
-    /// @param amountsToSwap Array of amounts to swap
-    /// @param assetsToStake Array of output tokens to receive and stake
-    function swapAndStakeAssetsToNode(
-        uint256 nodeId,
-        IERC20[] memory assetsToSwap,
-        uint256[] memory amountsToSwap,
-        IERC20[] memory assetsToStake
-    ) external;
-    
-
-    /// @notice Undelegates a set of staker nodes from their operators and creates a set of redemptions
-    /// @dev A separate redemption is created for each node, since undelegating a node on EL queues one withdrawal per strategy
-    /// @dev On completing a redemption created from undelegation, the funds are transferred to `LiquidToken`
-    /// @dev Caller should index the `RedemptionCreatedForNodeUndelegation` event to have the required data for redemption completion
-    /// @param nodeIds The IDs of the staker nodes
-    function undelegateNodes(uint256[] calldata nodeIds) external;
-
-    /// @notice Allows rebalancing of funds by partially withdrawing assets from nodes and creating a redemption
-    /// @dev On completing the redemption, the funds are transferred to `LiquidToken`
-    /// @dev Caller should index the `RedemptionCreatedForRebalancing` event to have the required data for redemption completion
-    /// @dev Strategies are always withdrawn into their respective assets, they are never converted
-    /// @param nodeIds The ID of the nodes to withdraw from
-    /// @param assets The array of assets to withdraw for each node
-    /// @param elDepositShares The EL deposit shares for `assets` (unscaled, pre-slashing shares)
-    function withdrawNodeAssets(
-        uint256[] calldata nodeIds,
-        IERC20[][] calldata assets,
-        uint256[][] calldata elDepositShares
-    ) external;
-    */
 
     /// @notice Enables a set of user withdrawal requests to be fulfillable after 14 days by the respective users
     /// @dev This function only uses staked balances from EigenLayer to ensure fair slashing distribution
@@ -541,59 +481,4 @@ interface ILiquidTokenManager {
     /// @notice Returns the LiquidToken contract
     /// @return The ILiquidToken interface
     function liquidToken() external view returns (ILiquidToken);
-
-    /// @notice Emergency function to undelegate all nodes from their operators
-    /// @dev Can only be called by admin (multisig). Queues withdrawals on EigenLayer.
-    /// @return nodeIds Array of node IDs that were undelegated
-    /// @return withdrawalRoots Nested array of withdrawal roots per node
-    function emergencyUndelegateAllNodes()
-        external
-        returns (uint256[] memory nodeIds, bytes32[][] memory withdrawalRoots);
-
-    /// @notice Emergency function to complete undelegation and recover funds
-    /// @dev Can only be called by admin (multisig) after EL withdrawal delay (7 days)
-    /// @param nodeIds Array of node IDs to complete withdrawals for
-    /// @param withdrawals Nested array of withdrawal structs per node
-    /// @param assets Nested array of asset arrays per withdrawal per node
-    /// @param recipient Address to receive the recovered funds (multisig)
-    function emergencyCompleteUndelegation(
-        uint256[] calldata nodeIds,
-        IDelegationManagerTypes.Withdrawal[][] calldata withdrawals,
-        IERC20[][][] calldata assets,
-        address recipient
-    ) external;
-
-    /// @notice Helper to reconstruct withdrawal structs from stored data
-    /// @param nodeId The node ID
-    /// @param strategies The strategies involved in the withdrawal
-    /// @param shares The share amounts for each strategy
-    /// @param nonce The withdrawal nonce
-    /// @param delegatedTo The operator the node was delegated to
-    /// @param startBlock The block number when the withdrawal was queued
-    /// @return withdrawal The reconstructed withdrawal struct
-    /// @return withdrawalRoot The computed withdrawal root
-    function reconstructWithdrawal(
-        uint256 nodeId,
-        IStrategy[] calldata strategies,
-        uint256[] calldata shares,
-        uint256 nonce,
-        address delegatedTo,
-        uint256 startBlock
-    ) external view returns (IDelegationManagerTypes.Withdrawal memory withdrawal, bytes32 withdrawalRoot);
-
-    /// @notice Get stored emergency withdrawal data for a node
-    /// @param nodeId The node ID
-    /// @param withdrawalIndex The withdrawal index
-    /// @return data The stored withdrawal data
-    function getEmergencyWithdrawalData(
-        uint256 nodeId,
-        uint256 withdrawalIndex
-    ) external view returns (EmergencyWithdrawalData memory data);
-
-    /// @notice Get all emergency withdrawal data for a node
-    /// @param nodeId The node ID
-    /// @return allData Array of all withdrawal data for the node
-    function getAllEmergencyWithdrawalData(
-        uint256 nodeId
-    ) external view returns (EmergencyWithdrawalData[] memory allData);
 }

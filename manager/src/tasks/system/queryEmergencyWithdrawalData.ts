@@ -3,7 +3,7 @@ import 'dotenv/config'
 import { createPublicClient, http, parseAbi } from 'viem'
 import { mainnet, holesky } from 'viem/chains'
 import { writeFileSync } from 'fs'
-import { LIQUID_TOKEN_MANAGER_ADDRESS, DEPLOYMENT } from '../../utils/forge'
+import { EMERGENCY_RESCUE_ADDRESS, DEPLOYMENT } from '../../utils/forge'
 
 /**
  * Queries and saves all emergency withdrawal data after emergencyUndelegateAllNodes execution
@@ -21,14 +21,13 @@ export async function queryEmergencyWithdrawalData(nodeIds: number[]) {
             transport: http()
         })
 
-        const contractAddress = LIQUID_TOKEN_MANAGER_ADDRESS
+        const contractAddress = EMERGENCY_RESCUE_ADDRESS
         const abi = parseAbi([
-            'function getAllEmergencyWithdrawalData(uint256) view returns (tuple(address[] strategies, uint256[] depositShares, uint256 nonce, address operator, uint256 startBlock, bool exists)[])',
-            'function emergencyWithdrawalCount(uint256) view returns (uint256)',
-            'function getStrategyToken(address) view returns (address)'
+            'function getAllEmergencyWithdrawalData(uint256) view returns (tuple(address[] strategies, uint256[] depositShares, bytes32[] withdrawalRoots, uint256 nonce, address operator, uint256 startBlock, bool exists)[])',
+            'function emergencyWithdrawalCount(uint256) view returns (uint256)'
         ])
 
-        console.log(' Querying emergency withdrawal data...\n')
+        console.log('Querying emergency withdrawal data...\n')
 
         const allWithdrawalData: any = {}
 
@@ -53,38 +52,25 @@ export async function queryEmergencyWithdrawalData(nodeIds: number[]) {
                 args: [BigInt(nodeId)]
             })
 
-            // Get token addresses for each strategy
-            const withdrawalsWithTokens = await Promise.all(
-                (withdrawalData as any[]).map(async (withdrawal: any) => {
-                    const tokens = await Promise.all(
-                        withdrawal.strategies.map(async (strategy: string) => {
-                            const token = await client.readContract({
-                                address: contractAddress as `0x${string}`,
-                                abi,
-                                functionName: 'getStrategyToken',
-                                args: [strategy]
-                            })
-                            return token
-                        })
-                    )
+            // Map withdrawal data with all fields including withdrawalRoots
+            const withdrawalsWithAllData = (withdrawalData as any[]).map((withdrawal: any) => {
+                return {
+                    strategies: withdrawal.strategies,
+                    depositShares: withdrawal.depositShares.map((share: bigint) => share.toString()),
+                    withdrawalRoots: withdrawal.withdrawalRoots,
+                    nonce: withdrawal.nonce.toString(),
+                    operator: withdrawal.operator,
+                    startBlock: withdrawal.startBlock.toString(),
+                    exists: withdrawal.exists
+                }
+            })
 
-                    return {
-                        strategies: withdrawal.strategies,
-                        depositShares: withdrawal.depositShares,
-                        nonce: withdrawal.nonce,
-                        operator: withdrawal.operator,
-                        startBlock: withdrawal.startBlock,
-                        exists: withdrawal.exists,
-                        tokens
-                    }
-                })
-            )
+            allWithdrawalData[nodeId] = withdrawalsWithAllData
 
-            allWithdrawalData[nodeId] = withdrawalsWithTokens
-
-            console.log(`  - Operator: ${withdrawalsWithTokens[0]?.operator}`)
-            console.log(`  - Start Block: ${withdrawalsWithTokens[0]?.startBlock}`)
-            console.log(`  - Strategies: ${withdrawalsWithTokens[0]?.strategies.length}\n`)
+            console.log(`  - Operator: ${withdrawalsWithAllData[0]?.operator}`)
+            console.log(`  - Start Block: ${withdrawalsWithAllData[0]?.startBlock}`)
+            console.log(`  - Strategies: ${withdrawalsWithAllData[0]?.strategies.length}`)
+            console.log(`  - Withdrawal Roots: ${withdrawalsWithAllData[0]?.withdrawalRoots.length}\n`)
         }
 
         // Save to file
@@ -98,7 +84,7 @@ export async function queryEmergencyWithdrawalData(nodeIds: number[]) {
             nodeIds,
             withdrawalData: allWithdrawalData,
             notes: {
-                minimumWaitBlocks: '50400', // ~7 days
+                minimumWaitBlocks: '50400',
                 minimumWaitTime: '7 days',
                 nextStep: 'Run emergencyCompleteUndelegation.ts after 7 days'
             }
@@ -106,10 +92,10 @@ export async function queryEmergencyWithdrawalData(nodeIds: number[]) {
 
         writeFileSync(filepath, JSON.stringify(output, null, 2))
 
-        console.log(' Emergency withdrawal data saved successfully')
-        console.log(` File: ${filepath}`)
-        console.log('\n  SAVE THIS FILE - It is required to complete the undelegation')
-        console.log('  Wait at least 7 days (50,400 blocks) before running the completion script')
+        console.log('Emergency withdrawal data saved successfully')
+        console.log(`File: ${filepath}`)
+        console.log('\nSAVE THIS FILE - It is required to complete the undelegation')
+        console.log('Wait at least 7 days (50,400 blocks) before running the completion script')
 
         return output
     } catch (error) {
@@ -176,9 +162,8 @@ export async function queryFromTransactionReceipt(txHash: string) {
 // CLI usage
 if (require.main === module) {
     const args = process.argv.slice(2)
-    
+
     if (args[0] === '--tx') {
-        // Query from transaction hash
         const txHash = args[1]
         if (!txHash) {
             console.error('Usage: ts-node queryEmergencyWithdrawalData.ts --tx <transaction-hash>')
@@ -186,7 +171,6 @@ if (require.main === module) {
         }
         queryFromTransactionReceipt(txHash)
     } else if (args[0] === '--nodes') {
-        // Query from node IDs
         const nodeIds = args.slice(1).map(id => parseInt(id))
         if (nodeIds.length === 0) {
             console.error('Usage: ts-node queryEmergencyWithdrawalData.ts --nodes <nodeId1> <nodeId2> ...')
