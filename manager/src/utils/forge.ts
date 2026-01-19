@@ -23,6 +23,7 @@ export let TOKEN_REGISTRY_ORACLE_ADDRESS = ''
 export let PRICE_UPDATER = ''
 export let ADMIN = process.env.MULTISIG_ADMIN_PUBLIC_KEY // Updates from deployment data if not local
 export let PAUSER = process.env.MULTISIG_PAUSER_PUBLIC_KEY // Updates from deployment data if not local
+export let AVS_ADDRESS = ''
 
 /**
  * Returns the forge command used to call a task from the /script folder
@@ -192,6 +193,7 @@ export async function refreshDeploymentAddresses() {
     ADMIN = String(output.roles.admin)
     PAUSER = String(output.roles.pauser)
     PRICE_UPDATER = String(output.roles.priceUpdater)
+    AVS_ADDRESS = String(output.avsAddress)
 }
 
 /**
